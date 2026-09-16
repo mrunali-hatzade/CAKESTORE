@@ -22,7 +22,7 @@ public class MediaController {
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".webp", ".pdf");
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-    private final MediaUploadService mediaUploadService;
+    private final StorageService storageService;
 
     @PostMapping("/upload")
     public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file,
@@ -59,7 +59,7 @@ public class MediaController {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid or corrupt file content. Magic bytes verification failed."));
         }
 
-        String fileDownloadUri = mediaUploadService.storeFile(file, normalizedType);
+        String fileDownloadUri = storageService.storeFile(file, normalizedType);
 
         Map<String, String> response = new HashMap<>();
         response.put("url", fileDownloadUri);

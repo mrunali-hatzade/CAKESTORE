@@ -66,6 +66,7 @@ function StorefrontContent() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
   const [isCustomInquiryOpen, setIsCustomInquiryOpen] = useState<boolean>(false);
+  const [customCakeRefImage, setCustomCakeRefImage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const handleSearchChange = (query: string) => {
@@ -95,12 +96,43 @@ function StorefrontContent() {
     }
   }, [shopId]);
 
+  // Lightweight refresh — only re-fetches shop data (not products/categories)
+  // Called on tab change and window focus to keep owner dashboard changes in sync
+  const refreshShopData = useCallback(async () => {
+    if (!shopId) return;
+    try {
+      const freshShop = await storefrontApi.getShopById(shopId);
+      if (freshShop) setShop(freshShop);
+    } catch {
+      // silently ignore — stale data is better than broken UI
+    }
+  }, [shopId]);
+
+  // Full load on first mount
   useEffect(() => {
     loadStorefrontData();
   }, [loadStorefrontData]);
 
+  // Re-fetch fresh shop data on every tab switch
+  useEffect(() => {
+    refreshShopData();
+  }, [activeTab, refreshShopData]);
+
+  // Re-fetch fresh shop data when the browser tab gets focus
+  // (e.g. user switches from owner dashboard → storefront tab)
+  useEffect(() => {
+    const onFocus = () => refreshShopData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshShopData]);
+
   const handleOpenProduct = (product: Product) => {
     router.push(`/shop/${shopId}/product/${product.id}`);
+  };
+
+  const handleOpenGalleryProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setIsDetailModalOpen(true);
   };
 
   if (isLoading) {
@@ -136,6 +168,7 @@ function StorefrontContent() {
 
       {/* Bakery Mini-Website 8-Destination Tab Navigation */}
       <StorefrontTabNav
+        shop={shop}
         activeTab={activeTab}
         onTabChange={handleTabChange}
         productCount={products.length}
@@ -182,6 +215,7 @@ function StorefrontContent() {
         {activeTab === 'custom-cakes' && (
           <StorefrontCustomCakesTab
             shop={shop}
+            initialReferenceImage={customCakeRefImage}
           />
         )}
 
@@ -190,8 +224,12 @@ function StorefrontContent() {
             shop={shop}
             products={products}
             categories={categories}
-            onSelectProduct={handleOpenProduct}
+            onSelectProduct={handleOpenGalleryProduct}
             onNavigateTab={handleTabChange}
+            onInquireCustomCake={(imageUrl: string) => {
+              setCustomCakeRefImage(imageUrl);
+              handleTabChange('custom-cakes');
+            }}
           />
         )}
 

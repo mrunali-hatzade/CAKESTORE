@@ -1,12 +1,13 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ShoppingBag, Search, Printer, ChevronDown, Download, Eye,
   Phone, Mail, MapPin, MessageCircle
 } from 'lucide-react';
 import { ordersApi } from '@/lib/api/orders';
+import { useOwner } from '@/context/OwnerContext';
 import { Order, OrderStatus } from '@/types/order';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -35,21 +36,31 @@ export default function OwnerOrdersPage() {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const { registerRefreshHandler } = useOwner();
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  const fetchOrders = async () => {
-    setIsLoading(true);
+  const fetchOrders = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsLoading(true);
     try {
       const data = await ordersApi.getOwnerOrders();
       setOrders(data || []);
     } catch {
       setOrders([]);
     } finally {
-      setIsLoading(false);
+      if (!isSilent) setIsLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchOrders(); }, []);
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  useEffect(() => {
+    const unregister = registerRefreshHandler(async () => {
+      await fetchOrders(true);
+    });
+    return unregister;
+  }, [registerRefreshHandler, fetchOrders]);
 
   const handleStatusChange = async (orderId: number, status: string) => {
     setUpdatingId(orderId);

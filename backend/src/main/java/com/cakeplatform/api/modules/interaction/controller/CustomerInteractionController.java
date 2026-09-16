@@ -20,8 +20,8 @@ public class CustomerInteractionController {
 
     @GetMapping("/feedback")
     public ResponseEntity<List<Feedback>> getShopFeedback(@PathVariable Long shopId) {
-        // Return only non-deleted feedback
-        return ResponseEntity.ok(feedbackRepository.findByShopIdAndDeletedAtIsNullOrderByCreatedAtDesc(shopId));
+        // Return only approved non-deleted feedback for storefront
+        return ResponseEntity.ok(feedbackRepository.findByShopIdAndIsApprovedTrueAndDeletedAtIsNullOrderByCreatedAtDesc(shopId));
     }
 
     @PostMapping("/feedback")

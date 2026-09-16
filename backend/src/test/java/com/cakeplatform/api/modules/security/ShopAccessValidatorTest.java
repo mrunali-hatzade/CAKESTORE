@@ -3,6 +3,7 @@ package com.cakeplatform.api.modules.security;
 import com.cakeplatform.api.exception.SubscriptionExpiredException;
 import com.cakeplatform.api.modules.shop.Shop;
 import com.cakeplatform.api.modules.shop.ShopRepository;
+import com.cakeplatform.api.modules.shop.ShopStatus;
 import com.cakeplatform.api.modules.shop.VerificationStatus;
 import com.cakeplatform.api.modules.subscription.Subscription;
 import com.cakeplatform.api.modules.subscription.SubscriptionRepository;
@@ -93,18 +94,21 @@ public class ShopAccessValidatorTest {
     }
 
     @Test
-    void testGetValidShopForOwner_ShopNotVerified() {
+    void testGetValidShopForOwner_ShopNotVerified_AllowsAccessIfActive() {
         // Arrange
         Long ownerId = 4L;
+        mockShop.setStatus(ShopStatus.ACTIVE);
         mockShop.setVerificationStatus(VerificationStatus.PROCESSING);
         when(shopRepository.findByOwnerId(ownerId)).thenReturn(List.of(mockShop));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(mockShop.getId()))
+                .thenReturn(Optional.of(mockSubscription));
 
-        // Act & Assert
-        SubscriptionExpiredException exception = assertThrows(SubscriptionExpiredException.class, () -> {
-            shopAccessValidator.getValidShopForOwner(ownerId);
-        });
+        // Act
+        Shop result = shopAccessValidator.getValidShopForOwner(ownerId);
 
-        assertTrue(exception.getMessage().contains("Shop is not verified yet"));
+        // Assert: Under Rule 2, ACTIVE shop with active subscription has operational access even while verification is PROCESSING
+        assertNotNull(result);
+        assertEquals(mockShop.getId(), result.getId());
     }
 
     @Test

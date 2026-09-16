@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Calendar, Plus, Trash2, Clock, CheckCircle2, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
 import { deliverySlotsApi } from '@/lib/api/deliverySlots';
 import { DeliverySlot } from '@/types/deliverySlot';
+import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -24,6 +25,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export default function OwnerDeliverySlotsPage() {
+  const { registerRefreshHandler } = useOwner();
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,8 +39,8 @@ export default function OwnerDeliverySlotsPage() {
   const [maxOrders, setMaxOrders] = useState('10');
   const [isActive, setIsActive] = useState(true);
 
-  const fetchSlots = async () => {
-    setIsLoading(true);
+  const fetchSlots = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsLoading(true);
     try {
       const data = await deliverySlotsApi.getOwnerSlots();
       // Sort chronologically by day of week then time
@@ -52,13 +54,20 @@ export default function OwnerDeliverySlotsPage() {
     } catch {
       setSlots([]);
     } finally {
-      setIsLoading(false);
+      if (!isSilent) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSlots();
-  }, []);
+  }, [fetchSlots]);
+
+  useEffect(() => {
+    const unregister = registerRefreshHandler(async () => {
+      await fetchSlots(true);
+    });
+    return unregister;
+  }, [registerRefreshHandler, fetchSlots]);
 
   const handleCreateSlot = async (e: React.FormEvent) => {
     e.preventDefault();

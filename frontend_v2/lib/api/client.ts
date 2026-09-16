@@ -77,7 +77,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     const response = await fetch(url, {
       ...rest,
       headers: reqHeaders,
-      signal: rest.signal || AbortSignal.timeout(5000),
+      signal: rest.signal || AbortSignal.timeout(30000),
     });
 
     if (response.status === 204) {
@@ -132,8 +132,11 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 }
 
 export const apiClient = {
+  // cache: 'no-store' ensures the browser never serves a stale cached response.
+  // This is critical so that owner dashboard changes (delivery config, about info, etc.)
+  // are always reflected immediately when the customer refreshes the storefront page.
   get: <T>(endpoint: string, options?: RequestOptions) =>
-    request<T>(endpoint, { ...options, method: 'GET' }),
+    request<T>(endpoint, { ...options, method: 'GET', cache: 'no-store' }),
 
   post: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
     request<T>(endpoint, {

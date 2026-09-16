@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Users,
   Search,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { CustomerProfile, CustomerOrderSummary } from '@/types/owner';
+import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -29,6 +30,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function OwnerCustomersPage() {
+  const { registerRefreshHandler } = useOwner();
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,7 +44,7 @@ export default function OwnerCustomersPage() {
   const [customerDetail, setCustomerDetail] = useState<CustomerProfile | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const fetchCustomers = async (isManual = false) => {
+  const fetchCustomers = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -56,11 +58,18 @@ export default function OwnerCustomersPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [fetchCustomers]);
+
+  useEffect(() => {
+    const unregister = registerRefreshHandler(async () => {
+      await fetchCustomers(true);
+    });
+    return unregister;
+  }, [registerRefreshHandler, fetchCustomers]);
 
   const handleOpenCustomerDetail = async (c: CustomerProfile) => {
     setSelectedCustomer(c);

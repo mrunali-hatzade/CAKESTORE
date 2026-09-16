@@ -1,6 +1,6 @@
 package com.cakeplatform.api.modules.storefront;
 
-import com.cakeplatform.api.modules.media.MediaUploadService;
+import com.cakeplatform.api.modules.media.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +23,7 @@ public class CustomerMediaController {
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final String SUBDIRECTORY = "custom-cake-references";
 
-    private final MediaUploadService mediaUploadService;
+    private final StorageService storageService;
 
     @PostMapping("/upload-reference")
     public ResponseEntity<Map<String, String>> uploadReferenceImage(@RequestParam("file") MultipartFile file) {
@@ -55,7 +55,7 @@ public class CustomerMediaController {
         }
 
         // 5. Store file under controlled subdirectory with server-generated UUID filename
-        String fileDownloadUri = mediaUploadService.storeFile(file, SUBDIRECTORY);
+        String fileDownloadUri = storageService.storeFile(file, SUBDIRECTORY);
 
         Map<String, String> response = new HashMap<>();
         response.put("url", fileDownloadUri);

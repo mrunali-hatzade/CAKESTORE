@@ -72,13 +72,19 @@ public class CustomerStorefrontServiceTest {
         mockProduct.setId(100L);
         mockProduct.setName("Chocolate Truffle");
         mockProduct.setPrice(BigDecimal.valueOf(20.00));
+        mockProduct.setOriginalPrice(BigDecimal.valueOf(25.00));
+        mockProduct.setImageUrl("https://example.com/base.jpg");
         mockProduct.setAvailability(true);
         mockProduct.setStatus("ACTIVE");
+        mockProduct.setAllowEggChoice(true);
+        mockProduct.setEgglessPriceDiff(BigDecimal.valueOf(5.00));
 
         ProductVariant variant = new ProductVariant();
         variant.setId(5L);
         variant.setName("1 kg");
         variant.setPrice(BigDecimal.valueOf(35.00));
+        variant.setOriginalPrice(BigDecimal.valueOf(40.00));
+        variant.setImageUrl("https://example.com/variant-1kg.jpg");
         variant.setIsAvailable(true);
         mockProduct.getVariants().add(variant);
 
@@ -134,6 +140,8 @@ public class CustomerStorefrontServiceTest {
         assertTrue(savedOrder.getItems().get(0).getAddonsSummary().contains("Sparkle Candle"));
         assertEquals("EGGLESS", savedOrder.getItems().get(0).getDietaryPreference());
         assertEquals(mockSlot, savedOrder.getDeliverySlot());
+        assertEquals("https://example.com/variant-1kg.jpg", savedOrder.getItems().get(0).getProductImageUrl());
+        assertEquals(0, BigDecimal.valueOf(40.00).compareTo(savedOrder.getItems().get(0).getOriginalPrice()));
     }
 
     @Test
@@ -184,5 +192,70 @@ public class CustomerStorefrontServiceTest {
         assertEquals(0, BigDecimal.valueOf(60.00).compareTo(savedOrder.getTotalAmount()));
         assertEquals("MINUS10", savedOrder.getCouponCode());
         verify(couponRepository).incrementUsedCountIfWithinLimit(1L);
+    }
+
+    @Test
+    void testPlaceGuestOrder_EgglessWithoutEggChoice_NoUpcharge() {
+        mockProduct.setAllowEggChoice(false);
+        when(shopRepository.findById(1L)).thenReturn(Optional.of(mockShop));
+        when(productRepository.findByIdAndShopId(100L, 1L)).thenReturn(Optional.of(mockProduct));
+        when(orderRepository.save(any(Order.class))).thenAnswer(i -> {
+            Order o = i.getArgument(0);
+            o.setId(999L);
+            return o;
+        });
+
+        GuestOrderRequest request = new GuestOrderRequest();
+        request.setCustomerName("Dietary User");
+        request.setCustomerEmail("dietary@example.com");
+        request.setCustomerPhone("+1234567890");
+        request.setPaymentMethod("ONLINE_PAYMENT");
+        request.setDeliveryAddress("Test Address");
+        request.setDeliveryDate(LocalDate.now());
+        request.setDeliverySlotId(10L);
+
+        StorefrontOrderItem item = new StorefrontOrderItem();
+        item.setProductId(100L);
+        item.setQuantity(2);
+        item.setVariantId(5L); // 35.00
+        item.setAddonIds(List.of(8L)); // 2.50
+        item.setDietaryPreference("EGGLESS"); // Not allowed -> upcharge = 0.00
+        request.setItems(List.of(item));
+
+        Order savedOrder = storefrontService.placeGuestOrder(1L, request);
+
+        assertNotNull(savedOrder);
+        // Unit price: 35.00 + 2.50 + 0 = 37.50
+        // Total for 2 items: 37.50 * 2 = 75.00
+        assertEquals(0, BigDecimal.valueOf(75.00).compareTo(savedOrder.getSubtotal()));
+        // Total with delivery (50.00): 125.00
+        assertEquals(0, BigDecimal.valueOf(125.00).compareTo(savedOrder.getTotalAmount()));
+    }
+
+    @Test
+    void testPlaceGuestOrder_FallbackToBaseProductImageAndOriginalPrice() {
+        when(shopRepository.findById(1L)).thenReturn(Optional.of(mockShop));
+        when(productRepository.findByIdAndShopId(100L, 1L)).thenReturn(Optional.of(mockProduct));
+        when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+
+        GuestOrderRequest request = new GuestOrderRequest();
+        request.setCustomerName("Fallback User");
+        request.setCustomerEmail("fallback@example.com");
+        request.setCustomerPhone("+1234567890");
+        request.setPaymentMethod("COD");
+        request.setDeliveryAddress("Test Address");
+        request.setDeliveryDate(LocalDate.now());
+        request.setDeliverySlotId(10L);
+
+        StorefrontOrderItem item = new StorefrontOrderItem();
+        item.setProductId(100L);
+        item.setQuantity(1);
+        request.setItems(List.of(item));
+
+        Order savedOrder = storefrontService.placeGuestOrder(1L, request);
+
+        assertNotNull(savedOrder);
+        assertEquals("https://example.com/base.jpg", savedOrder.getItems().get(0).getProductImageUrl());
+        assertEquals(0, BigDecimal.valueOf(25.00).compareTo(savedOrder.getItems().get(0).getOriginalPrice()));
     }
 }

@@ -9,6 +9,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "products")
@@ -43,6 +45,18 @@ public class Product {
     @Column(nullable = false)
     private BigDecimal price;
 
+    @Column(name = "original_price")
+    private BigDecimal originalPrice;
+
+    @Column(name = "allow_egg_choice", nullable = false)
+    private Boolean allowEggChoice = false;
+
+    @Column(name = "egg_preference_default")
+    private String eggPreferenceDefault = "EGGLESS";
+
+    @Column(name = "eggless_price_diff")
+    private BigDecimal egglessPriceDiff = BigDecimal.ZERO;
+
     @Column(name = "image_url")
     private String imageUrl;
 
@@ -61,18 +75,35 @@ public class Product {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    private java.util.List<ProductVariant> variants = new java.util.ArrayList<>();
+    @OrderBy("displayOrder ASC, createdAt ASC")
+    private List<ProductImage> images = new ArrayList<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    private java.util.List<ProductAddon> addons = new java.util.ArrayList<>();
+    @OrderBy("displayOrder ASC, createdAt ASC")
+    private List<ProductHighlight> highlights = new ArrayList<>();
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder ASC, id ASC")
+    private List<ProductVariant> variants = new ArrayList<>();
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProductAddon> addons = new ArrayList<>();
+
+    @Transient
     @com.fasterxml.jackson.annotation.JsonProperty("categoryId")
     public Long getCategoryId() {
         return category != null ? category.getId() : null;
     }
 
+    @Transient
     @com.fasterxml.jackson.annotation.JsonProperty("categoryName")
     public String getCategoryName() {
         return category != null ? category.getName() : null;
+    }
+
+    @Transient
+    @com.fasterxml.jackson.annotation.JsonProperty("shopId")
+    public Long getShopId() {
+        return shop != null ? shop.getId() : null;
     }
 }

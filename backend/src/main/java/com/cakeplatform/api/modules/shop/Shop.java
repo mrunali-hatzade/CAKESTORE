@@ -8,6 +8,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "shops")
@@ -68,6 +70,21 @@ public class Shop {
     @Column(name = "cover_image_url")
     private String coverImageUrl;
 
+    @Column(name = "about_story", columnDefinition = "TEXT")
+    private String aboutStory;
+
+    @Column(name = "about_image_url", length = 1000)
+    private String aboutImageUrl;
+
+    @Column(name = "show_about_image", nullable = false)
+    private Boolean showAboutImage = true;
+
+    @Column(name = "whatsapp_number", length = 50)
+    private String whatsappNumber;
+
+    @Column(name = "map_location_url", length = 1000)
+    private String mapLocationUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ShopStatus status = ShopStatus.PENDING;
@@ -85,5 +102,22 @@ public class Shop {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
-    private java.util.List<ShopDeliverySlot> deliverySlots = new java.util.ArrayList<>();
+    private List<ShopDeliverySlot> deliverySlots = new ArrayList<>();
+
+    @OneToOne(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private ShopDeliveryConfig deliveryConfig;
+
+    @OneToOne(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private ShopStorefrontSettings storefrontSettings;
+
+    @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder ASC, createdAt ASC")
+    private List<ShopBanner> banners = new ArrayList<>();
+
+    @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ShopBusinessHours> businessHours = new ArrayList<>();
+
+    @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder ASC")
+    private List<ShopCustomFormField> customFormFields = new ArrayList<>();
 }

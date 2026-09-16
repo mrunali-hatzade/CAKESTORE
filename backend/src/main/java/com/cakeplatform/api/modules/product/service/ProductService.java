@@ -2,6 +2,8 @@ package com.cakeplatform.api.modules.product.service;
 
 import com.cakeplatform.api.modules.audit.ActivityLoggerService;
 import com.cakeplatform.api.modules.product.Product;
+import com.cakeplatform.api.modules.product.ProductHighlight;
+import com.cakeplatform.api.modules.product.ProductImage;
 import com.cakeplatform.api.modules.product.ProductRepository;
 import com.cakeplatform.api.modules.product.dto.ProductRequest;
 import com.cakeplatform.api.modules.shop.Shop;
@@ -35,47 +37,21 @@ public class ProductService {
 
         Product product = new Product();
         product.setShop(shop);
-        product.setName(request.getName());
-        product.setDescription(request.getDescription());
-        product.setIngredients(request.getIngredients());
-        product.setAllergens(request.getAllergens());
-        product.setPrice(request.getPrice());
-        product.setImageUrl(request.getImageUrl());
-        product.setAvailability(request.getAvailability() != null ? request.getAvailability() : true);
-        product.setStatus("ACTIVE");
-        
-        if (request.getCategoryId() != null) {
-            com.cakeplatform.api.modules.product.ProductCategory category = categoryRepository.findByIdAndShopId(request.getCategoryId(), shop.getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Category not found or does not belong to your shop"));
-            product.setCategory(category);
-        } else {
-            product.setCategory(null);
-        }
-        
-        if (request.getVariants() != null) {
-            for (ProductRequest.VariantDto vDto : request.getVariants()) {
-                com.cakeplatform.api.modules.product.ProductVariant variant = new com.cakeplatform.api.modules.product.ProductVariant();
-                variant.setName(vDto.getName());
-                variant.setPrice(vDto.getPrice());
-                variant.setIsAvailable(vDto.getIsAvailable() != null ? vDto.getIsAvailable() : true);
-                variant.setProduct(product);
-                product.getVariants().add(variant);
-            }
-        }
-        
-        if (request.getAddons() != null) {
-            for (ProductRequest.AddonDto aDto : request.getAddons()) {
-                com.cakeplatform.api.modules.product.ProductAddon addon = new com.cakeplatform.api.modules.product.ProductAddon();
-                addon.setName(aDto.getName());
-                addon.setPrice(aDto.getPrice());
-                addon.setIsAvailable(aDto.getIsAvailable() != null ? aDto.getIsAvailable() : true);
-                addon.setProduct(product);
-                product.getAddons().add(addon);
-            }
-        }
+        applyBasicProductFields(product, request, shop);
+
+        // Images (Max 3 alternative images enforced by backend)
+        applyProductImages(product, request.getImages());
+
+        // Highlights
+        applyProductHighlights(product, request.getHighlights());
+
+        // Variants / Flavours
+        applyProductVariants(product, request.getVariants());
+
+        // Addons
+        applyProductAddons(product, request.getAddons());
 
         Product saved = productRepository.save(product);
-        
         activityLogger.logActivity(userId, shop.getId(), "PRODUCT_CREATED", "PRODUCT", saved.getId(), "Name: " + saved.getName());
         return saved;
     }
@@ -83,19 +59,50 @@ public class ProductService {
     @Transactional
     public Product updateProduct(Long productId, Long userId, ProductRequest request) {
         Shop shop = getShopByOwnerId(userId);
-        
+
         Product product = productRepository.findByIdAndShopId(productId, shop.getId())
                 .orElseThrow(() -> new RuntimeException("Product not found or unauthorized"));
 
-        product.setName(request.getName());
+        applyBasicProductFields(product, request, shop);
+
+        if (request.getImages() != null) {
+            product.getImages().clear();
+            applyProductImages(product, request.getImages());
+        }
+
+        if (request.getHighlights() != null) {
+            product.getHighlights().clear();
+            applyProductHighlights(product, request.getHighlights());
+        }
+
+        if (request.getVariants() != null) {
+            product.getVariants().clear();
+            applyProductVariants(product, request.getVariants());
+        }
+
+        if (request.getAddons() != null) {
+            product.getAddons().clear();
+            applyProductAddons(product, request.getAddons());
+        }
+
+        Product updated = productRepository.save(product);
+        activityLogger.logActivity(userId, shop.getId(), "PRODUCT_UPDATED", "PRODUCT", updated.getId(), null);
+        return updated;
+    }
+
+    private void applyBasicProductFields(Product product, ProductRequest request, Shop shop) {
+        product.setName(request.getName().trim());
         product.setDescription(request.getDescription());
         product.setIngredients(request.getIngredients());
         product.setAllergens(request.getAllergens());
         product.setPrice(request.getPrice());
+        product.setOriginalPrice(request.getOriginalPrice());
         product.setImageUrl(request.getImageUrl());
-        if (request.getAvailability() != null) {
-            product.setAvailability(request.getAvailability());
-        }
+        product.setAvailability(request.getAvailability() != null ? request.getAvailability() : true);
+        product.setStatus("ACTIVE");
+        product.setAllowEggChoice(Boolean.TRUE.equals(request.getAllowEggChoice()));
+        product.setEggPreferenceDefault(request.getEggPreferenceDefault() != null ? request.getEggPreferenceDefault() : "EGGLESS");
+        product.setEgglessPriceDiff(request.getEgglessPriceDiff() != null ? request.getEgglessPriceDiff() : java.math.BigDecimal.ZERO);
 
         if (request.getCategoryId() != null) {
             com.cakeplatform.api.modules.product.ProductCategory category = categoryRepository.findByIdAndShopId(request.getCategoryId(), shop.getId())
@@ -104,20 +111,77 @@ public class ProductService {
         } else {
             product.setCategory(null);
         }
-
-        Product updated = productRepository.save(product);
-        
-        activityLogger.logActivity(userId, shop.getId(), "PRODUCT_UPDATED", "PRODUCT", updated.getId(), null);
-        return updated;
     }
-    
+
+    private void applyProductImages(Product product, List<ProductRequest.ImageDto> imageDtos) {
+        if (imageDtos == null) return;
+        if (imageDtos.size() > 3) {
+            throw new IllegalArgumentException("A product can have a maximum of 3 alternative images");
+        }
+        for (int i = 0; i < imageDtos.size(); i++) {
+            ProductRequest.ImageDto dto = imageDtos.get(i);
+            if (dto.getImageUrl() != null && !dto.getImageUrl().trim().isEmpty()) {
+                ProductImage img = new ProductImage();
+                img.setProduct(product);
+                img.setImageUrl(dto.getImageUrl().trim());
+                img.setDisplayOrder(dto.getDisplayOrder() != null ? dto.getDisplayOrder() : i + 1);
+                img.setAltText(dto.getAltText());
+                product.getImages().add(img);
+            }
+        }
+    }
+
+    private void applyProductHighlights(Product product, List<ProductRequest.HighlightDto> highlightDtos) {
+        if (highlightDtos == null) return;
+        for (int i = 0; i < highlightDtos.size(); i++) {
+            ProductRequest.HighlightDto dto = highlightDtos.get(i);
+            if (dto.getHighlightText() != null && !dto.getHighlightText().trim().isEmpty()) {
+                ProductHighlight ph = new ProductHighlight();
+                ph.setProduct(product);
+                ph.setHighlightText(dto.getHighlightText().trim());
+                ph.setDisplayOrder(dto.getDisplayOrder() != null ? dto.getDisplayOrder() : i + 1);
+                product.getHighlights().add(ph);
+            }
+        }
+    }
+
+    private void applyProductVariants(Product product, List<ProductRequest.VariantDto> variantDtos) {
+        if (variantDtos == null) return;
+        for (int i = 0; i < variantDtos.size(); i++) {
+            ProductRequest.VariantDto vDto = variantDtos.get(i);
+            com.cakeplatform.api.modules.product.ProductVariant variant = new com.cakeplatform.api.modules.product.ProductVariant();
+            variant.setName(vDto.getName().trim());
+            variant.setPrice(vDto.getPrice());
+            variant.setOriginalPrice(vDto.getOriginalPrice());
+            variant.setImageUrl(vDto.getImageUrl());
+            variant.setDescription(vDto.getDescription());
+            variant.setDisplayOrder(vDto.getDisplayOrder() != null ? vDto.getDisplayOrder() : i + 1);
+            variant.setVariantType(vDto.getVariantType() != null ? vDto.getVariantType() : "FLAVOUR");
+            variant.setIsAvailable(vDto.getIsAvailable() != null ? vDto.getIsAvailable() : true);
+            variant.setProduct(product);
+            product.getVariants().add(variant);
+        }
+    }
+
+    private void applyProductAddons(Product product, List<ProductRequest.AddonDto> addonDtos) {
+        if (addonDtos == null) return;
+        for (ProductRequest.AddonDto aDto : addonDtos) {
+            com.cakeplatform.api.modules.product.ProductAddon addon = new com.cakeplatform.api.modules.product.ProductAddon();
+            addon.setName(aDto.getName().trim());
+            addon.setPrice(aDto.getPrice());
+            addon.setIsAvailable(aDto.getIsAvailable() != null ? aDto.getIsAvailable() : true);
+            addon.setProduct(product);
+            product.getAddons().add(addon);
+        }
+    }
+
     @Transactional
     public void deleteProduct(Long productId, Long userId) {
         Shop shop = getShopByOwnerId(userId);
-        
+
         Product product = productRepository.findByIdAndShopId(productId, shop.getId())
                 .orElseThrow(() -> new RuntimeException("Product not found or unauthorized"));
-                
+
         productRepository.delete(product);
         activityLogger.logActivity(userId, shop.getId(), "PRODUCT_DELETED", "PRODUCT", productId, null);
     }

@@ -1,17 +1,14 @@
-# Production Configuration Profile for CakeStore API
-# Active when SPRING_PROFILES_ACTIVE=prod
-
 spring:
   datasource:
-    url: 
-    username: 
-    password: 
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     hikari:
-      maximum-pool-size: 
-      minimum-idle: 
-      idle-timeout: 
-      max-lifetime: 
-      connection-timeout: 
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:30000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:1800000}
+      connection-timeout: ${DB_POOL_CONN_TIMEOUT:20000}
 
   jpa:
     show-sql: false
@@ -20,20 +17,20 @@ spring:
         format_sql: false
 
 jwt:
-  secret: 
-  expiration: 
+  secret: ${JWT_SECRET}
+  expiration: 86400000
 
 app:
   cors:
-    allowed-origins: 
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
 razorpay:
-  key-id: 
-  key-secret: 
-  webhook-secret: 
+  key-id: ${RAZORPAY_KEY_ID}
+  key-secret: ${RAZORPAY_KEY_SECRET}
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET}
 
 file:
-  upload-dir: 
+  upload-dir: ${FILE_UPLOAD_DIR:/var/lib/cakestore/uploads}
 
 logging:
   level:
@@ -42,3 +39,13 @@ logging:
     org.hibernate.SQL: WARN
     org.hibernate.type.descriptor.sql: WARN
     com.cakeplatform.api: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+

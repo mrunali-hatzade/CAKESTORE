@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Cake, Lock, Mail, ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, ShieldCheck, Store } from 'lucide-react';
+import { Cake, Lock, Mail, ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -34,16 +34,6 @@ export default function LoginPage() {
       setError(err.message || 'Invalid email or password. Please verify your credentials.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleQuickFill = (type: 'owner' | 'admin') => {
-    if (type === 'owner') {
-      setEmail('owner@sweetdelight.com');
-      setPassword('password123');
-    } else {
-      setEmail('admin@cakeplatform.com');
-      setPassword('Password123!');
     }
   };
 
@@ -143,30 +133,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Quick Demo Autofill Helper */}
-          <div className="p-3.5 rounded-2xl bg-brand-blush/60 border border-brand-blush-border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-brand-plum">
-              <Store className="w-4 h-4 shrink-0" />
-              <span>Quick Test Autofill:</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFill('owner')}
-                className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-white border border-brand-border text-brand-espresso hover:bg-brand-plum hover:text-white transition-colors shadow-2xs cursor-pointer"
-              >
-                Owner Demo
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('admin')}
-                className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-white border border-brand-border text-brand-espresso hover:bg-brand-plum hover:text-white transition-colors shadow-2xs cursor-pointer"
-              >
-                Admin Demo
-              </button>
-            </div>
-          </div>
-
           {error && <ErrorState message={error} className="text-left" />}
 
           {/* Login Form */}
@@ -194,7 +160,7 @@ export default function LoginPage() {
                   Password <span className="text-brand-crimson">*</span>
                 </label>
                 <Link
-                  href="/contact"
+                  href="/forgot-password"
                   className="text-[11px] font-semibold text-brand-plum hover:underline"
                 >
                   Forgot password?
@@ -240,7 +206,7 @@ export default function LoginPage() {
               href="/onboarding"
               className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl border border-brand-border bg-white hover:bg-brand-cream text-xs font-bold text-brand-espresso transition-all shadow-2xs"
             >
-              <span>Register Your Bakery (Free 14-Day Trial)</span>
+              <span>Register Your Bakery</span>
               <ArrowRight className="w-3.5 h-3.5 text-brand-plum" />
             </Link>
           </div>

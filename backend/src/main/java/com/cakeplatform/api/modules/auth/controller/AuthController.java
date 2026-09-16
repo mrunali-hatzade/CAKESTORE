@@ -35,4 +35,24 @@ public class AuthController {
     ) {
         return ResponseEntity.ok(authService.login(request));
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<java.util.Map<String, String>> forgotPassword(
+            @Valid @RequestBody com.cakeplatform.api.modules.auth.dto.ForgotPasswordRequest request
+    ) {
+        authService.forgotPassword(request.getEmail());
+        java.util.Map<String, String> response = new java.util.HashMap<>();
+        response.put("message", "If an account with that email exists, a password reset link has been sent.");
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<java.util.Map<String, String>> resetPassword(
+            @Valid @RequestBody com.cakeplatform.api.modules.auth.dto.ResetPasswordRequest request
+    ) {
+        authService.resetPassword(request.getToken(), request.getNewPassword());
+        java.util.Map<String, String> response = new java.util.HashMap<>();
+        response.put("message", "Password has been successfully reset.");
+        return ResponseEntity.ok(response);
+    }
 }

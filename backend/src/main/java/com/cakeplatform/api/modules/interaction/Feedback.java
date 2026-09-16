@@ -35,6 +35,12 @@ public class Feedback {
     @Column(name = "order_reference")
     private String orderReference;
 
+    @Column(name = "customer_email")
+    private String customerEmail;
+
+    @Column(name = "is_approved", nullable = false)
+    private Boolean isApproved = true;
+
     @Column(name = "owner_reply", columnDefinition = "TEXT")
     private String ownerReply;
 

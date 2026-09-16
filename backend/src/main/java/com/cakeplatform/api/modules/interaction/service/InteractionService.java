@@ -14,14 +14,42 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 @Service
-@RequiredArgsConstructor
 public class InteractionService {
 
     private final FeedbackRepository feedbackRepository;
     private final EnquiryRepository enquiryRepository;
     private final CustomCakeRequestRepository customCakeRequestRepository;
+    private final CustomCakeRequestFieldValueRepository customCakeRequestFieldValueRepository;
     private final ShopRepository shopRepository;
     private final NotificationService notificationService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InteractionService(
+            FeedbackRepository feedbackRepository,
+            EnquiryRepository enquiryRepository,
+            CustomCakeRequestRepository customCakeRequestRepository,
+            CustomCakeRequestFieldValueRepository customCakeRequestFieldValueRepository,
+            ShopRepository shopRepository,
+            NotificationService notificationService
+    ) {
+        this.feedbackRepository = feedbackRepository;
+        this.enquiryRepository = enquiryRepository;
+        this.customCakeRequestRepository = customCakeRequestRepository;
+        this.customCakeRequestFieldValueRepository = customCakeRequestFieldValueRepository;
+        this.shopRepository = shopRepository;
+        this.notificationService = notificationService;
+    }
+
+    // Backward-compatible constructor for existing tests
+    public InteractionService(
+            FeedbackRepository feedbackRepository,
+            EnquiryRepository enquiryRepository,
+            CustomCakeRequestRepository customCakeRequestRepository,
+            ShopRepository shopRepository,
+            NotificationService notificationService
+    ) {
+        this(feedbackRepository, enquiryRepository, customCakeRequestRepository, null, shopRepository, notificationService);
+    }
 
     private Shop getActiveShop(Long shopId) {
         Shop shop = shopRepository.findById(shopId)
@@ -42,6 +70,8 @@ public class InteractionService {
         feedback.setRating(request.getRating());
         feedback.setComment(request.getComment());
         feedback.setOrderReference(request.getOrderReference());
+        feedback.setCustomerEmail(request.getCustomerEmail());
+        feedback.setIsApproved(true);
         
         Feedback saved = feedbackRepository.save(feedback);
 
@@ -102,6 +132,20 @@ public class InteractionService {
         cakeRequest.setDeliveryPreference(request.getDeliveryPreference());
 
         CustomCakeRequest saved = customCakeRequestRepository.save(cakeRequest);
+
+        if (request.getDynamicFieldValues() != null && !request.getDynamicFieldValues().isEmpty()) {
+            for (DynamicFieldValueDto valDto : request.getDynamicFieldValues()) {
+                if (valDto != null && valDto.getFieldKey() != null) {
+                    CustomCakeRequestFieldValue val = CustomCakeRequestFieldValue.builder()
+                            .request(saved)
+                            .fieldKey(valDto.getFieldKey())
+                            .fieldLabel(valDto.getFieldLabel() != null ? valDto.getFieldLabel() : valDto.getFieldKey())
+                            .fieldValue(valDto.getFieldValue())
+                            .build();
+                    customCakeRequestFieldValueRepository.save(val);
+                }
+            }
+        }
 
         notificationService.createNotification(
                 shop.getOwner(),

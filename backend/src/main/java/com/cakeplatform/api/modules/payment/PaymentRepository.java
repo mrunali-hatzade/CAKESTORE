@@ -13,8 +13,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByShopId(Long shopId);
     List<Payment> findByShopIdOrderByCreatedAtDesc(Long shopId);
     java.util.Optional<Payment> findByProviderPaymentId(String providerPaymentId);
+    java.util.Optional<Payment> findByProviderOrderId(String providerOrderId);
     java.util.Optional<Payment> findByIdAndShopId(Long id, Long shopId);
     void deleteByShopId(Long shopId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p WHERE p.id = :id")
+    java.util.Optional<Payment> findByIdWithLock(@org.springframework.data.repository.query.Param("id") Long id);
 
     @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'COMPLETED'")
     BigDecimal getTotalRevenue();

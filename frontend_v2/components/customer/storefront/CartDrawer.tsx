@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, ShoppingBag, Plus, Minus, Trash2, ArrowRight, Store, Tag, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { storefrontApi } from '@/lib/api/storefront';
+import { ShopDeliveryConfig } from '@/types/shop';
 
 export const CartDrawer: React.FC = () => {
   const router = useRouter();
@@ -26,6 +27,27 @@ export const CartDrawer: React.FC = () => {
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  const [deliveryConfig, setDeliveryConfig] = useState<ShopDeliveryConfig | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (currentShopId && isCartOpen) {
+      storefrontApi.getShopById(currentShopId)
+        .then((s) => {
+          if (isMounted) {
+            setDeliveryConfig(s?.deliveryConfig || null);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setDeliveryConfig(null);
+        });
+    } else if (!currentShopId) {
+      setDeliveryConfig(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [currentShopId, isCartOpen]);
 
   if (!isCartOpen) return null;
 
@@ -67,7 +89,21 @@ export const CartDrawer: React.FC = () => {
     setCouponSuccess(null);
   };
 
-  const deliveryCharge = items.length > 0 ? 50 : 0;
+  let deliveryCharge = 0;
+  if (items.length > 0 && deliveryConfig) {
+    if (deliveryConfig.deliveryChargeType === 'FIXED') {
+      const fixedAmount = Number(deliveryConfig.fixedChargeAmount) || 0;
+      const minFree = deliveryConfig.minOrderForFreeDelivery;
+      if (minFree && minFree > 0 && totalPrice >= minFree) {
+        deliveryCharge = 0;
+      } else {
+        deliveryCharge = fixedAmount;
+      }
+    } else if (deliveryConfig.deliveryChargeType === 'FREE') {
+      deliveryCharge = 0;
+    }
+  }
+
   const discountAmount = appliedCoupon ? appliedCoupon.discountAmount : 0;
   const finalTotal = Math.max(0, totalPrice - discountAmount + deliveryCharge);
 
@@ -288,7 +324,13 @@ export const CartDrawer: React.FC = () => {
 
                 <div className="flex items-center justify-between text-brand-muted">
                   <span>Delivery Estimate:</span>
-                  <span className="text-brand-espresso font-medium">₹{deliveryCharge}</span>
+                  <span className="font-medium text-brand-espresso">
+                    {deliveryCharge === 0 ? (
+                      <span className="text-emerald-700 font-semibold">FREE</span>
+                    ) : (
+                      `₹${deliveryCharge}`
+                    )}
+                  </span>
                 </div>
 
                 <div className="pt-2 border-t border-brand-border/60 flex items-center justify-between font-bold text-sm">

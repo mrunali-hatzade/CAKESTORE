@@ -14,10 +14,28 @@ export interface CategoryRequest {
   displayOrder?: number;
 }
 
+export interface ProductImage {
+  id?: number;
+  imageUrl: string;
+  displayOrder: number;
+  altText?: string;
+}
+
+export interface ProductHighlight {
+  id?: number;
+  highlightText: string;
+  displayOrder: number;
+}
+
 export interface ProductVariant {
   id?: number;
   name: string;
   price: number;
+  originalPrice?: number | null;
+  imageUrl?: string | null;
+  description?: string | null;
+  displayOrder?: number;
+  variantType?: string;
   isAvailable?: boolean;
 }
 
@@ -34,19 +52,29 @@ export interface Product {
   name: string;
   description: string;
   price: number;
+  originalPrice?: number | null;
   categoryId?: number | null;
   categoryName?: string | null;
-  category: string;
+  category?: string;
   imageUrl?: string;
   isEggless: boolean;
+  allowEggChoice?: boolean;
+  eggPreferenceDefault?: 'EGGLESS' | 'REGULAR' | string;
+  egglessPriceDiff?: number;
   inStock: boolean;
   availability?: boolean;
+  status?: string;
   preparationTimeHours?: number;
   weightGrams?: number;
   ingredients?: string | null;
   allergens?: string | null;
+  images?: ProductImage[];
+  highlights?: ProductHighlight[];
   variants?: ProductVariant[];
   addons?: ProductAddon[];
+  rating?: number;
+  reviewCount?: number;
+  totalReviews?: number;
 }
 
 export interface CreateProductRequest {
@@ -55,14 +83,20 @@ export interface CreateProductRequest {
   ingredients?: string | null;
   allergens?: string | null;
   price: number;
+  originalPrice?: number | null;
   categoryId?: number | null;
   category?: string;
   imageUrl?: string;
   isEggless?: boolean;
+  allowEggChoice?: boolean;
+  eggPreferenceDefault?: string;
+  egglessPriceDiff?: number;
   inStock?: boolean;
   availability?: boolean;
   preparationTimeHours?: number;
   weightGrams?: number;
+  images?: ProductImage[];
+  highlights?: ProductHighlight[];
   variants?: ProductVariant[];
   addons?: ProductAddon[];
 }

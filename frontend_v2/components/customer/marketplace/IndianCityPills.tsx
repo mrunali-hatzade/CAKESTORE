@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapPin } from 'lucide-react';
-import { INDIAN_POPULAR_CITIES } from '@/lib/constants/indianLocations';
+import { storefrontApi } from '@/lib/api/storefront';
+import { PopularCity } from '@/types/shop';
 
 interface IndianCityPillsProps {
   selectedCity: string;
@@ -15,12 +16,35 @@ export const IndianCityPills: React.FC<IndianCityPillsProps> = ({
   onSelectCity,
   className = '',
 }) => {
-  const cities = ['ALL', ...INDIAN_POPULAR_CITIES.map((c) => c.name)];
+  const [popularCities, setPopularCities] = useState<PopularCity[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    storefrontApi
+      .getPopularCities(10)
+      .then((data) => {
+        if (isMounted && Array.isArray(data)) {
+          setPopularCities(data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const cities = ['ALL', ...popularCities.map((c) => c.cityName)];
+
+  if (cities.length <= 1) {
+    return null;
+  }
 
   return (
     <div className={`flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none ${className}`}>
       {cities.map((cityName) => {
-        const isSelected = selectedCity.toLowerCase() === cityName.toLowerCase() || (cityName === 'ALL' && !selectedCity);
+        const isSelected =
+          selectedCity.toLowerCase() === cityName.toLowerCase() ||
+          (cityName === 'ALL' && !selectedCity);
 
         return (
           <button

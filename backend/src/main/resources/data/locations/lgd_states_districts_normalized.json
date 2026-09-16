@@ -1,0 +1,380 @@
+[
+  {
+    "stateCode": "MH",
+    "stateName": "Maharashtra",
+    "type": "STATE",
+    "lgdCode": 27,
+    "districts": [
+      { "name": "Pune", "lgdCode": 492 },
+      { "name": "Mumbai City", "lgdCode": 490 },
+      { "name": "Mumbai Suburban", "lgdCode": 491 },
+      { "name": "Nagpur", "lgdCode": 497 },
+      { "name": "Bhandara", "lgdCode": 498 },
+      { "name": "Thane", "lgdCode": 493 },
+      { "name": "Nashik", "lgdCode": 489 },
+      { "name": "Aurangabad", "lgdCode": 488 },
+      { "name": "Kolhapur", "lgdCode": 501 },
+      { "name": "Solapur", "lgdCode": 500 },
+      { "name": "Satara", "lgdCode": 499 },
+      { "name": "Raigad", "lgdCode": 494 },
+      { "name": "Amravati", "lgdCode": 485 }
+    ]
+  },
+  {
+    "stateCode": "KA",
+    "stateName": "Karnataka",
+    "type": "STATE",
+    "lgdCode": 29,
+    "districts": [
+      { "name": "Bengaluru Urban", "lgdCode": 505 },
+      { "name": "Bengaluru Rural", "lgdCode": 506 },
+      { "name": "Mysuru", "lgdCode": 519 },
+      { "name": "Dakshina Kannada", "lgdCode": 511 },
+      { "name": "Belagavi", "lgdCode": 504 },
+      { "name": "Dharwad", "lgdCode": 513 }
+    ]
+  },
+  {
+    "stateCode": "DL",
+    "stateName": "Delhi",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 7,
+    "districts": [
+      { "name": "New Delhi", "lgdCode": 88 },
+      { "name": "Central Delhi", "lgdCode": 89 },
+      { "name": "South Delhi", "lgdCode": 90 },
+      { "name": "North Delhi", "lgdCode": 91 },
+      { "name": "East Delhi", "lgdCode": 92 }
+    ]
+  },
+  {
+    "stateCode": "GJ",
+    "stateName": "Gujarat",
+    "type": "STATE",
+    "lgdCode": 24,
+    "districts": [
+      { "name": "Ahmedabad", "lgdCode": 438 },
+      { "name": "Surat", "lgdCode": 454 },
+      { "name": "Vadodara", "lgdCode": 456 },
+      { "name": "Rajkot", "lgdCode": 451 }
+    ]
+  },
+  {
+    "stateCode": "TN",
+    "stateName": "Tamil Nadu",
+    "type": "STATE",
+    "lgdCode": 33,
+    "districts": [
+      { "name": "Chennai", "lgdCode": 566 },
+      { "name": "Coimbatore", "lgdCode": 568 },
+      { "name": "Madurai", "lgdCode": 574 }
+    ]
+  },
+  {
+    "stateCode": "TS",
+    "stateName": "Telangana",
+    "type": "STATE",
+    "lgdCode": 36,
+    "districts": [
+      { "name": "Hyderabad", "lgdCode": 502 },
+      { "name": "Rangareddy", "lgdCode": 503 },
+      { "name": "Medchal-Malkajgiri", "lgdCode": 680 }
+    ]
+  },
+  {
+    "stateCode": "WB",
+    "stateName": "West Bengal",
+    "type": "STATE",
+    "lgdCode": 19,
+    "districts": [
+      { "name": "Kolkata", "lgdCode": 317 },
+      { "name": "North 24 Parganas", "lgdCode": 318 },
+      { "name": "Howrah", "lgdCode": 315 }
+    ]
+  },
+  {
+    "stateCode": "RJ",
+    "stateName": "Rajasthan",
+    "type": "STATE",
+    "lgdCode": 8,
+    "districts": [
+      { "name": "Jaipur", "lgdCode": 105 },
+      { "name": "Jodhpur", "lgdCode": 107 },
+      { "name": "Udaipur", "lgdCode": 120 }
+    ]
+  },
+  {
+    "stateCode": "UP",
+    "stateName": "Uttar Pradesh",
+    "type": "STATE",
+    "lgdCode": 9,
+    "districts": [
+      { "name": "Lucknow", "lgdCode": 157 },
+      { "name": "Gautam Buddha Nagar", "lgdCode": 141 },
+      { "name": "Ghaziabad", "lgdCode": 142 },
+      { "name": "Varanasi", "lgdCode": 191 },
+      { "name": "Rampur", "lgdCode": 172 },
+      { "name": "Aurangabad", "lgdCode": 130 }
+    ]
+  },
+  {
+    "stateCode": "KL",
+    "stateName": "Kerala",
+    "type": "STATE",
+    "lgdCode": 32,
+    "districts": [
+      { "name": "Ernakulam", "lgdCode": 555 },
+      { "name": "Thiruvananthapuram", "lgdCode": 564 },
+      { "name": "Kozhikode", "lgdCode": 558 }
+    ]
+  },
+  {
+    "stateCode": "PB",
+    "stateName": "Punjab",
+    "type": "STATE",
+    "lgdCode": 3,
+    "districts": [
+      { "name": "Ludhiana", "lgdCode": 39 },
+      { "name": "Amritsar", "lgdCode": 28 },
+      { "name": "SAS Nagar Mohali", "lgdCode": 45 }
+    ]
+  },
+  {
+    "stateCode": "CH",
+    "stateName": "Chandigarh",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 4,
+    "districts": [
+      { "name": "Chandigarh", "lgdCode": 50 }
+    ]
+  },
+  {
+    "stateCode": "HP",
+    "stateName": "Himachal Pradesh",
+    "type": "STATE",
+    "lgdCode": 2,
+    "districts": [
+      { "name": "Shimla", "lgdCode": 22 },
+      { "name": "Bilaspur", "lgdCode": 13 },
+      { "name": "Kangra", "lgdCode": 16 }
+    ]
+  },
+  {
+    "stateCode": "CG",
+    "stateName": "Chhattisgarh",
+    "type": "STATE",
+    "lgdCode": 22,
+    "districts": [
+      { "name": "Raipur", "lgdCode": 386 },
+      { "name": "Bilaspur", "lgdCode": 375 },
+      { "name": "Durg", "lgdCode": 378 }
+    ]
+  },
+  {
+    "stateCode": "MP",
+    "stateName": "Madhya Pradesh",
+    "type": "STATE",
+    "lgdCode": 23,
+    "districts": [
+      { "name": "Bhopal", "lgdCode": 395 },
+      { "name": "Indore", "lgdCode": 412 }
+    ]
+  },
+  {
+    "stateCode": "AP",
+    "stateName": "Andhra Pradesh",
+    "type": "STATE",
+    "lgdCode": 28,
+    "districts": [
+      { "name": "Visakhapatnam", "lgdCode": 535 },
+      { "name": "Vijayawada (NTR)", "lgdCode": 743 }
+    ]
+  },
+  {
+    "stateCode": "BR",
+    "stateName": "Bihar",
+    "type": "STATE",
+    "lgdCode": 10,
+    "districts": [
+      { "name": "Patna", "lgdCode": 230 },
+      { "name": "Aurangabad", "lgdCode": 213 }
+    ]
+  },
+  {
+    "stateCode": "HR",
+    "stateName": "Haryana",
+    "type": "STATE",
+    "lgdCode": 6,
+    "districts": [
+      { "name": "Gurugram", "lgdCode": 64 },
+      { "name": "Faridabad", "lgdCode": 63 }
+    ]
+  },
+  {
+    "stateCode": "GA",
+    "stateName": "Goa",
+    "type": "STATE",
+    "lgdCode": 30,
+    "districts": [
+      { "name": "North Goa", "lgdCode": 538 },
+      { "name": "South Goa", "lgdCode": 539 }
+    ]
+  },
+  {
+    "stateCode": "AS",
+    "stateName": "Assam",
+    "type": "STATE",
+    "lgdCode": 18,
+    "districts": [
+      { "name": "Kamrup Metropolitan", "lgdCode": 298 }
+    ]
+  },
+  {
+    "stateCode": "OR",
+    "stateName": "Odisha",
+    "type": "STATE",
+    "lgdCode": 21,
+    "districts": [
+      { "name": "Khordha", "lgdCode": 361 }
+    ]
+  },
+  {
+    "stateCode": "JH",
+    "stateName": "Jharkhand",
+    "type": "STATE",
+    "lgdCode": 20,
+    "districts": [
+      { "name": "Ranchi", "lgdCode": 349 }
+    ]
+  },
+  {
+    "stateCode": "UT",
+    "stateName": "Uttarakhand",
+    "type": "STATE",
+    "lgdCode": 5,
+    "districts": [
+      { "name": "Dehradun", "lgdCode": 54 }
+    ]
+  },
+  {
+    "stateCode": "JK",
+    "stateName": "Jammu and Kashmir",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 1,
+    "districts": [
+      { "name": "Srinagar", "lgdCode": 11 },
+      { "name": "Jammu", "lgdCode": 4 }
+    ]
+  },
+  {
+    "stateCode": "LA",
+    "stateName": "Ladakh",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 37,
+    "districts": [
+      { "name": "Leh", "lgdCode": 678 },
+      { "name": "Kargil", "lgdCode": 677 }
+    ]
+  },
+  {
+    "stateCode": "PY",
+    "stateName": "Puducherry",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 34,
+    "districts": [
+      { "name": "Puducherry", "lgdCode": 598 }
+    ]
+  },
+  {
+    "stateCode": "AN",
+    "stateName": "Andaman and Nicobar Islands",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 35,
+    "districts": [
+      { "name": "South Andaman", "lgdCode": 601 }
+    ]
+  },
+  {
+    "stateCode": "DH",
+    "stateName": "Dadra and Nagar Haveli and Daman and Diu",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 38,
+    "districts": [
+      { "name": "Daman", "lgdCode": 602 },
+      { "name": "Diu", "lgdCode": 603 },
+      { "name": "Dadra and Nagar Haveli", "lgdCode": 604 }
+    ]
+  },
+  {
+    "stateCode": "LD",
+    "stateName": "Lakshadweep",
+    "type": "UNION_TERRITORY",
+    "lgdCode": 31,
+    "districts": [
+      { "name": "Lakshadweep", "lgdCode": 540 }
+    ]
+  },
+  {
+    "stateCode": "SK",
+    "stateName": "Sikkim",
+    "type": "STATE",
+    "lgdCode": 11,
+    "districts": [
+      { "name": "East Sikkim", "lgdCode": 242 }
+    ]
+  },
+  {
+    "stateCode": "ML",
+    "stateName": "Meghalaya",
+    "type": "STATE",
+    "lgdCode": 17,
+    "districts": [
+      { "name": "East Khasi Hills", "lgdCode": 284 }
+    ]
+  },
+  {
+    "stateCode": "MN",
+    "stateName": "Manipur",
+    "type": "STATE",
+    "lgdCode": 14,
+    "districts": [
+      { "name": "Imphal West", "lgdCode": 260 }
+    ]
+  },
+  {
+    "stateCode": "TR",
+    "stateName": "Tripura",
+    "type": "STATE",
+    "lgdCode": 16,
+    "districts": [
+      { "name": "West Tripura", "lgdCode": 277 }
+    ]
+  },
+  {
+    "stateCode": "MZ",
+    "stateName": "Mizoram",
+    "type": "STATE",
+    "lgdCode": 15,
+    "districts": [
+      { "name": "Aizawl", "lgdCode": 269 }
+    ]
+  },
+  {
+    "stateCode": "NL",
+    "stateName": "Nagaland",
+    "type": "STATE",
+    "lgdCode": 13,
+    "districts": [
+      { "name": "Kohima", "lgdCode": 254 }
+    ]
+  },
+  {
+    "stateCode": "AR",
+    "stateName": "Arunachal Pradesh",
+    "type": "STATE",
+    "lgdCode": 12,
+    "districts": [
+      { "name": "Papum Pare", "lgdCode": 251 }
+    ]
+  }
+]

@@ -26,4 +26,6 @@ public class CustomCakeDto {
     private BigDecimal budget;
     private LocalDate requiredDate;
     private String deliveryPreference;
+
+    private java.util.List<DynamicFieldValueDto> dynamicFieldValues;
 }

@@ -6,7 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Cake, ShoppingBag, Calendar, BarChart3,
   Tag, Users, MessageSquareQuote, Star, Settings, CreditCard,
-  LogOut, Store, ExternalLink, Menu, Globe, X, RefreshCw,
+  LogOut, Store, ExternalLink, Menu, Globe, X, RefreshCw, Images,
+  AlertCircle, Clock,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { OwnerProvider, useOwner } from '@/context/OwnerContext';
@@ -33,6 +34,7 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
   const navItems = [
     { label: 'Overview', href: '/dashboard/owner', icon: LayoutDashboard },
     { label: 'Products', href: '/dashboard/owner/products', icon: Cake },
+    { label: 'Cake Gallery', href: '/dashboard/owner/gallery', icon: Images },
     { label: 'Orders', href: '/dashboard/owner/orders', icon: ShoppingBag },
     { label: 'Delivery Slots', href: '/dashboard/owner/delivery-slots', icon: Calendar },
     { label: 'Storefront Website', href: '/dashboard/owner/website', icon: Globe },
@@ -207,6 +209,78 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </header>
+
+        {/* Phase 1 Bakery Lifecycle Status Alert Banners */}
+        {shop?.status === 'PENDING' && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2.5 shrink-0">
+            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  <strong className="font-semibold">Complete Your Subscription:</strong> Your bakery registration is complete. Complete your subscription to activate your bakery.
+                </span>
+              </div>
+              <Link href="/dashboard/owner/subscription" className="shrink-0">
+                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7 px-3 shadow-xs">
+                  Subscribe Now
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {shop?.status === 'EXPIRED' && (
+          <div className="bg-rose-50 border-b border-rose-200 px-4 sm:px-6 py-2.5 shrink-0">
+            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-900">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>
+                  <strong className="font-semibold">Subscription Expired:</strong> Your CakeStore subscription has expired. Renew your subscription to continue managing your bakery.
+                </span>
+              </div>
+              <Link href="/dashboard/owner/subscription" className="shrink-0">
+                <Button size="sm" className="bg-rose-600 hover:bg-rose-700 text-white text-xs h-7 px-3 shadow-xs">
+                  Renew Subscription
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {shop?.status === 'ACTIVE' && shop?.verificationStatus === 'PROCESSING' && (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 sm:px-6 py-2 shrink-0">
+            <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs text-blue-900">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  <strong className="font-semibold">Your Bakery is Active:</strong> Your verification is currently under review by CakeStore. Your storefront is live and you can accept orders.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {shop?.status === 'ACTIVE' && shop?.verificationStatus === 'REJECTED' && (
+          <div className="bg-rose-50 border-b border-rose-200 px-4 sm:px-6 py-2 shrink-0">
+            <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs text-rose-900">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>
+                  <strong className="font-semibold">Verification Update:</strong> Your bakery verification documents require attention. Please update your store settings or contact support.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {shop?.status === 'SUSPENDED' && (
+          <div className="bg-rose-100 border-b border-rose-300 px-4 sm:px-6 py-2.5 shrink-0">
+            <div className="max-w-7xl mx-auto flex items-center gap-2.5 text-xs text-rose-900 font-medium">
+              <AlertCircle className="w-4 h-4 text-rose-700 shrink-0" />
+              <span>Your bakery account has been suspended by administration. Please contact platform support.</span>
+            </div>
+          </div>
+        )}
 
         {refreshError && (
           <div className="px-4 sm:px-6 pt-3 shrink-0">

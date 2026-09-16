@@ -22,6 +22,7 @@ import {
   ArrowRight,
   Calendar,
   Store,
+  ShieldCheck,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { Product } from '@/types/product';
@@ -41,13 +42,6 @@ import { Footer } from '@/components/common/Footer';
 
 const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1200&q=80';
 
-const WEIGHT_OPTIONS = [
-  { weight: 0.5, label: '500g', serves: '4-6 serves' },
-  { weight: 1.0, label: '1kg', serves: '8-12 serves' },
-  { weight: 2.0, label: '2kg', serves: '18-24 serves' },
-];
-
-const DEFAULT_FLAVOURS = ['Chocolate', 'Dark Choc', 'Milk Choc'];
 
 function ProductDetailContent() {
   const params = useParams();
@@ -67,8 +61,6 @@ function ProductDetailContent() {
 
   const [quantity, setQuantity] = useState(1);
   const [customMessage, setCustomMessage] = useState('');
-  const [selectedWeight, setSelectedWeight] = useState<number>(0.5);
-  const [selectedFlavour, setSelectedFlavour] = useState<string>('Chocolate');
   const [isEgglessPreference, setIsEgglessPreference] = useState<boolean>(true);
   const [deliveryDate, setDeliveryDate] = useState<string>('');
   const [selectedVariantId, setSelectedVariantId] = useState<number | undefined>(undefined);
@@ -79,7 +71,7 @@ function ProductDetailContent() {
 
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
     about: true,
-    ingredients: false,
+    ingredients: true,
     delivery: false,
     reviews: false,
     more: false,
@@ -177,14 +169,11 @@ function ProductDetailContent() {
     );
   }
 
-  const baseImg = product.imageUrl || FALLBACK_CAKE;
-  const galleryThumbnails = [
-    baseImg,
-    baseImg.includes('unsplash.com')
-      ? baseImg.replace(/&w=\d+/, '&w=1000&auto=format&fit=crop')
-      : baseImg,
-    'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=900&q=80',
-  ];
+  const rawGallery = [
+    product.imageUrl,
+    ...(product.images || []).map((img: any) => img.imageUrl),
+  ].filter(Boolean) as string[];
+  const galleryThumbnails = rawGallery.length > 0 ? rawGallery : [FALLBACK_CAKE];
 
   const hasVariants = Boolean(product.variants && product.variants.length > 0);
   const isVariantWeight = Boolean(
@@ -194,24 +183,31 @@ function ProductDetailContent() {
     ? product.variants?.find((v) => v.id === selectedVariantId) || product.variants?.[0]
     : null;
 
-  const baseUnitPrice = selectedVariant ? Number(selectedVariant.price) : Number(product.price) * (selectedWeight || 1);
+  const baseUnitPrice = selectedVariant ? Number(selectedVariant.price) : Number(product.price);
 
   const addonsTotal = (product.addons || [])
     .filter((a) => a.id && selectedAddonIds.includes(a.id))
     .reduce((sum, a) => sum + Number(a.price), 0);
 
-  const unitPrice = baseUnitPrice + addonsTotal;
+  const egglessDiff = Boolean(product.allowEggChoice && isEgglessPreference && product.egglessPriceDiff)
+    ? Number(product.egglessPriceDiff)
+    : 0;
+
+  const unitPrice = baseUnitPrice + addonsTotal + egglessDiff;
+
+  // Determine effective original price for discount display
+  const effectiveOriginalPrice = selectedVariant
+    ? (selectedVariant.originalPrice ? Number(selectedVariant.originalPrice) : null)
+    : (product.originalPrice ? Number(product.originalPrice) : null);
+
+  const discountPercent = effectiveOriginalPrice && effectiveOriginalPrice > unitPrice
+    ? Math.round(((effectiveOriginalPrice - unitPrice) / effectiveOriginalPrice) * 100)
+    : 0;
 
   const getFullItemName = () => {
     let name = product.name;
     if (selectedVariant) {
       name += ` (${selectedVariant.name})`;
-    } else {
-      const opt = WEIGHT_OPTIONS.find((w) => w.weight === selectedWeight);
-      name += ` (${opt?.label || `${selectedWeight}kg`})`;
-    }
-    if ((!hasVariants || isVariantWeight) && selectedFlavour) {
-      name += ` - ${selectedFlavour}`;
     }
     const selectedAddons = (product.addons || []).filter((a) => a.id && selectedAddonIds.includes(a.id));
     if (selectedAddons.length > 0) {
@@ -226,11 +222,15 @@ function ProductDetailContent() {
       name: getFullItemName(),
       price: unitPrice,
       quantity,
-      imageUrl: product.imageUrl || FALLBACK_CAKE,
+      imageUrl: selectedVariant?.imageUrl || product.imageUrl || FALLBACK_CAKE,
       isEggless: isEgglessPreference,
       customMessage: customMessage.trim() || undefined,
       shopId: shop.id,
       shopName: shop.businessName,
+      variantId: selectedVariant?.id,
+      variantName: selectedVariant?.name,
+      weight: selectedVariant ? selectedVariant.name : undefined,
+      dietaryPreference: isEgglessPreference ? 'EGGLESS' : 'REGULAR',
     });
 
     if (result.conflict) {
@@ -248,11 +248,15 @@ function ProductDetailContent() {
       name: getFullItemName(),
       price: unitPrice,
       quantity,
-      imageUrl: product.imageUrl || FALLBACK_CAKE,
+      imageUrl: selectedVariant?.imageUrl || product.imageUrl || FALLBACK_CAKE,
       isEggless: isEgglessPreference,
       customMessage: customMessage.trim() || undefined,
       shopId: shop.id,
       shopName: shop.businessName,
+      variantId: selectedVariant?.id,
+      variantName: selectedVariant?.name,
+      weight: selectedVariant ? selectedVariant.name : undefined,
+      dietaryPreference: isEgglessPreference ? 'EGGLESS' : 'REGULAR',
     });
 
     if (result.conflict) {
@@ -270,11 +274,15 @@ function ProductDetailContent() {
       name: getFullItemName(),
       price: unitPrice,
       quantity,
-      imageUrl: product.imageUrl || FALLBACK_CAKE,
+      imageUrl: selectedVariant?.imageUrl || product.imageUrl || FALLBACK_CAKE,
       isEggless: isEgglessPreference,
       customMessage: customMessage.trim() || undefined,
       shopId: shop.id,
       shopName: shop.businessName,
+      variantId: selectedVariant?.id,
+      variantName: selectedVariant?.name,
+      weight: selectedVariant ? selectedVariant.name : undefined,
+      dietaryPreference: isEgglessPreference ? 'EGGLESS' : 'REGULAR',
     });
     setShowConflictPrompt(false);
     toast.success(`Cart updated for "${shop.businessName}"!`);
@@ -282,7 +290,7 @@ function ProductDetailContent() {
   };
 
   const totalReviews = reviewsSummary?.totalReviews ?? 0;
-  const averageRating = reviewsSummary?.averageRating ?? 4.8;
+  const averageRating = reviewsSummary?.averageRating ?? 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF7F2] font-sans">
@@ -355,11 +363,11 @@ function ProductDetailContent() {
           {/* ============================================================ */}
           {/* LEFT COLUMN: Main Image + 3 Thumbnails + 5 Accordions       */}
           {/* ============================================================ */}
-          <div className="lg:col-span-5 w-full space-y-4 max-w-[420px] mx-auto lg:mx-0">
-            {/* Main Photo Card - Compact & Balanced (Matches UI Design Reference) */}
-            <div className="relative w-full h-[300px] sm:h-[340px] rounded-3xl overflow-hidden bg-white border border-brand-border/80 shadow-soft">
+          <div className="lg:col-span-7 w-full space-y-4">
+            {/* Main Photo Card - Balanced & Prominent */}
+            <div className="relative w-full h-[360px] sm:h-[400px] rounded-3xl overflow-hidden bg-white border border-brand-border/80 shadow-soft">
               <img
-                src={galleryThumbnails[selectedImageIndex] || FALLBACK_CAKE}
+                src={(selectedVariant?.imageUrl && selectedImageIndex === 0 ? selectedVariant.imageUrl : galleryThumbnails[selectedImageIndex]) || FALLBACK_CAKE}
                 alt={product.name}
                 className="w-full h-full object-cover object-center transition-all duration-300 hover:scale-105"
                 onError={(e) => {
@@ -367,7 +375,7 @@ function ProductDetailContent() {
                 }}
               />
 
-              {/* Floating Wishlist Heart Icon (Top Right, exactly as in UI Design) */}
+              {/* Floating Wishlist Heart Icon */}
               <button
                 type="button"
                 onClick={() => toggleFavorite(product, shop.id, shop.businessName)}
@@ -394,7 +402,7 @@ function ProductDetailContent() {
               </div>
             </div>
 
-            {/* 3 Angle Gallery Thumbnails (Compact matching UI Design) */}
+            {/* Gallery Thumbnails */}
             <div className="grid grid-cols-3 gap-2.5">
               {galleryThumbnails.map((thumb, idx) => (
                 <button
@@ -419,6 +427,256 @@ function ProductDetailContent() {
               ))}
             </div>
 
+                        {/* Product Configuration & Purchase Panel (With Card Border Restored) */}
+            <div className="bg-white p-5 sm:p-6 rounded-2xl border border-brand-border/80 shadow-soft space-y-4">
+              {/* Title & Category */}
+            <div>
+              <span className="text-[10px] uppercase font-bold tracking-widest text-[#C5A880] block">
+                {product.categoryName || product.category?.replace(/_/g, ' ') || 'Artisanal Creation'}
+              </span>
+              <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#2C1A1D] tracking-tight mt-0.5">
+                {product.name}
+              </h1>
+            </div>
+
+            {/* Ratings Bar */}
+            <div className="flex items-center gap-1.5 -mt-1">
+              <div className="flex items-center gap-0.5 text-amber-500">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star key={s} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                ))}
+              </div>
+              <span className="text-xs font-bold text-[#2C1A1D]">
+                {averageRating > 0 ? averageRating.toFixed(1) : null}
+              </span>
+              <span className="text-[11px] text-brand-muted font-normal">
+                ({totalReviews} reviews)
+              </span>
+            </div>
+
+            {/* Price & Discount */}
+            <div className="flex items-baseline gap-2.5 flex-wrap">
+              <div className="text-2xl font-serif font-extrabold text-[#2C1A1D]">
+                ₹{unitPrice}
+              </div>
+              {effectiveOriginalPrice && discountPercent >= 1 ? (
+                <>
+                  <span className="text-sm text-brand-muted line-through">
+                    ₹{effectiveOriginalPrice}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    {discountPercent}% OFF
+                  </span>
+                </>
+              ) : null}
+            </div>
+
+            {/* Short Description */}
+            {product.description && (
+              <p className="text-xs text-brand-muted leading-relaxed line-clamp-2">
+                {product.description}
+              </p>
+            )}
+
+            {/* Real Variants from Database (Only if configured by owner) */}
+            {hasVariants && (
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-[#2C1A1D] w-24 shrink-0">
+                  {isVariantWeight ? 'Weight:' : 'Option:'}
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {product.variants!.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setSelectedVariantId(v.id)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        selectedVariantId === v.id
+                          ? 'bg-[#5C1D2E] text-white shadow-xs'
+                          : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
+                      }`}
+                    >
+                      {v.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Eggless Option - Inline Row (only when owner enabled allowEggChoice) */}
+            {product.allowEggChoice ? (
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-[#2C1A1D] w-24 shrink-0">Dietary:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEgglessPreference(true)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isEgglessPreference
+                        ? 'bg-[#5C1D2E] text-white shadow-xs'
+                        : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
+                    }`}
+                  >
+                    100% Eggless
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEgglessPreference(false)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      !isEgglessPreference
+                        ? 'bg-[#5C1D2E] text-white shadow-xs'
+                        : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
+                    }`}
+                  >
+                    Contains Egg
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Addons if configured */}
+            {product.addons && product.addons.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-[#2C1A1D] block">Celebration Add-ons</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {product.addons.map((addon) => {
+                    const isChecked = Boolean(addon.id && selectedAddonIds.includes(addon.id));
+                    return (
+                      <button
+                        key={addon.id ?? addon.name}
+                        type="button"
+                        onClick={() => {
+                          if (!addon.id) return;
+                          if (isChecked) {
+                            setSelectedAddonIds(selectedAddonIds.filter((id) => id !== addon.id));
+                          } else {
+                            setSelectedAddonIds([...selectedAddonIds, addon.id]);
+                          }
+                        }}
+                        className={`p-2 rounded-xl text-left border flex items-center justify-between transition-all cursor-pointer ${
+                          isChecked
+                            ? 'bg-brand-blush border-brand-plum text-brand-espresso shadow-2xs'
+                            : 'bg-white border-brand-border hover:bg-brand-cream/40 text-brand-espresso'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center ${
+                              isChecked ? 'bg-brand-plum border-brand-plum text-white' : 'border-brand-border bg-white'
+                            }`}
+                          >
+                            {isChecked && <Check className="w-3 h-3" />}
+                          </div>
+                          <span className="text-xs font-medium">{addon.name}</span>
+                        </div>
+                        <span className="text-xs font-bold text-brand-plum">+₹{addon.price}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Cake Personalization & Delivery Schedule */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* Cake Message */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-[#2C1A1D]">Cake Message</label>
+                  <span className="text-[10px] text-brand-muted">Optional</span>
+                </div>
+                <input
+                  type="text"
+                  maxLength={45}
+                  placeholder="E.g., Happy Birthday Emily!"
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  className="w-full h-10 px-3.5 rounded-xl border border-brand-border bg-white text-xs text-brand-espresso placeholder:text-brand-muted/70 focus:outline-none focus:border-[#5C1D2E] focus:ring-1 focus:ring-[#5C1D2E] shadow-2xs transition-all"
+                />
+              </div>
+
+              {/* Delivery Date */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-[#2C1A1D]">Delivery Date</label>
+                  <span className="text-[10px] text-brand-muted">Required</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="date"
+                    min={new Date().toISOString().split('T')[0]}
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                    className="w-full h-10 px-3.5 pl-10 rounded-xl border border-brand-border bg-white text-xs text-brand-espresso focus:outline-none focus:border-[#5C1D2E] focus:ring-1 focus:ring-[#5C1D2E] shadow-2xs transition-all cursor-pointer"
+                  />
+                  <Calendar className="w-4 h-4 text-brand-muted absolute left-3 top-3 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Quantity Stepper & Add to Cart */}
+            <div className="flex items-center gap-2.5 pt-3 border-t border-brand-border/60">
+              <div className="flex items-center gap-1.5 border border-brand-border rounded-xl px-2.5 py-1.5 bg-white shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="p-1 rounded-full text-brand-espresso hover:bg-brand-cream/40 transition-colors cursor-pointer"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="font-serif font-bold text-sm text-brand-espresso w-5 text-center">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className="p-1 rounded-full text-brand-espresso hover:bg-brand-cream/40 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <Button
+                onClick={handleAddToCart}
+                size="md"
+                className="flex-1 font-bold h-11 rounded-xl bg-[#5C1D2E] hover:bg-[#4a1525] shadow-xs text-xs sm:text-sm text-white cursor-pointer"
+              >
+                <span>Add to Cart • ₹{unitPrice * quantity}</span>
+              </Button>
+            </div>
+
+            {/* Direct Order & WhatsApp Consultation */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+              <Button
+                onClick={handleDirectCheckout}
+                variant="outline"
+                size="sm"
+                className="w-full font-bold h-10 rounded-xl border-[#5C1D2E] text-[#5C1D2E] hover:bg-brand-blush/40 text-xs cursor-pointer"
+              >
+                <span>Direct Order &amp; Delivery</span>
+              </Button>
+
+              {shop.phone && (
+                <a
+                  href={`https://wa.me/${shop.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                    `Hi ${shop.businessName}, I'm interested in ordering "${product.name}" (₹${unitPrice * quantity}) on CakeStore. Could you please assist me with customization and delivery?`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 font-bold text-xs border border-emerald-200 transition-all cursor-pointer"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Ask on WhatsApp</span>
+                </a>
+              )}
+            </div>
+            </div>
+          </div>
+
+          {/* ============================================================ */}
+          {/* RIGHT COLUMN: Information Accordions & Details Group         */}
+          {/* ============================================================ */}
+          <div className="lg:col-span-5 w-full space-y-4">
             {/* Information Accordions Group (Matching UI Design Panel 4 Left Column) */}
             <div className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white divide-y divide-brand-border/60 shadow-2xs">
               
@@ -447,8 +705,7 @@ function ProductDetailContent() {
                 {openAccordions.about && (
                   <div className="px-5 pb-5 pt-1 text-xs text-brand-espresso/85 leading-relaxed space-y-3 border-t border-brand-border/30 bg-[#FAF7F2]/20">
                     <p className="whitespace-pre-line">
-                      {product.description ||
-                        `Handcrafted fresh to order by ${shop.businessName}. We use authentic European butter, high-cocoa couverture chocolate, and pure natural fruit extracts.`}
+                      {product.description?.trim() ? product.description.trim() : <span className="text-brand-muted italic">No description provided for this cake.</span>}
                     </p>
                     <div className="grid grid-cols-2 gap-2.5 pt-1">
                       <div className="bg-white p-3 rounded-xl border border-brand-border/40">
@@ -456,7 +713,7 @@ function ProductDetailContent() {
                         <span className="text-brand-muted text-[11px]">
                           {product.preparationTimeHours
                             ? `${product.preparationTimeHours} hrs advance notice`
-                            : 'Same-day delivery available'}
+                            : 'Standard preparation'}
                         </span>
                       </div>
                       <div className="bg-white p-3 rounded-xl border border-brand-border/40">
@@ -468,7 +725,7 @@ function ProductDetailContent() {
                 )}
               </div>
 
-              {/* 2. Ingredients */}
+              {/* 2. Ingredients & Dietary Safety (Always Visible) */}
               <div>
                 <button
                   type="button"
@@ -479,7 +736,10 @@ function ProductDetailContent() {
                     <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                       <Leaf className="w-4 h-4" />
                     </div>
-                    <span className="font-serif font-bold text-sm text-[#2C1A1D]">Ingredients</span>
+                    <div>
+                      <span className="font-serif font-bold text-sm text-[#2C1A1D] block">Ingredients &amp; Dietary Safety</span>
+                      <span className="text-[10px] text-brand-muted">Fresh &amp; natural ingredients disclosure</span>
+                    </div>
                   </div>
                   <ChevronDown
                     className={`w-4 h-4 text-brand-muted transition-transform duration-200 ${
@@ -491,29 +751,31 @@ function ProductDetailContent() {
                   <div className="px-5 pb-5 pt-1 text-xs text-brand-espresso/85 leading-relaxed space-y-3 border-t border-brand-border/30 bg-[#FAF7F2]/20">
                     <div>
                       <strong className="text-brand-espresso font-semibold block text-[11px] uppercase tracking-wider">
-                        Ingredients Used:
+                        Ingredients:
                       </strong>
-                      <p className="mt-1 pl-2 text-xs leading-relaxed text-brand-espresso/80 whitespace-pre-line">
-                        {product.ingredients?.trim() ||
-                          'Handmade with premium unbleached flour, pure dairy butter, rich cane sugar, fresh dairy cream, and natural flavor extracts. Free from synthetic dough softeners.'}
-                      </p>
+                      {product.ingredients?.trim() ? (
+                        <p className="mt-1 text-xs leading-relaxed text-brand-espresso/80 whitespace-pre-line">
+                          {product.ingredients.trim()}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-brand-muted italic">
+                          Ingredients not specified by the bakery.
+                        </p>
+                      )}
                     </div>
-                    <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/60">
-                      <strong className="text-amber-900 font-semibold block text-[11px]">Allergen Notice:</strong>
-                      <p className="text-amber-900/90 mt-1 pl-2 text-[11px] leading-relaxed whitespace-pre-line">
-                        {product.allergens?.trim() ||
-                          'Contains wheat (gluten) and dairy. Prepared in an artisanal kitchen handling nuts, seeds, and chocolate.'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+
+                    {product.allergens?.trim() && (
+                      <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/60">
+                        <strong className="text-amber-900 font-semibold block text-[11px]">Allergen Notice:</strong>
+                        <p className="text-amber-900/90 mt-1 text-[11px] leading-relaxed whitespace-pre-line">
+                          {product.allergens.trim()}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
                         {isEgglessPreference ? '🌱 100% Pure Veg (Eggless)' : 'Contains Egg'}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-white text-brand-muted text-[10px] font-medium border border-brand-border/50">
-                        Zero Preservatives
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-white text-brand-muted text-[10px] font-medium border border-brand-border/50">
-                        Baked Fresh
                       </span>
                     </div>
                   </div>
@@ -540,16 +802,45 @@ function ProductDetailContent() {
                   />
                 </button>
                 {openAccordions.delivery && (
-                  <div className="px-5 pb-5 pt-1 text-xs text-brand-espresso/85 leading-relaxed space-y-2.5 border-t border-brand-border/30 bg-[#FAF7F2]/20">
-                    <p>
-                      Direct doorstep delivery from <strong>{shop.businessName}</strong> across {shop.city || 'the local area'}.
-                    </p>
-                    <p>
-                      Packaged in shock-proof, double-walled cake boxes with secure bottom baseboards to prevent damage in transit.
-                    </p>
-                    <p className="text-brand-muted">
-                      Storage: Keep refrigerated at 4°C - 8°C. Best enjoyed within 48 hours of delivery.
-                    </p>
+                  <div className="px-5 pb-5 pt-1 text-xs text-brand-espresso/85 leading-relaxed space-y-3 border-t border-brand-border/30 bg-[#FAF7F2]/20">
+                    <div>
+                      <strong className="text-brand-espresso font-semibold block text-[11px] uppercase tracking-wider">
+                        Delivery Coverage:
+                      </strong>
+                      <p className="mt-0.5 text-xs text-brand-espresso/85">
+                        Direct doorstep delivery from <strong>{shop.businessName}</strong> across {shop.city || 'the local area'}.
+                      </p>
+                    </div>
+
+                    {shop.deliveryConfig && (
+                      <div className="p-3 bg-white rounded-xl border border-brand-border/40 text-[11px] text-brand-espresso">
+                        <strong className="font-bold text-brand-espresso block text-[11px]">Delivery Fee:</strong>
+                        <p className="mt-0.5 text-brand-muted">
+                          {shop.deliveryConfig.deliveryChargeType === 'FREE'
+                            ? 'Complimentary Free Delivery on all orders.'
+                            : `Fixed ₹${shop.deliveryConfig.fixedChargeAmount} delivery fee${
+                                shop.deliveryConfig.minOrderForFreeDelivery
+                                  ? ` (Free delivery for orders above ₹${shop.deliveryConfig.minOrderForFreeDelivery})`
+                                  : ''
+                              }.`}
+                        </p>
+                      </div>
+                    )}
+
+                    <div>
+                      <strong className="text-brand-espresso font-semibold block text-[11px] uppercase tracking-wider">
+                        Packaging &amp; Handling:
+                      </strong>
+                      {shop.deliveryConfig?.deliveryNotes?.trim() ? (
+                        <p className="mt-0.5 text-xs text-brand-espresso/85 whitespace-pre-line">
+                          {shop.deliveryConfig.deliveryNotes.trim()}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-brand-muted italic">
+                          Special packaging notes not specified by the bakery.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -566,7 +857,7 @@ function ProductDetailContent() {
                       <Star className="w-4 h-4 fill-amber-500" />
                     </div>
                     <span className="font-serif font-bold text-sm text-[#2C1A1D]">
-                      Customer Reviews ({totalReviews || 24})
+                      Customer Reviews ({totalReviews})
                     </span>
                   </div>
                   <ChevronDown
@@ -580,10 +871,10 @@ function ProductDetailContent() {
                     <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-brand-border/40">
                       <div>
                         <span className="font-serif font-bold text-base text-brand-espresso">
-                          {averageRating > 0 ? averageRating.toFixed(1) : '4.8'}★
+                          {averageRating > 0 ? (averageRating.toFixed(1) + '★') : null}
                         </span>
                         <span className="text-[11px] text-brand-muted ml-2">
-                          ({totalReviews || 24} customer ratings)
+                          ({totalReviews} customer ratings)
                         </span>
                       </div>
                       <button
@@ -655,270 +946,16 @@ function ProductDetailContent() {
               </div>
 
             </div>
-          </div>
 
-          {/* ============================================================ */}
-          {/* RIGHT COLUMN: Conversion Flow (Matching UI Design Panel 4)   */}
-          {/* ============================================================ */}
-          <div className="lg:col-span-7 w-full space-y-5 bg-white p-6 sm:p-8 rounded-3xl border border-brand-border/80 shadow-soft">
-            
-            {/* Title */}
-            <div>
-              <span className="text-[11px] uppercase font-bold tracking-widest text-[#C5A880] block mb-1">
-                {product.categoryName || product.category?.replace(/_/g, ' ') || 'Artisanal Creation'}
-              </span>
-              <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#2C1A1D] tracking-tight">
-                {product.name}
-              </h1>
-            </div>
-
-            {/* Ratings Bar */}
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-0.5 text-amber-500">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                ))}
+            {/* FSSAI Certified Kitchens Trust Badge */}
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-brand-border/60 text-xs text-brand-espresso shadow-2xs">
+              <div className="w-8 h-8 rounded-xl bg-brand-blush/60 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4 text-brand-plum" />
               </div>
-              <span className="text-xs font-bold text-[#2C1A1D]">
-                {averageRating > 0 ? averageRating.toFixed(1) : '4.8'}
-              </span>
-              <span className="text-xs text-brand-muted font-normal">
-                ({totalReviews || 24} reviews)
-              </span>
-            </div>
-
-            {/* Price */}
-            <div className="text-3xl font-serif font-extrabold text-[#2C1A1D]">
-              ₹{unitPrice}
-            </div>
-
-            {/* Short Description */}
-            <p className="text-xs sm:text-sm text-brand-muted leading-relaxed">
-              {product.description || 'Rich and moist handcrafted celebration cake with premium truffle glaze.'}
-            </p>
-
-            {/* Weight Selection Chips */}
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-bold text-[#2C1A1D] block">Weight</label>
-              <div className="flex flex-wrap gap-2.5">
-                {isVariantWeight ? (
-                  product.variants?.map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setSelectedVariantId(v.id)}
-                      className={`px-5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                        selectedVariantId === v.id
-                          ? 'bg-[#5C1D2E] text-white shadow-xs'
-                          : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
-                      }`}
-                    >
-                      {v.name}
-                    </button>
-                  ))
-                ) : (
-                  WEIGHT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.weight}
-                      type="button"
-                      onClick={() => setSelectedWeight(opt.weight)}
-                      className={`px-5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                        selectedWeight === opt.weight
-                          ? 'bg-[#5C1D2E] text-white shadow-xs'
-                          : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))
-                )}
+              <div>
+                <p className="font-bold text-[11px] text-[#2C1A1D]">FSSAI Certified Kitchens</p>
+                <p className="text-[10px] text-brand-muted">Food safety &amp; hygiene compliance verified</p>
               </div>
-            </div>
-
-            {/* Flavour Selection Chips */}
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-bold text-[#2C1A1D] block">Flavour</label>
-              <div className="flex flex-wrap gap-2.5">
-                {(hasVariants && !isVariantWeight ? product.variants! : DEFAULT_FLAVOURS).map((flv: any) => {
-                  const flvName = hasVariants && !isVariantWeight ? flv.name : flv;
-                  const isSelected =
-                    hasVariants && !isVariantWeight ? selectedVariantId === flv.id : selectedFlavour === flvName;
-                  return (
-                    <button
-                      key={hasVariants && !isVariantWeight ? flv.id : flv}
-                      type="button"
-                      onClick={() => {
-                        if (hasVariants && !isVariantWeight) setSelectedVariantId(flv.id);
-                        else setSelectedFlavour(flvName);
-                      }}
-                      className={`px-5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#5C1D2E] text-white shadow-xs'
-                          : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
-                      }`}
-                    >
-                      {flvName}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Eggless Option Chips */}
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-bold text-[#2C1A1D] block">Eggless</label>
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsEgglessPreference(true)}
-                  className={`px-7 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                    isEgglessPreference
-                      ? 'bg-[#5C1D2E] text-white shadow-xs'
-                      : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
-                  }`}
-                >
-                  Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEgglessPreference(false)}
-                  className={`px-7 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                    !isEgglessPreference
-                      ? 'bg-[#5C1D2E] text-white shadow-xs'
-                      : 'bg-white text-brand-espresso border border-brand-border hover:bg-brand-cream/40'
-                  }`}
-                >
-                  No
-                </button>
-              </div>
-            </div>
-
-            {/* Addons if configured */}
-            {product.addons && product.addons.length > 0 && (
-              <div className="space-y-2 pt-1">
-                <label className="text-xs font-bold text-[#2C1A1D] block">Celebration Add-ons</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {product.addons.map((addon) => {
-                    const isChecked = Boolean(addon.id && selectedAddonIds.includes(addon.id));
-                    return (
-                      <button
-                        key={addon.id ?? addon.name}
-                        type="button"
-                        onClick={() => {
-                          if (!addon.id) return;
-                          if (isChecked) {
-                            setSelectedAddonIds(selectedAddonIds.filter((id) => id !== addon.id));
-                          } else {
-                            setSelectedAddonIds([...selectedAddonIds, addon.id]);
-                          }
-                        }}
-                        className={`p-2.5 rounded-xl text-left border flex items-center justify-between transition-all cursor-pointer ${
-                          isChecked
-                            ? 'bg-brand-blush border-brand-plum text-brand-espresso shadow-2xs'
-                            : 'bg-white border-brand-border hover:bg-brand-cream/40 text-brand-espresso'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-4 h-4 rounded border flex items-center justify-center ${
-                              isChecked ? 'bg-brand-plum border-brand-plum text-white' : 'border-brand-border bg-white'
-                            }`}
-                          >
-                            {isChecked && <Check className="w-3 h-3" />}
-                          </div>
-                          <span className="text-xs font-medium">{addon.name}</span>
-                        </div>
-                        <span className="text-xs font-bold text-brand-plum">+₹{addon.price}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Cake Message Input */}
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-bold text-[#2C1A1D] block">Cake Message</label>
-              <input
-                type="text"
-                maxLength={45}
-                placeholder="E.g., Happy Birthday!"
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                className="w-full h-11 px-4 rounded-xl border border-brand-border bg-white text-xs sm:text-sm text-brand-espresso focus:outline-none focus:border-[#5C1D2E] focus:ring-1 focus:ring-[#5C1D2E] shadow-2xs"
-              />
-            </div>
-
-            {/* Delivery Date Picker */}
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-bold text-[#2C1A1D] block">Delivery Date</label>
-              <div className="relative">
-                <input
-                  type="date"
-                  min={new Date().toISOString().split('T')[0]}
-                  value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
-                  className="w-full h-11 px-4 pl-10 rounded-xl border border-brand-border bg-white text-xs sm:text-sm text-brand-espresso focus:outline-none focus:border-[#5C1D2E] focus:ring-1 focus:ring-[#5C1D2E] shadow-2xs cursor-pointer"
-                />
-                <Calendar className="w-4 h-4 text-brand-muted absolute left-3.5 top-3.5 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* Quantity Stepper & Add to Cart (Matching UI Design) */}
-            <div className="flex items-center gap-3 pt-4 border-t border-brand-border/60">
-              <div className="flex items-center gap-2 border border-brand-border rounded-xl px-3 py-2 bg-white shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="p-1 rounded-full text-brand-espresso hover:bg-brand-cream/40 transition-colors cursor-pointer"
-                >
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
-                <span className="font-serif font-bold text-sm text-brand-espresso w-6 text-center">
-                  {quantity}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="p-1 rounded-full text-brand-espresso hover:bg-brand-cream/40 transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <Button
-                onClick={handleAddToCart}
-                size="lg"
-                className="flex-1 font-bold h-12 rounded-xl bg-[#5C1D2E] hover:bg-[#4a1525] shadow-sm text-xs sm:text-sm text-white cursor-pointer"
-              >
-                <span>Add to Cart</span>
-              </Button>
-            </div>
-
-            {/* Direct Order & WhatsApp Consultation */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-              <Button
-                onClick={handleDirectCheckout}
-                variant="outline"
-                size="md"
-                className="w-full font-bold h-11 rounded-xl border-[#5C1D2E] text-[#5C1D2E] hover:bg-brand-blush/40 text-xs cursor-pointer"
-              >
-                <span>Direct Order &amp; Delivery</span>
-              </Button>
-
-              {shop.phone && (
-                <a
-                  href={`https://wa.me/${shop.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                    `Hi ${shop.businessName}, I'm interested in ordering "${product.name}" (₹${unitPrice * quantity}) on CakeStore. Could you please assist me with customization and delivery?`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 font-bold text-xs border border-emerald-200 transition-all cursor-pointer"
-                >
-                  <MessageCircle className="w-4 h-4 text-emerald-600" />
-                  <span>Ask on WhatsApp</span>
-                </a>
-              )}
             </div>
           </div>
 

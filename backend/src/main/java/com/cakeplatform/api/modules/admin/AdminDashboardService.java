@@ -41,6 +41,8 @@ public class AdminDashboardService {
     private final BusinessDocumentRepository businessDocumentRepository;
     private final NotificationService notificationService;
     private final ActivityLoggerService activityLogger;
+    @Autowired(required = false)
+    private com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
 
     @Autowired
     public AdminDashboardService(
@@ -207,6 +209,9 @@ public class AdminDashboardService {
         } else if ("INACTIVE".equals(status)) {
             shopStatusManager.markShopInactive(shopId, actorUserId);
         }
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
+        }
         return shopRepository.findById(shopId).orElseThrow();
     }
 
@@ -237,6 +242,18 @@ public class AdminDashboardService {
 
         if (action.equalsIgnoreCase("APPROVE")) {
             shop.setVerificationStatus(VerificationStatus.VERIFIED);
+            
+            // Idempotent safety reconciliation: if shop was still PENDING despite an active subscription, activate it
+            if (shop.getStatus() == ShopStatus.PENDING && subscriptionRepository != null) {
+                subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(
+                        shopId, com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE)
+                        .ifPresent(sub -> {
+                            if (sub.getExpiryDate() == null || sub.getExpiryDate().isAfter(java.time.LocalDateTime.now())) {
+                                shop.setStatus(ShopStatus.ACTIVE);
+                            }
+                        });
+            }
+
             shopRepository.save(shop);
 
             for (BusinessDocument doc : docs) {
@@ -297,6 +314,10 @@ public class AdminDashboardService {
                         false
                 );
             }
+        }
+
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
         }
 
         return shop;

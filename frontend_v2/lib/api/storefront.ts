@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { Shop, ShopSearchFilters } from '@/types/shop';
+import { Shop, ShopSearchFilters, PopularCity } from '@/types/shop';
 import { Product, Category } from '@/types/product';
 
 export const storefrontApi = {
@@ -13,6 +13,18 @@ export const storefrontApi = {
     } catch (err: any) {
       console.error(`[StorefrontAPI] getShopById(${shopId}) error:`, err);
       throw new Error(err.message || 'Failed to load bakery storefront.');
+    }
+  },
+
+  getPopularCities: async (limit: number = 8): Promise<PopularCity[]> => {
+    try {
+      const data = await apiClient.get<PopularCity[]>(
+        `/api/storefront/shops/locations/popular-cities?limit=${limit}`
+      );
+      return Array.isArray(data) ? data : [];
+    } catch (err: any) {
+      console.error('[StorefrontAPI] getPopularCities error:', err);
+      return [];
     }
   },
 
@@ -30,6 +42,12 @@ export const storefrontApi = {
     if (filters.area && filters.area.trim() && !filters.area.toLowerCase().startsWith('all')) {
       params.area = filters.area.trim();
     }
+    if (filters.pincode && filters.pincode.trim() && !filters.pincode.toLowerCase().startsWith('all')) {
+      params.pincode = filters.pincode.trim();
+    }
+    if (filters.country && filters.country.trim()) {
+      params.country = filters.country.trim();
+    }
     if (filters.businessType && filters.businessType !== 'ALL' && filters.businessType.trim()) {
       params.businessType = filters.businessType.trim();
     }
@@ -38,6 +56,24 @@ export const storefrontApi = {
     }
     if (filters.location && filters.location.trim() && !filters.location.toLowerCase().startsWith('all')) {
       params.location = filters.location.trim();
+    }
+    if (filters.latitude != null && !isNaN(filters.latitude)) {
+      params.latitude = filters.latitude.toString();
+    }
+    if (filters.longitude != null && !isNaN(filters.longitude)) {
+      params.longitude = filters.longitude.toString();
+    }
+    if (filters.radiusKm != null && !isNaN(filters.radiusKm)) {
+      params.radiusKm = filters.radiusKm.toString();
+    }
+    if (filters.sortBy && filters.sortBy.trim()) {
+      params.sortBy = filters.sortBy.trim();
+    }
+    if (filters.page != null) {
+      params.page = filters.page.toString();
+    }
+    if (filters.size != null) {
+      params.size = filters.size.toString();
     }
 
     try {
@@ -95,6 +131,35 @@ export const storefrontApi = {
       `/api/storefront/shops/${shopId}/coupons/validate`,
       { code, subtotal }
     );
+  },
+
+  getTopRatedProducts: async (shopId: number | string, limit: number = 8): Promise<Product[]> => {
+    try {
+      const prods = await apiClient.get<Product[]>(`/api/storefront/shops/${shopId}/products/top-rated?limit=${limit}`);
+      return Array.isArray(prods) ? prods : [];
+    } catch (err: any) {
+      console.error(`[StorefrontAPI] getTopRatedProducts(${shopId}) error:`, err);
+      return [];
+    }
+  },
+
+  submitCustomCakeRequest: async (
+    shopId: number | string,
+    payload: any
+  ): Promise<any> => {
+    return apiClient.post(`/api/storefront/shops/${shopId}/custom-cakes`, payload);
+  },
+
+  submitEnquiry: async (
+    shopId: number | string,
+    payload: {
+      customerName: string;
+      customerEmail: string;
+      enquiryType: string;
+      message: string;
+    }
+  ): Promise<any> => {
+    return apiClient.post(`/api/storefront/shops/${shopId}/enquiries`, payload);
   },
 
   getShopFeedback: async (shopId: number | string): Promise<any[]> => {

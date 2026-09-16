@@ -46,6 +46,16 @@ public class OwnerInteractionService {
         feedbackRepository.save(feedback);
     }
 
+    @Transactional
+    public Feedback toggleFeedbackApproval(Long ownerId, Long feedbackId, boolean isApproved) {
+        Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
+        Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+                .orElseThrow(() -> new RuntimeException("Feedback not found"));
+        
+        feedback.setIsApproved(isApproved);
+        return feedbackRepository.save(feedback);
+    }
+
     public List<Enquiry> getMyEnquiries(Long ownerId) {
         Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
         return enquiryRepository.findByShopIdOrderByCreatedAtDesc(shop.getId());

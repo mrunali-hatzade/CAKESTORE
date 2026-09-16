@@ -51,8 +51,8 @@ export const BakeryGrid: React.FC<BakeryGridProps> = ({
   const [sortBy, setSortBy] = useState<'default' | 'name' | 'city'>('default');
 
   const sortedShops = [...shops].sort((a, b) => {
-    if (sortBy === 'name') return a.businessName.localeCompare(b.businessName);
-    if (sortBy === 'city') return a.city.localeCompare(b.city);
+    if (sortBy === 'name') return (a.businessName || '').localeCompare(b.businessName || '');
+    if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '');
     return 0;
   });
 

@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   MessageSquareQuote,
   Cake,
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { CustomCakeRequest, GeneralEnquiry } from '@/types/owner';
+import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -36,6 +37,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function OwnerEnquiriesPage() {
+  const { registerRefreshHandler } = useOwner();
   const [activeTab, setActiveTab] = useState<'custom-cakes' | 'general'>('custom-cakes');
   const [customCakes, setCustomCakes] = useState<CustomCakeRequest[]>([]);
   const [generalEnquiries, setGeneralEnquiries] = useState<GeneralEnquiry[]>([]);
@@ -59,7 +61,7 @@ export default function OwnerEnquiriesPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const fetchData = async (isManualRefresh = false) => {
+  const fetchData = useCallback(async (isManualRefresh = false) => {
     if (isManualRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -82,11 +84,18 @@ export default function OwnerEnquiriesPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const unregister = registerRefreshHandler(async () => {
+      await fetchData(true);
+    });
+    return unregister;
+  }, [registerRefreshHandler, fetchData]);
 
   // Filtered lists
   const filteredCakes = useMemo(() => {
@@ -633,6 +642,21 @@ export default function OwnerEnquiriesPage() {
                 <p className="text-xs text-owner-muted p-3 rounded-xl bg-white border border-owner-border leading-relaxed">
                   {selectedCake.designDescription}
                 </p>
+              </div>
+            )}
+
+            {/* Dynamic Custom Form Field Values */}
+            {selectedCake.fieldValues && selectedCake.fieldValues.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-owner-heading block">Custom Specifications</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {selectedCake.fieldValues.map((fv, idx) => (
+                    <div key={idx} className="p-2.5 rounded-xl bg-owner-canvas border border-owner-border text-xs">
+                      <p className="text-[10px] text-owner-muted uppercase font-bold tracking-wider">{fv.fieldLabel || fv.fieldKey}</p>
+                      <p className="font-semibold text-owner-heading mt-0.5">{fv.fieldValue || '—'}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

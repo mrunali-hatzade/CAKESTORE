@@ -18,12 +18,13 @@ import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 @Service
-public class MediaUploadService {
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.storage.provider", havingValue = "local", matchIfMissing = true)
+public class LocalMediaUploadServiceImpl implements StorageService {
 
     private final Path fileStorageLocation;
 
     @Autowired
-    public MediaUploadService(FileStorageProperties fileStorageProperties) {
+    public LocalMediaUploadServiceImpl(FileStorageProperties fileStorageProperties) {
         this.fileStorageLocation = Paths.get(fileStorageProperties.getUploadDir())
                 .toAbsolutePath().normalize();
 

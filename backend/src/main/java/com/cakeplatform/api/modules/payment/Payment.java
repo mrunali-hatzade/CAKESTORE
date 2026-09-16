@@ -30,6 +30,11 @@ public class Payment {
     @JoinColumn(name = "subscription_id")
     private Subscription subscription;
 
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "plan_id")
+    private com.cakeplatform.api.modules.subscription.SubscriptionPlan plan;
+
     @Column(nullable = false)
     private BigDecimal amount;
 

@@ -44,7 +44,7 @@ Content-Type: application/json
     "pincode": "NW1 6XE",
     "businessCategory": "Bakery",
     "logoUrl": "https://example.com/logo.png",
-    "coverImageUrl": "https://example.com/cover.png"
+    "coverImageUrl": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=80"
 }
 
 ### 1c. Update with Invalid Data (Validation Error)

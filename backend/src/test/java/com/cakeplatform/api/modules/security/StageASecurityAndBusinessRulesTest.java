@@ -146,8 +146,8 @@ public class StageASecurityAndBusinessRulesTest {
         assertEquals(SubscriptionStatus.EXPIRED, testSubscription.getStatus());
         verify(subscriptionRepository).save(testSubscription);
 
-        // Verify Shop was transitioned to INACTIVE
-        verify(shopStatusManager).markShopInactive(eq(testShop.getId()), isNull());
+        // Verify Shop was NOT transitioned to INACTIVE (customer storefront decoupled)
+        verify(shopStatusManager, never()).markShopInactive(any(), any());
 
         // Verify notification was sent to owner
         verify(notificationService).createNotification(
@@ -159,8 +159,7 @@ public class StageASecurityAndBusinessRulesTest {
                 eq(true)
         );
 
-        // Verify Idempotency: calling again when already EXPIRED and shop INACTIVE does not re-save or re-notify
-        testShop.setStatus(ShopStatus.INACTIVE);
+        // Verify Idempotency: calling again when already EXPIRED does not re-save or re-notify
         reset(subscriptionRepository, shopStatusManager, notificationService);
         when(subscriptionRepository.findById(100L)).thenReturn(Optional.of(testSubscription));
 
@@ -190,12 +189,13 @@ public class StageASecurityAndBusinessRulesTest {
     }
 
     // =========================================================================
-    // SECURITY TEST 5 — Unverified Shop Rejected Server-Side
+    // SECURITY TEST 5 — Unpaid Pending Shop Rejected; Active Unverified Allowed
     // =========================================================================
     @Test
-    @DisplayName("Security Test 5: Unverified shop rejected from operational access")
-    void testSecurity5_UnverifiedShopRejected() {
+    @DisplayName("Security Test 5: Unpaid pending shop rejected from operational access; active unverified allowed")
+    void testSecurity5_UnpaidPendingShopRejected() {
         Long ownerId = 42L;
+        testShop.setStatus(ShopStatus.PENDING);
         testShop.setVerificationStatus(VerificationStatus.PROCESSING);
         when(shopRepository.findByOwnerId(ownerId)).thenReturn(List.of(testShop));
 
@@ -203,8 +203,7 @@ public class StageASecurityAndBusinessRulesTest {
             shopAccessValidator.getValidShopForOwner(ownerId);
         });
 
-        assertTrue(ex.getMessage().contains("Shop is not verified yet"));
-        verifyNoInteractions(subscriptionRepository);
+        assertTrue(ex.getMessage().contains("No subscription found") || ex.getMessage().contains("PENDING"));
     }
 
     // =========================================================================

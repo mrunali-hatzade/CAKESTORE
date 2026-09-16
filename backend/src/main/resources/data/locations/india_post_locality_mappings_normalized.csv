@@ -1,0 +1,33 @@
+locality_name,city_name,district_name,state_code,pincode,latitude,longitude,is_primary
+Akurdi,Pimpri-Chinchwad,Pune,MH,411035,18.6496,73.7712,true
+Pradhikaran,Pimpri-Chinchwad,Pune,MH,411035,18.6570,73.7660,false
+Sector 24,Pimpri-Chinchwad,Pune,MH,411035,18.6550,73.7700,false
+Pimpri,Pimpri-Chinchwad,Pune,MH,411027,18.6279,73.8009,true
+Chinchwad,Pimpri-Chinchwad,Pune,MH,411033,18.6298,73.7997,true
+Wakad,Pimpri-Chinchwad,Pune,MH,411057,18.5987,73.7688,true
+Hinjawadi,Pimpri-Chinchwad,Pune,MH,411057,18.5913,73.7389,false
+Kothrud,Pune City,Pune,MH,411038,18.5074,73.8077,true
+Baner,Pune City,Pune,MH,411045,18.5590,73.7868,true
+Viman Nagar,Pune City,Pune,MH,411014,18.5679,73.9143,true
+Koregaon Park,Pune City,Pune,MH,411001,18.5362,73.8940,true
+Shivajinagar,Pune City,Pune,MH,411005,18.5314,73.8446,true
+Colaba,Mumbai City,Mumbai City,MH,400005,18.9067,72.8147,true
+Dadar,Mumbai City,Mumbai City,MH,400028,19.0178,72.8478,true
+Bandra West,Mumbai Suburban,Mumbai Suburban,MH,400050,19.0596,72.8295,true
+Andheri West,Mumbai Suburban,Mumbai Suburban,MH,400053,19.1197,72.8468,true
+Juhu,Mumbai Suburban,Mumbai Suburban,MH,400049,19.1075,72.8263,true
+Powai,Mumbai Suburban,Mumbai Suburban,MH,400076,19.1197,72.9050,true
+Indiranagar,Bengaluru,Bengaluru Urban,KA,560038,12.9784,77.6408,true
+Koramangala,Bengaluru,Bengaluru Urban,KA,560034,12.9352,77.6245,true
+Whitefield,Bengaluru,Bengaluru Urban,KA,560066,12.9698,77.7500,true
+HSR Layout,Bengaluru,Bengaluru Urban,KA,560102,12.9121,77.6446,true
+Connaught Place,Delhi City,New Delhi,DL,110001,28.6304,77.2177,true
+Hauz Khas,Delhi City,New Delhi,DL,110016,28.5494,77.2001,true
+South Extension,Delhi City,New Delhi,DL,110049,28.5728,77.2228,true
+Satellite,Ahmedabad City,Ahmedabad,GJ,380015,23.0300,72.5178,true
+Hitec City,Hyderabad City,Hyderabad,TS,500081,17.4435,78.3772,true
+Park Street,Kolkata City,Kolkata,WB,700016,22.5516,88.3524,true
+T. Nagar,Chennai City,Chennai,TN,600017,13.0418,80.2341,true
+Rampur Locality,Rampur City,Rampur,UP,244901,28.8154,79.0250,true
+Bilaspur HP Locality,Bilaspur Town,Bilaspur,HP,174001,31.3326,76.7578,true
+Bilaspur CG Locality,Bilaspur City,Bilaspur,CG,495001,22.0797,82.1409,true

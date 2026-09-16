@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Star,
   Search,
@@ -19,6 +19,7 @@ import {
   Cake,
 } from 'lucide-react';
 import { reviewsApi, OwnerProductReview } from '@/lib/api/reviews';
+import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -30,6 +31,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80';
 
 export default function OwnerReviewsPage() {
+  const { registerRefreshHandler } = useOwner();
   const [reviews, setReviews] = useState<OwnerProductReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,7 +48,7 @@ export default function OwnerReviewsPage() {
   const [replySuccess, setReplySuccess] = useState<string | null>(null);
   const [replyError, setReplyError] = useState<string | null>(null);
 
-  const fetchReviews = async (isManual = false) => {
+  const fetchReviews = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -60,11 +62,18 @@ export default function OwnerReviewsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchReviews();
-  }, []);
+  }, [fetchReviews]);
+
+  useEffect(() => {
+    const unregister = registerRefreshHandler(async () => {
+      await fetchReviews(true);
+    });
+    return unregister;
+  }, [registerRefreshHandler, fetchReviews]);
 
   // Filtered reviews
   const filteredReviews = useMemo(() => {

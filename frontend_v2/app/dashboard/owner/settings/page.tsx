@@ -33,6 +33,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { LoadingState } from '@/components/ui/LoadingState';
 import OwnerFeedbackModal from '@/components/owner/OwnerFeedbackModal';
 import DeleteAccountModal from '@/components/owner/DeleteAccountModal';
+import CascadingLocationSelector from '@/components/owner/CascadingLocationSelector';
 import { MessageSquare, Star, AlertTriangle, Trash2 } from 'lucide-react';
 
 export default function OwnerSettingsPage() {
@@ -58,9 +59,12 @@ export default function OwnerSettingsPage() {
   const [email, setEmail] = useState('');
   const [addressLine1, setAddressLine1] = useState('');
   const [addressLine2, setAddressLine2] = useState('');
-  const [city, setCity] = useState('Pune');
-  const [state, setState] = useState('Maharashtra');
-  const [pincode, setPincode] = useState('411035');
+  const [state, setState] = useState('');
+  const [district, setDistrict] = useState('');
+  const [city, setCity] = useState('');
+  const [area, setArea] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [locationErrors, setLocationErrors] = useState<Record<string, string>>({});
   const [isPureVeg, setIsPureVeg] = useState(false);
   const [openingTime, setOpeningTime] = useState('09:00 AM');
   const [closingTime, setClosingTime] = useState('10:00 PM');
@@ -98,8 +102,10 @@ export default function OwnerSettingsPage() {
         setEmail(shopData.email || '');
         setAddressLine1(shopData.addressLine1 || shopData.address || '');
         setAddressLine2(shopData.addressLine2 || '');
-        setCity(shopData.city || 'Pune');
-        setState(shopData.state || 'Maharashtra');
+        setState(shopData.state || '');
+        setDistrict(shopData.district || '');
+        setCity(shopData.city || '');
+        setArea(shopData.area || '');
         setPincode(shopData.pincode || '');
         setIsPureVeg(!!shopData.isPureVeg);
         setOpeningTime(shopData.openingTime || '09:00 AM');
@@ -149,6 +155,8 @@ export default function OwnerSettingsPage() {
         addressLine2,
         city,
         state,
+        district: district || undefined,
+        area: area || undefined,
         pincode,
         isPureVeg,
         openingTime,
@@ -160,7 +168,12 @@ export default function OwnerSettingsPage() {
       setSuccessMsg('Bakery profile settings saved successfully!');
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Failed to save bakery profile');
+      const respData = err?.response?.data || {};
+      const fieldErrors = respData?.fieldErrors || {};
+      if (Object.keys(fieldErrors).length > 0) {
+        setLocationErrors(fieldErrors);
+      }
+      setErrorMsg(err?.message || respData?.error || 'Failed to save bakery profile');
     } finally {
       setIsSaving(false);
     }
@@ -362,26 +375,25 @@ export default function OwnerSettingsPage() {
               onChange={(e) => setAddressLine2(e.target.value)}
             />
 
-            <div className="grid grid-cols-3 gap-4">
-              <Input
-                label="City"
-                required
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-              />
-              <Input
-                label="State"
-                required
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-              />
-              <Input
-                label="Pincode"
-                required
-                value={pincode}
-                onChange={(e) => setPincode(e.target.value)}
-              />
-            </div>
+            <CascadingLocationSelector
+              values={{ state, district, city, area, pincode }}
+              onChange={(updated) => {
+                if ('state' in updated) setState(updated.state || '');
+                if ('district' in updated) setDistrict(updated.district || '');
+                if ('city' in updated) setCity(updated.city || '');
+                if ('area' in updated) setArea(updated.area || '');
+                if ('pincode' in updated) setPincode(updated.pincode || '');
+                setLocationErrors((prev) => {
+                  const next = { ...prev };
+                  for (const key of Object.keys(updated)) {
+                    delete next[key];
+                  }
+                  return next;
+                });
+              }}
+              fieldErrors={locationErrors}
+              disabled={isSaving}
+            />
           </Card>
 
           <Card className="p-6 space-y-4">

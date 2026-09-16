@@ -22,6 +22,9 @@ public class SubscriptionPlan {
 
     private String description;
 
+    @Column(name = "billing_cycle", nullable = false)
+    private String billingCycle = "monthly";
+
     @Column(nullable = false)
     private BigDecimal price;
 

@@ -120,6 +120,12 @@ export interface CustomCakeRequest {
   deliveryPreference?: string;
   status: 'PENDING' | 'REVIEWED' | 'ACCEPTED' | 'REJECTED' | string;
   ownerResponse?: string;
+  fieldValues?: Array<{
+    id?: number;
+    fieldKey: string;
+    fieldLabel: string;
+    fieldValue: string;
+  }>;
   createdAt: string;
   updatedAt?: string;
 }
@@ -202,7 +208,12 @@ export interface ShopSettings {
   logoUrl?: string;
   instagramUrl?: string;
   whatsappNumber?: string;
+  aboutStory?: string;
+  aboutImageUrl?: string;
+  showAboutImage?: boolean;
+  mapLocationUrl?: string;
   verificationStatus?: 'PROCESSING' | 'VERIFIED' | 'ACTION_REQUIRED' | 'REJECTED' | string;
+  status?: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'EXPIRED' | 'INACTIVE' | string;
 }
 
 export interface SubscriptionPlanSummary {

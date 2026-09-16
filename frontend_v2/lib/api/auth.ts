@@ -32,4 +32,12 @@ export const authApi = {
 
     return apiClient.post('/api/auth/register', data);
   },
+
+  forgotPassword: async (email: string): Promise<any> => {
+    return apiClient.post('/api/auth/forgot-password', { email });
+  },
+
+  resetPassword: async (data: { token: string; newPassword: string }): Promise<any> => {
+    return apiClient.post('/api/auth/reset-password', data);
+  },
 };

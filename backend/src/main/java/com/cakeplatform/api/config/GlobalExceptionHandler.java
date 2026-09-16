@@ -32,9 +32,45 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(com.cakeplatform.api.exception.DuplicateResourceException.class)
-    public ResponseEntity<Map<String, String>> handleDuplicateResourceException(com.cakeplatform.api.exception.DuplicateResourceException ex) {
-        Map<String, String> error = new HashMap<>();
+    public ResponseEntity<Map<String, Object>> handleDuplicateResourceException(com.cakeplatform.api.exception.DuplicateResourceException ex) {
+        Map<String, Object> error = new HashMap<>();
         error.put("error", ex.getMessage());
+        if (!ex.getFieldErrors().isEmpty()) {
+            error.putAll(ex.getFieldErrors());
+            error.put("fieldErrors", ex.getFieldErrors());
+        }
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolationException(org.springframework.dao.DataIntegrityViolationException ex) {
+        Map<String, Object> error = new HashMap<>();
+        Map<String, String> fieldErrors = new HashMap<>();
+        String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        if (ex.getCause() != null && ex.getCause().getMessage() != null) {
+            msg += " " + ex.getCause().getMessage().toLowerCase();
+        }
+
+        if (msg.contains("idx_users_mobile") || msg.contains("uk_users_mobile") || msg.contains("mobile")) {
+            String mobileMsg = "This phone number is already registered. Please use another number.";
+            fieldErrors.put("mobile", mobileMsg);
+            error.put("mobile", mobileMsg);
+            error.put("error", mobileMsg);
+        } else if (msg.contains("email") || msg.contains("idx_users_email") || msg.contains("users_email_key")) {
+            String emailMsg = "This email is already registered. Please login or use another email.";
+            fieldErrors.put("email", emailMsg);
+            error.put("email", emailMsg);
+            error.put("error", emailMsg);
+        } else if (msg.contains("uk_shops_owner_id") || msg.contains("owner_id")) {
+            String ownerMsg = "An owner account can only own one bakery store.";
+            error.put("error", ownerMsg);
+        } else {
+            error.put("error", "A database conflict occurred due to duplicate information.");
+        }
+
+        if (!fieldErrors.isEmpty()) {
+            error.put("fieldErrors", fieldErrors);
+        }
         return new ResponseEntity<>(error, HttpStatus.CONFLICT);
     }
 
@@ -81,6 +117,27 @@ public class GlobalExceptionHandler {
         Map<String, String> error = new HashMap<>();
         error.put("error", "File size exceeds maximum allowed limit (5MB)");
         return new ResponseEntity<>(error, HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+
+    @ExceptionHandler(com.cakeplatform.api.modules.location.exception.InvalidLocationException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidLocationException(com.cakeplatform.api.modules.location.exception.InvalidLocationException ex) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("status", HttpStatus.BAD_REQUEST.value());
+        error.put("error", "INVALID_LOCATION_HIERARCHY");
+        error.put("message", ex.getMessage());
+        if (!ex.getFieldErrors().isEmpty()) {
+            error.put("fieldErrors", ex.getFieldErrors());
+        }
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(com.cakeplatform.api.modules.location.exception.LocationServiceUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleLocationServiceUnavailableException(com.cakeplatform.api.modules.location.exception.LocationServiceUnavailableException ex) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("status", HttpStatus.SERVICE_UNAVAILABLE.value());
+        error.put("error", "LOCATION_SERVICE_INITIALIZING");
+        error.put("message", ex.getMessage());
+        return new ResponseEntity<>(error, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(RuntimeException.class)

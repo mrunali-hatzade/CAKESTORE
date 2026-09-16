@@ -31,6 +31,20 @@ public class ShopSpecification {
             String search,
             String location
     ) {
+        return filterShops(state, district, city, area, null, null, businessType, search, location);
+    }
+
+    public static Specification<Shop> filterShops(
+            String state,
+            String district,
+            String city,
+            String area,
+            String pincode,
+            String country,
+            BusinessType businessType,
+            String search,
+            String location
+    ) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -57,12 +71,17 @@ public class ShopSpecification {
                 predicates.add(cb.equal(cb.lower(cb.trim(root.get("area"))), area.trim().toLowerCase()));
             }
 
-            // 6. BusinessType filter
+            // 6. Pincode filter (trimmed)
+            if (StringUtils.hasText(pincode) && !isAllFilter(pincode)) {
+                predicates.add(cb.equal(cb.trim(root.get("pincode")), pincode.trim()));
+            }
+
+            // 7. BusinessType filter
             if (businessType != null) {
                 predicates.add(cb.equal(root.get("businessType"), businessType));
             }
 
-            // 7. General search keyword across public shop fields
+            // 8. General search keyword across public shop fields
             if (StringUtils.hasText(search)) {
                 String searchPattern = "%" + search.trim().toLowerCase() + "%";
                 Predicate searchPredicate = cb.or(
@@ -75,7 +94,7 @@ public class ShopSpecification {
                 predicates.add(searchPredicate);
             }
 
-            // 8. Legacy location query (backward compatibility)
+            // 9. Legacy location query (backward compatibility)
             if (StringUtils.hasText(location)) {
                 String locPattern = "%" + location.trim().toLowerCase() + "%";
                 Predicate locPredicate = cb.or(

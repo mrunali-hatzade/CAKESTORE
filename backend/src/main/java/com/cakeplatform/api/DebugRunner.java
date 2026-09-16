@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
+@org.springframework.context.annotation.Profile("!prod")
 public class DebugRunner implements CommandLineRunner {
 
     @Autowired

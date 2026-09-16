@@ -26,6 +26,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [locationQuery, setLocationQuery] = useState<string>('');
   const [locationFilters, setLocationFilters] = useState<Partial<LocationFilterValues>>({});
+  const [geoParams, setGeoParams] = useState<{ latitude?: number; longitude?: number; radiusKm?: number }>({});
 
   const loadShops = useCallback(async () => {
     setIsLoading(true);
@@ -38,6 +39,10 @@ export default function HomePage() {
         district: locationFilters.district,
         city: locationFilters.city,
         area: locationFilters.area,
+        pincode: locationFilters.pincode,
+        latitude: geoParams.latitude,
+        longitude: geoParams.longitude,
+        radiusKm: geoParams.radiusKm,
         businessType: activeBusinessType,
       });
       setShops(data || []);
@@ -46,16 +51,32 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, locationQuery, locationFilters, activeBusinessType]);
+  }, [searchQuery, locationQuery, locationFilters, geoParams, activeBusinessType]);
 
   useEffect(() => {
     loadShops();
   }, [loadShops]);
 
-  const handleHeroSearch = (params: { search: string; location: string }) => {
+  const handleHeroSearch = (params: {
+    search: string;
+    location: string;
+    latitude?: number;
+    longitude?: number;
+    radiusKm?: number;
+  }) => {
     setSearchQuery(params.search);
     setLocationQuery(params.location);
-    setLocationFilters({});
+    if (params.latitude && params.longitude) {
+      setGeoParams({
+        latitude: params.latitude,
+        longitude: params.longitude,
+        radiusKm: params.radiusKm || 10,
+      });
+      setLocationFilters({});
+    } else {
+      setGeoParams({});
+      setLocationFilters({});
+    }
   };
 
   const handleSelectCategory = (category: CategoryOption) => {
@@ -63,27 +84,40 @@ export default function HomePage() {
     setActiveBusinessType(category.businessType);
   };
 
-  const handleLocationFilterChange = (filters: LocationFilterValues) => {
-    setLocationFilters({
-      state: filters.state,
-      district: filters.district,
-      city: filters.city,
-      area: filters.area,
-    });
-    setLocationQuery(filters.label === 'All Locations' ? '' : filters.label);
-  };
+  const handleLocationFilterChange = useCallback((filters: LocationFilterValues) => {
+    if (filters.mode === 'NEARBY' && filters.latitude && filters.longitude) {
+      setGeoParams({
+        latitude: filters.latitude,
+        longitude: filters.longitude,
+        radiusKm: filters.radiusKm || 10,
+      });
+      setLocationFilters({});
+      setLocationQuery(filters.label);
+    } else {
+      setGeoParams({});
+      setLocationFilters({
+        state: filters.state,
+        district: filters.district,
+        city: filters.city,
+        area: filters.area,
+        pincode: filters.pincode,
+      });
+      setLocationQuery(filters.label === 'All Locations' ? '' : filters.label);
+    }
+  }, []);
 
   const handleClearFilters = () => {
     setActiveCategory('ALL');
     setActiveBusinessType(undefined);
     setSearchQuery('');
     setLocationQuery('');
+    setGeoParams({});
     setLocationFilters({});
   };
 
   // Dynamic grid title based on city and category
   const getGridTitle = () => {
-    const isNearby = locationQuery.toLowerCase().includes('near');
+    const isNearby = geoParams.latitude != null || locationQuery.toLowerCase().includes('near') || locationQuery.toLowerCase().includes('within');
     const locPrefix = isNearby
       ? 'Near You'
       : locationQuery

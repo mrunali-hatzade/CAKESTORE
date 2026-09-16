@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Heart, Star, ShoppingBag, SlidersHorizontal, Check } from 'lucide-react';
+import { Heart, Star, ShoppingBag, SlidersHorizontal, Check, Share2 } from 'lucide-react';
 import { Product } from '@/types/product';
 import { Shop } from '@/types/shop';
 import { useCart } from '@/context/CartContext';
 import { useToast } from '@/components/common/Toast';
+import { getSafeImageUrl, FALLBACK_CAKE_IMAGE } from '@/lib/utils/image';
 
 import { useFavorites } from '@/context/FavoritesContext';
 
@@ -16,7 +17,7 @@ interface ProductCardProps {
   onSelect: (product: Product) => void;
 }
 
-const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80';
+const FALLBACK_CAKE = FALLBACK_CAKE_IMAGE;
 
 // Helper to generate flavor descriptor chips from product information
 function getFlavorChips(product: Product): string[] {
@@ -54,8 +55,12 @@ function getFlavorChips(product: Product): string[] {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelect }) => {
-  const [imgSrc, setImgSrc] = useState(product.imageUrl || FALLBACK_CAKE);
+  const [imgSrc, setImgSrc] = useState(() => getSafeImageUrl(product.imageUrl, FALLBACK_CAKE));
   const [isAdded, setIsAdded] = useState(false);
+
+  useEffect(() => {
+    setImgSrc(getSafeImageUrl(product.imageUrl, FALLBACK_CAKE));
+  }, [product.imageUrl]);
 
   const { isFavorite, toggleFavorite } = useFavorites();
   const isFav = isFavorite(product.id);
@@ -64,19 +69,39 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
   const toast = useToast();
 
   const flavorChips = getFlavorChips(product);
+  const isAvailable = product.availability !== false && product.inStock !== false;
+
+  const hasVariants = Boolean(product.variants && product.variants.length > 0);
+  const defaultVariant = hasVariants ? product.variants![0] : null;
+  const displayPrice = defaultVariant ? Number(defaultVariant.price) : Number(product.price);
+  const displayOriginalPrice = defaultVariant
+    ? (defaultVariant.originalPrice ? Number(defaultVariant.originalPrice) : null)
+    : (product.originalPrice ? Number(product.originalPrice) : null);
+  const discountPercent = displayOriginalPrice && displayOriginalPrice > displayPrice
+    ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
+    : 0;
+
+  const ratingsEnabled = shop?.storefrontSettings?.ratingsEnabled !== false;
+  const hasRating = ratingsEnabled && Boolean(product.rating && product.rating > 0);
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAvailable) {
+      toast.error('This product is currently out of stock.');
+      return;
+    }
 
     const result = addItem({
       productId: product.id,
-      name: product.name,
-      price: product.price,
+      name: defaultVariant ? `${product.name} (${defaultVariant.name})` : product.name,
+      price: displayPrice,
       quantity: 1,
-      imageUrl: product.imageUrl || FALLBACK_CAKE,
+      imageUrl: defaultVariant?.imageUrl || product.imageUrl || FALLBACK_CAKE,
       isEggless: product.isEggless,
       shopId: shop?.id || product.shopId,
       shopName: shop?.businessName || 'Bakery Boutique',
+      variantId: defaultVariant?.id,
+      variantName: defaultVariant?.name,
     });
 
     if (result.conflict) {
@@ -94,20 +119,41 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
     toggleFavorite(product, shop?.id || product.shopId, shop?.businessName || 'Bakery Boutique');
   };
 
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/shop/${shop?.id || product.shopId}/product/${product.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} at ${shop?.businessName || 'Bakery Boutique'}!`,
+          url,
+        });
+        return;
+      } catch {
+        // Fallback to clipboard
+      }
+    }
+    navigator.clipboard.writeText(url);
+    toast.success('Product link copied to clipboard!');
+  };
+
   return (
     <div
       onClick={() => onSelect(product)}
       className="group cursor-pointer flex flex-col justify-between overflow-hidden bg-white border border-brand-border/70 hover:border-[#C5A880]/60 rounded-2xl sm:rounded-3xl shadow-soft hover:shadow-elevated transition-all duration-300 hover:-translate-y-1 relative"
     >
       <div>
-        {/* Crisp 1:1 Aspect Ratio Photo with Zoom Effect */}
+        {/* 1:1 Aspect Ratio Photo with Zoom Effect */}
         <div className="relative aspect-square w-full overflow-hidden bg-[#FAF7F2]">
           <Image
             src={imgSrc}
             alt={product.name}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-cover object-center group-hover:scale-108 transition-transform duration-700 ease-out"
+            className={`object-cover object-center group-hover:scale-108 transition-transform duration-700 ease-out ${
+              !isAvailable ? 'grayscale opacity-60' : ''
+            }`}
             onError={() => setImgSrc(FALLBACK_CAKE)}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -124,19 +170,38 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
             </span>
           </div>
 
-          {/* Top-Right: Wishlist Heart Icon */}
-          <button
-            type="button"
-            onClick={handleToggleFavorite}
-            aria-label="Save to favorites"
-            className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md shadow-xs transition-all z-10 cursor-pointer ${
-              isFav
-                ? 'bg-rose-50 text-rose-600 border border-rose-200 scale-105'
-                : 'bg-white/90 text-brand-muted hover:text-rose-500 hover:bg-white hover:scale-110 border border-brand-border/40'
-            }`}
-          >
-            <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
-          </button>
+          {/* Out of Stock Overlay */}
+          {!isAvailable && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+              <span className="bg-red-600 text-white font-bold text-xs uppercase px-3 py-1 rounded-full shadow-md">
+                Sold Out
+              </span>
+            </div>
+          )}
+
+          {/* Top-Right: Quick Actions (Share & Wishlist) */}
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+            <button
+              type="button"
+              onClick={handleShare}
+              aria-label="Share product"
+              className="w-8 h-8 rounded-full flex items-center justify-center bg-white/90 backdrop-blur-md shadow-xs hover:text-brand-plum hover:bg-white hover:scale-110 border border-brand-border/40 transition-all cursor-pointer text-brand-muted"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleFavorite}
+              aria-label="Save to favorites"
+              className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md shadow-xs transition-all cursor-pointer ${
+                isFav
+                  ? 'bg-rose-50 text-rose-600 border border-rose-200 scale-105'
+                  : 'bg-white/90 text-brand-muted hover:text-rose-500 hover:bg-white hover:scale-110 border border-brand-border/40'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
+            </button>
+          </div>
         </div>
 
         {/* Card Content */}
@@ -147,11 +212,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
               {product.categoryName || product.category?.replace(/_/g, ' ') || 'Artisanal Cake'}
             </span>
 
-            <div className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-espresso bg-amber-50/80 px-2 py-0.5 rounded-full border border-amber-200/60 shrink-0">
-              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-              <span>4.8</span>
-              <span className="text-[10px] text-brand-muted font-normal">(24)</span>
-            </div>
+            {hasRating ? (
+              <div className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-espresso bg-amber-50/80 px-2 py-0.5 rounded-full border border-amber-200/60 shrink-0">
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                <span>{product.rating!.toFixed(1)}</span>
+                {(product.reviewCount || product.totalReviews) ? (
+                  <span className="text-[10px] text-brand-muted font-normal">
+                    ({product.reviewCount || product.totalReviews})
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <span className="text-[10px] font-medium text-brand-muted bg-brand-cream px-2 py-0.5 rounded-full">
+                Fresh Baked
+              </span>
+            )}
           </div>
 
           {/* Product Title */}
@@ -176,13 +251,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
             ) : null}
           </div>
 
-          {/* Prominent Price */}
-          <div className="pt-1 flex items-baseline gap-1">
+          {/* Prominent Price & Discount */}
+          <div className="pt-1 flex items-baseline gap-2 flex-wrap">
             <span className="font-serif font-bold text-lg sm:text-xl text-[#2C1A1D]">
-              ₹{product.price}
+              ₹{displayPrice}
             </span>
+            {displayOriginalPrice && discountPercent >= 1 ? (
+              <>
+                <span className="text-xs text-brand-muted line-through">
+                  ₹{displayOriginalPrice}
+                </span>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                  {discountPercent}% OFF
+                </span>
+              </>
+            ) : null}
             <span className="text-[11px] text-brand-muted font-normal">
-              {product.weightGrams ? `/ ${product.weightGrams >= 1000 ? `${product.weightGrams / 1000}kg` : `${product.weightGrams}g`}` : ''}
+              {defaultVariant ? `(${defaultVariant.name})` : product.weightGrams ? `/ ${product.weightGrams >= 1000 ? `${product.weightGrams / 1000}kg` : `${product.weightGrams}g`}` : ''}
             </span>
           </div>
         </div>
@@ -204,14 +289,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
 
         <button
           type="button"
+          disabled={!isAvailable}
           onClick={handleQuickAdd}
           className={`w-full inline-flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-white text-xs font-bold transition-all shadow-xs active:scale-95 ${
-            isAdded
+            !isAvailable
+              ? 'bg-brand-muted/50 cursor-not-allowed text-white/80'
+              : isAdded
               ? 'bg-emerald-600 hover:bg-emerald-700'
               : 'bg-[#5C1D2E] hover:bg-[#4a1525]'
           }`}
         >
-          {isAdded ? (
+          {!isAvailable ? (
+            <span>Sold Out</span>
+          ) : isAdded ? (
             <>
               <Check className="w-3.5 h-3.5" />
               <span>Added!</span>

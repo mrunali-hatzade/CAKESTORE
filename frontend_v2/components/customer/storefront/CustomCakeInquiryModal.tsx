@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
-import { Shop } from '@/types/shop';
+import { Shop, ShopCustomFormField } from '@/types/shop';
 import {
   Sparkles,
   MessageCircle,
@@ -19,9 +19,10 @@ import {
   Upload,
   Camera,
   Link as LinkIcon,
+  Cake,
 } from 'lucide-react';
 import { useToast } from '@/components/common/Toast';
-import { apiClient } from '@/lib/api/client';
+import { storefrontApi } from '@/lib/api/storefront';
 import { mediaApi } from '@/lib/api/media';
 
 interface CustomCakeInquiryModalProps {
@@ -50,6 +51,9 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
   const [designDescription, setDesignDescription] = useState('');
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
 
+  // Dynamic custom form fields
+  const [dynamicValues, setDynamicValues] = useState<Record<string, string>>({});
+
   const [imageTab, setImageTab] = useState<'upload' | 'url'>('upload');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +63,16 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const isCustomCakesEnabled = shop.storefrontSettings ? shop.storefrontSettings.customCakesEnabled !== false : true;
+
+  const activeCustomFields = (shop.customCakeFormFields || [])
+    .filter(f => f.isEnabled !== false)
+    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+  const handleDynamicChange = (key: string, value: string) => {
+    setDynamicValues(prev => ({ ...prev, [key]: value }));
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,32 +112,32 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
     );
   };
 
-  const rawPhone = (shop.phone || shop.businessPhone || '').replace(/\D/g, '') || '919823100000';
-  const whatsappUrl = `https://wa.me/${rawPhone.startsWith('91') ? rawPhone : '91' + rawPhone}?text=${getWhatsAppMessage()}`;
+  const cleanPhone = (shop.whatsappNumber || shop.phone || shop.businessPhone || '').replace(/\D/g, '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim() || !customerMobile.trim()) {
-      setErrorMessage('Please enter your name and contact phone number.');
-      return;
-    }
-    if (!designDescription.trim()) {
-      setErrorMessage('Please provide a few design notes or instructions.');
-      return;
-    }
-
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    let cleanPhone = customerMobile.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-    if (!cleanPhone.startsWith('91') && cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
+    let sanitizedMobile = customerMobile.replace(/\D/g, '');
+    if (sanitizedMobile.startsWith('0')) sanitizedMobile = sanitizedMobile.substring(1);
+    if (!sanitizedMobile.startsWith('91') && sanitizedMobile.length === 10) {
+      sanitizedMobile = `91${sanitizedMobile}`;
+    }
 
     try {
+      const dynamicFieldValuesList = activeCustomFields
+        .filter(f => dynamicValues[f.fieldKey] !== undefined && dynamicValues[f.fieldKey] !== '')
+        .map(f => ({
+          fieldKey: f.fieldKey,
+          fieldLabel: f.fieldLabel,
+          fieldValue: dynamicValues[f.fieldKey],
+        }));
+
       const payload = {
         customerName: customerName.trim(),
-        customerEmail: customerEmail.trim() || `${cleanPhone}@cakestore.customer`,
-        customerMobile: cleanPhone,
+        customerEmail: customerEmail.trim(),
+        customerMobile: sanitizedMobile,
         occasion,
         cakeType,
         flavour,
@@ -133,13 +147,14 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
         deliveryPreference,
         designDescription: designDescription.trim(),
         referenceImageUrl: referenceImageUrl || undefined,
+        dynamicFieldValues: dynamicFieldValuesList,
       };
 
-      const res = await apiClient.post<any>(`/api/storefront/shops/${shop.id}/custom-cakes`, payload);
-      setSuccessResult(res || { id: Date.now() });
-      toast.success('Custom cake inquiry submitted successfully!');
-    } catch {
-      setSuccessResult({ id: Date.now() });
+      const res = await storefrontApi.submitCustomCakeRequest(shop.id, payload);
+      setSuccessResult(res || { id: 'REQUEST-SUBMITTED' });
+      toast.success('Custom cake consultation submitted!');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to submit request. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -147,103 +162,107 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
 
   const handleReset = () => {
     setSuccessResult(null);
+    setErrorMessage(null);
     setDesignDescription('');
     setReferenceImageUrl('');
-    setCustomerName('');
-    setCustomerMobile('');
-    setCustomerEmail('');
+    setDynamicValues({});
     onClose();
   };
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleReset}
+      title=""
       maxWidth="lg"
-      title="Request a Custom Bespoke Cake"
-      description={`Direct consultation with master bakers at ${shop.businessName}`}
+      className="max-h-[92vh] overflow-y-auto"
     >
-      {successResult ? (
-        <div className="py-6 text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
-            <CheckCircle2 className="w-8 h-8" />
+      <div className="space-y-6">
+        {/* Header Banner */}
+        <div className="text-center space-y-1.5 pb-4 border-b border-brand-border/60">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-blush border border-brand-blush-border text-brand-plum text-[11px] font-semibold">
+            <Sparkles className="w-3 h-3" />
+            <span>Artisan Consultation</span>
           </div>
+          <h2 className="text-2xl font-serif font-bold text-brand-espresso">
+            Bespoke Custom Cake Inquiry
+          </h2>
+          <p className="text-xs text-brand-muted max-w-md mx-auto">
+            Design your dream celebration centerpiece with <strong>{shop.businessName}</strong>.
+          </p>
+        </div>
 
-          <div>
-            <h3 className="font-serif font-bold text-xl text-brand-espresso">
-              Consultation Form Submitted!
-            </h3>
-            <p className="text-xs text-brand-muted mt-1 max-w-md mx-auto">
-              Your cake specifications have been sent to <strong>{shop.businessName}</strong>. You can also chat directly on WhatsApp to share reference sketches.
+        {!isCustomCakesEnabled ? (
+          <div className="py-8 text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-brand-cream flex items-center justify-center text-brand-plum mx-auto border border-brand-border">
+              <Cake className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-serif font-bold text-brand-espresso">Custom Orders Temporarily Paused</h3>
+            <p className="text-xs text-brand-muted max-w-sm mx-auto leading-relaxed">
+              {shop.businessName} is currently not accepting bespoke cake consultation requests. Please check our ready-to-order cake menu.
             </p>
+            <div className="pt-2">
+              <Button variant="outline" size="sm" onClick={onClose}>
+                Close
+              </Button>
+            </div>
           </div>
-
-          <div className="bg-[#FAF7F2] p-4 rounded-2xl border border-brand-border/60 text-left text-xs space-y-1.5 max-w-md mx-auto">
-            <p><strong>Occasion:</strong> {occasion} • <strong>Flavour:</strong> {flavour}</p>
-            <p><strong>Servings:</strong> {servings} guests • <strong>Budget:</strong> ₹{budget}</p>
-            {requiredDate && <p><strong>Event Date:</strong> {requiredDate}</p>}
-            {designDescription && <p><strong>Notes:</strong> {designDescription}</p>}
-          </div>
-
-          <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-soft transition-all"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>Chat with Chef on WhatsApp</span>
-            </a>
-            <Button variant="outline" size="md" onClick={handleReset}>
+        ) : successResult ? (
+          <div className="text-center py-6 space-y-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
+              <CheckCircle2 className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-lg font-serif font-bold text-brand-espresso">
+                Inquiry Received!
+              </h3>
+              <p className="text-xs text-brand-muted mt-1">
+                Reference: <span className="font-bold text-brand-plum">#CC-{successResult.id || 'NEW'}</span>
+              </p>
+            </div>
+            <p className="text-xs text-brand-espresso bg-[#FAF7F2] p-4 rounded-2xl border border-brand-border/60 leading-relaxed text-left">
+              The pastry team at <strong>{shop.businessName}</strong> will review your custom specifications and contact you directly via WhatsApp or phone with an estimate and availability.
+            </p>
+            <Button onClick={handleReset} className="w-full font-bold">
               Done
             </Button>
           </div>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          {errorMessage && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            {errorMessage && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
-          {/* Section 1: Customer Contact */}
-          <div className="space-y-2.5">
-            <h4 className="text-xs font-bold text-brand-espresso uppercase tracking-wider border-b border-brand-border/60 pb-1">
-              1. Your Contact Information
-            </h4>
+            {/* Customer Information */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Input
-                label="Your Name *"
+                label="Your Name"
                 required
-                placeholder="Priya Sharma"
+                placeholder="Rohit Verma"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
               />
               <Input
-                label="WhatsApp / Phone Number *"
-                required
-                placeholder="9823100000"
-                value={customerMobile}
-                onChange={(e) => setCustomerMobile(e.target.value)}
-              />
-              <Input
                 label="Email Address"
                 type="email"
-                placeholder="priya@example.com"
+                required
+                placeholder="rohit@example.com"
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
               />
+              <Input
+                label="WhatsApp / Phone"
+                required
+                placeholder="9876543210"
+                value={customerMobile}
+                onChange={(e) => setCustomerMobile(e.target.value)}
+              />
             </div>
-          </div>
 
-          {/* Section 2: Cake Specs */}
-          <div className="space-y-2.5 pt-1">
-            <h4 className="text-xs font-bold text-brand-espresso uppercase tracking-wider border-b border-brand-border/60 pb-1">
-              2. Celebration Details &amp; Flavour
-            </h4>
+            {/* Cake Specifications */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Select
                 label="Occasion"
@@ -266,7 +285,7 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
                 options={[
                   { value: 'CUSTOM_DESIGN', label: 'Bespoke Theme Cake' },
                   { value: 'TIERED_WEDDING', label: 'Multi-Tier Luxe Cake' },
-                  { value: 'PHOTO_PRINT', label: 'Edible Photo Print Cake' },
+                  { value: 'PHOTO_PRINT', label: 'Edible Photo Print' },
                   { value: '3D_SCULPTED', label: '3D Sculpted Fondant' },
                   { value: 'NAKED_FLORAL', label: 'Rustic Naked & Floral' },
                 ]}
@@ -278,7 +297,7 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
                 onChange={(e) => setFlavour(e.target.value)}
                 options={[
                   { value: 'Belgian Dark Truffle', label: '🍫 Belgian Dark Truffle' },
-                  { value: 'Red Velvet Cream Cheese', label: '🍓 Red Velvet Cream Cheese' },
+                  { value: 'Red Velvet Cream Cheese', label: '🍓 Red Velvet' },
                   { value: 'Alfonso Mango Mascarpone', label: '🥭 Mango Mascarpone' },
                   { value: 'Lotus Biscoff Ganache', label: '🍪 Lotus Biscoff' },
                   { value: 'Nutella Hazelnut Praline', label: '🌰 Hazelnut Praline' },
@@ -288,7 +307,7 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
               />
 
               <Input
-                label="Expected Guests"
+                label="Servings / Guests"
                 type="number"
                 min="1"
                 required
@@ -300,22 +319,19 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Input
-                label="Celebration Date"
+                label="Event Date"
                 type="date"
                 required
                 value={requiredDate}
                 onChange={(e) => setRequiredDate(e.target.value)}
-                helperText="24-48h lead time recommended"
               />
-
               <Input
-                label="Estimated Budget (₹)"
+                label="Target Budget (₹)"
                 type="number"
                 placeholder="2000"
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
               />
-
               <Select
                 label="Fulfillment"
                 value={deliveryPreference}
@@ -326,122 +342,153 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
                 ]}
               />
             </div>
-          </div>
 
-          {/* Section 3: Design Instructions & Photo Reference */}
-          <div className="space-y-2.5 pt-1">
-            <h4 className="text-xs font-bold text-brand-espresso uppercase tracking-wider border-b border-brand-border/60 pb-1">
-              3. Design Instructions &amp; Photo Reference
-            </h4>
+            {/* Owner Custom Form Fields (if defined) */}
+            {activeCustomFields.length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-brand-cream-light/60 border border-brand-border/60 space-y-3">
+                <span className="font-bold text-brand-espresso block text-xs">Bakery Options:</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {activeCustomFields.map((field) => {
+                    let parsedOptions: string[] = [];
+                    if (field.optionsJson) {
+                      try {
+                        parsedOptions = typeof field.optionsJson === 'string'
+                          ? JSON.parse(field.optionsJson)
+                          : field.optionsJson;
+                      } catch {
+                        parsedOptions = field.optionsJson.split(',').map(s => s.trim());
+                      }
+                    }
 
+                    if (field.fieldType === 'DROPDOWN') {
+                      return (
+                        <Select
+                          key={field.fieldKey}
+                          label={field.fieldLabel}
+                          required={field.isRequired}
+                          value={dynamicValues[field.fieldKey] || ''}
+                          onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
+                          options={[
+                            { value: '', label: `Select ${field.fieldLabel}` },
+                            ...parsedOptions.map(opt => ({ value: opt, label: opt })),
+                          ]}
+                        />
+                      );
+                    }
+
+                    if (field.fieldType === 'TEXTAREA') {
+                      return (
+                        <div key={field.fieldKey} className="sm:col-span-2">
+                          <Textarea
+                            label={field.fieldLabel}
+                            required={field.isRequired}
+                            rows={2}
+                            value={dynamicValues[field.fieldKey] || ''}
+                            onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Input
+                        key={field.fieldKey}
+                        label={field.fieldLabel}
+                        type={field.fieldType === 'NUMBER' ? 'number' : field.fieldType === 'DATE' ? 'date' : 'text'}
+                        required={field.isRequired}
+                        value={dynamicValues[field.fieldKey] || ''}
+                        onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Design Description */}
             <Textarea
-              label="Design Instructions &amp; Plaque Text *"
+              label="Design Instructions & Plaque Text"
               rows={3}
               required
-              placeholder="Describe colors, theme elements, topper text, dietary preferences (e.g. eggless), and special requests..."
+              placeholder="Describe color palette, theme elements, name/age for cake plaque, dietary notes..."
               value={designDescription}
               onChange={(e) => setDesignDescription(e.target.value)}
             />
 
-            {/* Reference Image Upload */}
+            {/* Reference Image */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-brand-espresso block">
-                Inspiration / Reference Photo (Optional)
+              <label className="font-semibold text-brand-espresso block">
+                Reference Photo (Optional)
               </label>
-              <div className="flex gap-2 p-1 bg-[#FAF7F2] rounded-xl border border-brand-border/60 max-w-xs">
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
                 <button
                   type="button"
-                  onClick={() => setImageTab('upload')}
-                  className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    imageTab === 'upload' ? 'bg-white text-brand-espresso shadow-xs' : 'text-brand-muted'
-                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-2 rounded-xl border border-brand-border hover:bg-brand-cream text-brand-espresso font-semibold inline-flex items-center gap-1.5 transition-all text-xs"
                 >
-                  <Upload className="w-3.5 h-3.5 inline mr-1" /> Upload File
+                  <Camera className="w-3.5 h-3.5 text-brand-plum" />
+                  <span>{isUploading ? 'Uploading...' : 'Upload Photo'}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setImageTab('url')}
-                  className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    imageTab === 'url' ? 'bg-white text-brand-espresso shadow-xs' : 'text-brand-muted'
-                  }`}
-                >
-                  <LinkIcon className="w-3.5 h-3.5 inline mr-1" /> Paste URL
-                </button>
+                <Input
+                  placeholder="Or paste image URL"
+                  value={referenceImageUrl}
+                  onChange={(e) => setReferenceImageUrl(e.target.value)}
+                  className="flex-1"
+                />
               </div>
 
-              {imageTab === 'upload' ? (
-                <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileUpload}
+              {referenceImageUrl && (
+                <div className="flex items-center gap-2 pt-1">
+                  <img
+                    src={referenceImageUrl}
+                    alt="Reference"
+                    className="w-12 h-12 rounded-lg object-cover border border-brand-border"
                   />
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full border-2 border-dashed border-brand-border hover:border-[#5C1D2E]/40 rounded-2xl p-4 text-center transition-all bg-[#FAF7F2]/40 cursor-pointer"
+                    onClick={() => setReferenceImageUrl('')}
+                    className="text-rose-600 text-[11px] hover:underline"
                   >
-                    {isUploading ? (
-                      <div className="text-xs text-brand-muted">Uploading photo...</div>
-                    ) : (
-                      <>
-                        <Camera className="w-5 h-5 text-brand-plum mx-auto mb-1" />
-                        <p className="text-xs font-bold text-brand-espresso">Click to upload reference photo</p>
-                        <p className="text-[11px] text-brand-muted">JPG, PNG, WebP up to 5MB</p>
-                      </>
-                    )}
+                    Remove
                   </button>
-                </div>
-              ) : (
-                <Input
-                  placeholder="https://images.unsplash.com/... or Pinterest URL"
-                  value={referenceImageUrl}
-                  onChange={(e) => setReferenceImageUrl(e.target.value)}
-                />
-              )}
-
-              {referenceImageUrl && (
-                <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-[#FAF7F2] border border-brand-border/60">
-                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-white border border-brand-border shrink-0">
-                    <img
-                      src={referenceImageUrl}
-                      alt="Reference design"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="text-xs flex-1">
-                    <span className="font-semibold text-brand-espresso block">Photo Attached</span>
-                    <button
-                      type="button"
-                      onClick={() => setReferenceImageUrl('')}
-                      className="text-rose-600 hover:underline text-[11px]"
-                    >
-                      Remove
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="pt-3 border-t border-brand-border/60 flex items-center justify-end gap-2.5">
-            <Button variant="ghost" size="sm" onClick={onClose} type="button" disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="md"
-              disabled={isSubmitting}
-              className="font-bold bg-[#5C1D2E] text-white hover:bg-[#4a1525] shadow-xs cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5 mr-1.5" />
-              <span>{isSubmitting ? 'Submitting...' : 'Submit Custom Consultation'}</span>
-            </Button>
-          </div>
-        </form>
-      )}
+            {/* Action Buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row gap-2">
+              <Button
+                type="submit"
+                size="md"
+                disabled={isSubmitting}
+                className="flex-1 font-bold"
+              >
+                <Send className="w-3.5 h-3.5 mr-1.5" />
+                <span>{isSubmitting ? 'Submitting...' : 'Submit Inquiry'}</span>
+              </Button>
+
+              {cleanPhone && (
+                <a
+                  href={`https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${getWhatsAppMessage()}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs transition-all text-center"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 mr-1.5 fill-current" />
+                  <span>Chat on WhatsApp</span>
+                </a>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
     </Modal>
   );
 };

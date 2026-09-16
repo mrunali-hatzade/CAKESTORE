@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   TrendingUp,
   ShoppingBag,
@@ -15,17 +15,19 @@ import {
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { DashboardAnalytics } from '@/types/owner';
+import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function OwnerAnalyticsPage() {
+  const { registerRefreshHandler } = useOwner();
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async (isManual = false) => {
+  const loadData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -39,11 +41,18 @@ export default function OwnerAnalyticsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  useEffect(() => {
+    const unregister = registerRefreshHandler(async () => {
+      await loadData(true);
+    });
+    return unregister;
+  }, [registerRefreshHandler, loadData]);
 
   if (loading) return <LoadingState message="Calculating bakery sales performance..." />;
 

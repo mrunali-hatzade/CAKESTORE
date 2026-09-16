@@ -183,9 +183,9 @@ export const ownerApi = {
     }
   },
 
-  processMockSubscriptionPayment: async (amount: number): Promise<PaymentMockResult> => {
+  processMockSubscriptionPayment: async (planId: number): Promise<PaymentMockResult> => {
     return apiClient.post<PaymentMockResult>('/api/owner/payments/mock-checkout', {
-      amount: amount.toString(),
+      planId: planId,
     });
   },
 
@@ -218,15 +218,15 @@ export const ownerApi = {
     window.URL.revokeObjectURL(url);
   },
 
-  initiateSubscriptionPayment: async (billingCycle: 'monthly' | 'yearly'): Promise<any> => {
-    return apiClient.post('/api/owner/payments/initiate-subscription', { billingCycle });
+  initiateSubscriptionPayment: async (planId: number): Promise<any> => {
+    return apiClient.post('/api/owner/payments/initiate-subscription', { planId });
   },
 
   verifySubscriptionPayment: async (payload: {
     razorpayOrderId: string;
     razorpayPaymentId: string;
     razorpaySignature: string;
-    billingCycle?: string;
+    planId: number;
   }): Promise<any> => {
     return apiClient.post('/api/owner/payments/verify-subscription', payload);
   },

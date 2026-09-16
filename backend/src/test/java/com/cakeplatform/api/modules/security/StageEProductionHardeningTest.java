@@ -4,7 +4,7 @@ import com.cakeplatform.api.config.FileStorageProperties;
 import com.cakeplatform.api.config.GlobalExceptionHandler;
 import com.cakeplatform.api.modules.common.HealthController;
 import com.cakeplatform.api.modules.media.MediaController;
-import com.cakeplatform.api.modules.media.MediaUploadService;
+import com.cakeplatform.api.modules.media.StorageService;
 import com.cakeplatform.api.security.CustomUserDetailsService;
 import com.cakeplatform.api.security.JwtAuthenticationEntryPoint;
 import com.cakeplatform.api.security.JwtAuthenticationFilter;
@@ -49,7 +49,7 @@ import static org.mockito.Mockito.*;
 public class StageEProductionHardeningTest {
 
     @Mock
-    private MediaUploadService mediaUploadService;
+    private StorageService storageService;
 
     @Mock
     private FilterChain filterChain;
@@ -61,7 +61,7 @@ public class StageEProductionHardeningTest {
 
     @BeforeEach
     void setUp() {
-        mediaController = new MediaController(mediaUploadService);
+        mediaController = new MediaController(storageService);
         rateLimitingFilter = new RateLimitingFilter();
         healthController = new HealthController();
         exceptionHandler = new GlobalExceptionHandler();
@@ -272,7 +272,7 @@ public class StageEProductionHardeningTest {
     void testUpload_AcceptsValidJpeg() {
         byte[] validJpeg = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0x10, 'J', 'F', 'I', 'F', 0, 1};
         MockMultipartFile file = new MockMultipartFile("file", "cake.jpg", "image/jpeg", validJpeg);
-        when(mediaUploadService.storeFile(any(), eq("products"))).thenReturn("http://localhost:8080/uploads/products/uuid.jpg");
+        when(storageService.storeFile(any(), eq("products"))).thenReturn("http://localhost:8080/uploads/products/uuid.jpg");
 
         ResponseEntity<Map<String, String>> response = mediaController.uploadFile(file, "products");
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -284,7 +284,7 @@ public class StageEProductionHardeningTest {
     void testUpload_AcceptsValidPng() {
         byte[] validPng = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0};
         MockMultipartFile file = new MockMultipartFile("file", "logo.png", "image/png", validPng);
-        when(mediaUploadService.storeFile(any(), eq("logos"))).thenReturn("http://localhost:8080/uploads/logos/uuid.png");
+        when(storageService.storeFile(any(), eq("logos"))).thenReturn("http://localhost:8080/uploads/logos/uuid.png");
 
         ResponseEntity<Map<String, String>> response = mediaController.uploadFile(file, "logos");
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -296,7 +296,7 @@ public class StageEProductionHardeningTest {
     void testUpload_AcceptsValidPdf() {
         byte[] validPdf = new byte[]{'%', 'P', 'D', 'F', '-', '1', '.', '5', '\n', 0, 0, 0};
         MockMultipartFile file = new MockMultipartFile("file", "license.pdf", "application/pdf", validPdf);
-        when(mediaUploadService.storeFile(any(), eq("documents"))).thenReturn("http://localhost:8080/uploads/documents/uuid.pdf");
+        when(storageService.storeFile(any(), eq("documents"))).thenReturn("http://localhost:8080/uploads/documents/uuid.pdf");
 
         ResponseEntity<Map<String, String>> response = mediaController.uploadFile(file, "documents");
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -312,7 +312,7 @@ public class StageEProductionHardeningTest {
                 'W', 'E', 'B', 'P'
         };
         MockMultipartFile file = new MockMultipartFile("file", "hero.webp", "image/webp", validWebp);
-        when(mediaUploadService.storeFile(any(), eq("covers"))).thenReturn("http://localhost:8080/uploads/covers/uuid.webp");
+        when(storageService.storeFile(any(), eq("covers"))).thenReturn("http://localhost:8080/uploads/covers/uuid.webp");
 
         ResponseEntity<Map<String, String>> response = mediaController.uploadFile(file, "covers");
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -354,12 +354,12 @@ public class StageEProductionHardeningTest {
     // =========================================================================
 
     @Test
-    @DisplayName("MediaUploadService rejects subDirectory containing path traversal characters")
-    void testMediaUploadService_PathTraversalRejection() throws IOException {
+    @DisplayName("StorageService rejects subDirectory containing path traversal characters")
+    void testStorageService_PathTraversalRejection() throws IOException {
         Path tempDir = Files.createTempDirectory("cakestore_test_uploads");
         FileStorageProperties props = new FileStorageProperties();
         props.setUploadDir(tempDir.toString());
-        MediaUploadService uploadService = new MediaUploadService(props);
+        StorageService uploadService = new com.cakeplatform.api.modules.media.LocalMediaUploadServiceImpl(props);
 
         MockMultipartFile file = new MockMultipartFile("file", "test.jpg", "image/jpeg", new byte[]{1, 2, 3});
 

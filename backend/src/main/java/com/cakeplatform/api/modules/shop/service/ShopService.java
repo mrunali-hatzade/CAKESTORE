@@ -11,11 +11,30 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class ShopService {
 
     private final ShopRepository shopRepository;
     private final com.cakeplatform.api.modules.security.ShopAccessValidator shopAccessValidator;
+    private final com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
+    private final com.cakeplatform.api.modules.location.service.LocationValidationService locationValidationService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ShopService(
+            ShopRepository shopRepository,
+            com.cakeplatform.api.modules.security.ShopAccessValidator shopAccessValidator,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) com.cakeplatform.api.modules.location.service.LocationValidationService locationValidationService) {
+        this.shopRepository = shopRepository;
+        this.shopAccessValidator = shopAccessValidator;
+        this.storefrontCacheService = storefrontCacheService;
+        this.locationValidationService = locationValidationService;
+    }
+
+    public ShopService(
+            ShopRepository shopRepository,
+            com.cakeplatform.api.modules.security.ShopAccessValidator shopAccessValidator) {
+        this(shopRepository, shopAccessValidator, null, null);
+    }
 
     @Transactional(readOnly = true)
     public ShopResponse getMyShopProfile(Long ownerId) {
@@ -29,6 +48,27 @@ public class ShopService {
 
         if (shop.getStatus() == com.cakeplatform.api.modules.shop.ShopStatus.SUSPENDED) {
             throw new com.cakeplatform.api.exception.SubscriptionExpiredException("Shop is suspended by administration. Profile updates are disabled.");
+        }
+
+        boolean isLocationUpdated = request.getState() != null || request.getDistrict() != null 
+                || request.getCity() != null || request.getPincode() != null;
+
+        if (isLocationUpdated && locationValidationService != null) {
+            String effectiveState = request.getState() != null ? request.getState() : shop.getState();
+            String effectiveDistrict = request.getDistrict() != null ? request.getDistrict() : shop.getDistrict();
+            String effectiveCity = request.getCity() != null ? request.getCity() : shop.getCity();
+            String effectiveArea = request.getArea() != null ? request.getArea() : shop.getArea();
+            String effectivePincode = request.getPincode() != null ? request.getPincode() : shop.getPincode();
+
+            locationValidationService.validateLocation(
+                    com.cakeplatform.api.modules.location.dto.LocationValidationDTO.builder()
+                            .state(effectiveState)
+                            .district(effectiveDistrict)
+                            .city(effectiveCity)
+                            .area(effectiveArea)
+                            .pincode(effectivePincode)
+                            .build()
+            );
         }
 
         if (request.getBusinessName() != null) shop.setBusinessName(request.getBusinessName());
@@ -49,8 +89,16 @@ public class ShopService {
         if (request.getBusinessCategory() != null) shop.setBusinessCategory(request.getBusinessCategory());
         if (request.getLogoUrl() != null) shop.setLogoUrl(request.getLogoUrl());
         if (request.getCoverImageUrl() != null) shop.setCoverImageUrl(request.getCoverImageUrl());
+        if (request.getAboutStory() != null) shop.setAboutStory(request.getAboutStory());
+        if (request.getAboutImageUrl() != null) shop.setAboutImageUrl(request.getAboutImageUrl());
+        if (request.getShowAboutImage() != null) shop.setShowAboutImage(request.getShowAboutImage());
+        if (request.getWhatsappNumber() != null) shop.setWhatsappNumber(request.getWhatsappNumber());
+        if (request.getMapLocationUrl() != null) shop.setMapLocationUrl(request.getMapLocationUrl());
 
         Shop updatedShop = shopRepository.save(shop);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(updatedShop.getId());
+        }
         return mapToResponse(updatedShop);
     }
 
@@ -81,6 +129,11 @@ public class ShopService {
                 .fssaiRegistration(shop.getFssaiRegistration())
                 .logoUrl(shop.getLogoUrl())
                 .coverImageUrl(shop.getCoverImageUrl())
+                .aboutStory(shop.getAboutStory())
+                .aboutImageUrl(shop.getAboutImageUrl())
+                .showAboutImage(shop.getShowAboutImage())
+                .whatsappNumber(shop.getWhatsappNumber())
+                .mapLocationUrl(shop.getMapLocationUrl())
                 .status(shop.getStatus())
                 .verificationStatus(shop.getVerificationStatus() != null ? shop.getVerificationStatus().name() : null)
                 .createdAt(shop.getCreatedAt())

@@ -6,7 +6,7 @@ import com.cakeplatform.api.modules.interaction.CustomCakeRequest;
 import com.cakeplatform.api.modules.interaction.CustomCakeRequestRepository;
 import com.cakeplatform.api.modules.interaction.EnquiryRepository;
 import com.cakeplatform.api.modules.interaction.FeedbackRepository;
-import com.cakeplatform.api.modules.media.MediaUploadService;
+import com.cakeplatform.api.modules.media.StorageService;
 import com.cakeplatform.api.modules.notification.NotificationRepository;
 import com.cakeplatform.api.modules.order.Order;
 import com.cakeplatform.api.modules.order.OrderRepository;
@@ -60,7 +60,7 @@ public class OwnerAccountDeletionService {
     private final NotificationRepository notificationRepository;
     private final PaymentRepository paymentRepository;
     private final SubscriptionRepository subscriptionRepository;
-    private final MediaUploadService mediaUploadService;
+    private final StorageService storageService;
     private final ActivityLoggerService activityLogger;
     private final PasswordEncoder passwordEncoder;
 
@@ -124,22 +124,22 @@ public class OwnerAccountDeletionService {
             log.info("Deleting dependent resources for Shop ID: {} (Owner: {})", shopId, ownerId);
 
             // A. Physical Media Cleanup (Best-effort safe file removal)
-            mediaUploadService.deleteFileByUrl(shop.getLogoUrl());
-            mediaUploadService.deleteFileByUrl(shop.getCoverImageUrl());
+            storageService.deleteFileByUrl(shop.getLogoUrl());
+            storageService.deleteFileByUrl(shop.getCoverImageUrl());
 
             List<Product> products = productRepository.findByShopId(shopId);
             for (Product product : products) {
-                mediaUploadService.deleteFileByUrl(product.getImageUrl());
+                storageService.deleteFileByUrl(product.getImageUrl());
             }
 
             List<BusinessDocument> docs = businessDocumentRepository.findByShopId(shopId);
             for (BusinessDocument doc : docs) {
-                mediaUploadService.deleteFileByUrl(doc.getFileUrl());
+                storageService.deleteFileByUrl(doc.getFileUrl());
             }
 
             List<CustomCakeRequest> customRequests = customCakeRequestRepository.findByShopIdOrderByCreatedAtDesc(shopId);
             for (CustomCakeRequest cr : customRequests) {
-                mediaUploadService.deleteFileByUrl(cr.getReferenceImageUrl());
+                storageService.deleteFileByUrl(cr.getReferenceImageUrl());
             }
 
             // B. Customer Interaction records (Custom cake requests, Enquiries, Feedback)

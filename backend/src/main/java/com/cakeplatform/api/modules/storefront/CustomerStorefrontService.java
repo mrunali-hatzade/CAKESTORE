@@ -19,14 +19,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.cakeplatform.api.modules.storefront.dto.StorefrontShopSummaryDTO;
+import com.cakeplatform.api.modules.storefront.dto.PopularCityDTO;
+import com.cakeplatform.api.modules.storefront.dto.ShopSummaryProjection;
+import com.cakeplatform.api.modules.storefront.dto.PopularCityProjection;
+import com.cakeplatform.api.modules.shop.BusinessType;
+import com.cakeplatform.api.modules.shop.VerificationStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 @Service
-@RequiredArgsConstructor
 public class CustomerStorefrontService {
 
     private final ShopRepository shopRepository;
@@ -38,11 +47,87 @@ public class CustomerStorefrontService {
     private final com.cakeplatform.api.modules.interaction.CustomCakeRequestRepository customCakeRequestRepository;
     private final com.cakeplatform.api.modules.product.ProductCategoryRepository categoryRepository;
     private final com.cakeplatform.api.modules.shop.ShopDeliverySlotRepository deliverySlotRepository;
+    private final com.cakeplatform.api.modules.shop.ShopBannerRepository shopBannerRepository;
+    private final com.cakeplatform.api.modules.shop.ShopBusinessHoursRepository shopBusinessHoursRepository;
+    private final com.cakeplatform.api.modules.shop.ShopDeliveryConfigRepository shopDeliveryConfigRepository;
+    private final com.cakeplatform.api.modules.shop.ShopStorefrontSettingsRepository shopStorefrontSettingsRepository;
+    private final com.cakeplatform.api.modules.shop.ShopCustomFormFieldRepository shopCustomFormFieldRepository;
+    private final com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository;
+    private final com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CustomerStorefrontService(
+            ShopRepository shopRepository,
+            ProductRepository productRepository,
+            OrderRepository orderRepository,
+            com.cakeplatform.api.modules.shop.CouponRepository couponRepository,
+            com.cakeplatform.api.modules.notification.NotificationService notificationService,
+            com.cakeplatform.api.modules.notification.AdminNotificationService adminNotificationService,
+            com.cakeplatform.api.modules.interaction.CustomCakeRequestRepository customCakeRequestRepository,
+            com.cakeplatform.api.modules.product.ProductCategoryRepository categoryRepository,
+            com.cakeplatform.api.modules.shop.ShopDeliverySlotRepository deliverySlotRepository,
+            com.cakeplatform.api.modules.shop.ShopBannerRepository shopBannerRepository,
+            com.cakeplatform.api.modules.shop.ShopBusinessHoursRepository shopBusinessHoursRepository,
+            com.cakeplatform.api.modules.shop.ShopDeliveryConfigRepository shopDeliveryConfigRepository,
+            com.cakeplatform.api.modules.shop.ShopStorefrontSettingsRepository shopStorefrontSettingsRepository,
+            com.cakeplatform.api.modules.shop.ShopCustomFormFieldRepository shopCustomFormFieldRepository,
+            com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository,
+            com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository
+    ) {
+        this.shopRepository = shopRepository;
+        this.productRepository = productRepository;
+        this.orderRepository = orderRepository;
+        this.couponRepository = couponRepository;
+        this.notificationService = notificationService;
+        this.adminNotificationService = adminNotificationService;
+        this.customCakeRequestRepository = customCakeRequestRepository;
+        this.categoryRepository = categoryRepository;
+        this.deliverySlotRepository = deliverySlotRepository;
+        this.shopBannerRepository = shopBannerRepository;
+        this.shopBusinessHoursRepository = shopBusinessHoursRepository;
+        this.shopDeliveryConfigRepository = shopDeliveryConfigRepository;
+        this.shopStorefrontSettingsRepository = shopStorefrontSettingsRepository;
+        this.shopCustomFormFieldRepository = shopCustomFormFieldRepository;
+        this.feedbackRepository = feedbackRepository;
+        this.productReviewRepository = productReviewRepository;
+    }
+
+    // Backward-compatible constructor for existing test suites
+    public CustomerStorefrontService(
+            ShopRepository shopRepository,
+            ProductRepository productRepository,
+            OrderRepository orderRepository,
+            com.cakeplatform.api.modules.shop.CouponRepository couponRepository,
+            com.cakeplatform.api.modules.notification.NotificationService notificationService,
+            com.cakeplatform.api.modules.notification.AdminNotificationService adminNotificationService,
+            com.cakeplatform.api.modules.interaction.CustomCakeRequestRepository customCakeRequestRepository,
+            com.cakeplatform.api.modules.product.ProductCategoryRepository categoryRepository,
+            com.cakeplatform.api.modules.shop.ShopDeliverySlotRepository deliverySlotRepository
+    ) {
+        this(
+                shopRepository,
+                productRepository,
+                orderRepository,
+                couponRepository,
+                notificationService,
+                adminNotificationService,
+                customCakeRequestRepository,
+                categoryRepository,
+                deliverySlotRepository,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
 
     private Shop getActiveShop(Long shopId) {
         Shop shop = shopRepository.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
-        if (shop.getStatus() != ShopStatus.ACTIVE) {
+        if (shop.getStatus() != ShopStatus.ACTIVE && shop.getStatus() != ShopStatus.EXPIRED) {
             throw new RuntimeException("Shop is currently unavailable");
         }
         return shop;
@@ -77,6 +162,201 @@ public class CustomerStorefrontService {
         return searchShops(null, null, null, null, null, null, location);
     }
 
+    private volatile List<PopularCityDTO> popularCitiesCache = null;
+    private volatile long lastPopularCitiesCacheTime = 0L;
+    private static final long POPULAR_CITIES_CACHE_TTL_MS = 15 * 60 * 1000L; // 15 minutes
+
+    public List<PopularCityDTO> getPopularCities(int limit) {
+        int effectiveLimit = limit > 0 ? Math.min(limit, 50) : 10;
+        long now = System.currentTimeMillis();
+        List<PopularCityDTO> cached = popularCitiesCache;
+        if (cached != null && (now - lastPopularCitiesCacheTime) < POPULAR_CITIES_CACHE_TTL_MS) {
+            return cached.stream().limit(effectiveLimit).collect(Collectors.toList());
+        }
+        synchronized (this) {
+            cached = popularCitiesCache;
+            if (cached != null && (System.currentTimeMillis() - lastPopularCitiesCacheTime) < POPULAR_CITIES_CACHE_TTL_MS) {
+                return cached.stream().limit(effectiveLimit).collect(Collectors.toList());
+            }
+            List<PopularCityProjection> rows = shopRepository.findPopularCities();
+            List<PopularCityDTO> freshList = rows.stream()
+                    .map(r -> PopularCityDTO.builder()
+                            .cityName(r.getCityName())
+                            .stateName(r.getStateName())
+                            .activeBakeryCount(r.getActiveBakeryCount())
+                            .build())
+                    .collect(Collectors.toList());
+            popularCitiesCache = freshList;
+            lastPopularCitiesCacheTime = System.currentTimeMillis();
+            return freshList.stream().limit(effectiveLimit).collect(Collectors.toList());
+        }
+    }
+
+    public Page<StorefrontShopSummaryDTO> discoverShopsPaged(
+            String country,
+            String state,
+            String district,
+            String city,
+            String area,
+            String pincode,
+            BusinessType businessType,
+            String search,
+            String location,
+            Double latitude,
+            Double longitude,
+            Double radiusKm,
+            String sortBy,
+            int page,
+            int size
+    ) {
+        int effectivePage = Math.max(0, page);
+        int effectiveSize = (size > 0) ? Math.min(size, 100) : 20;
+        int offset = effectivePage * effectiveSize;
+
+        String cleanCity = cleanParam(city);
+        String cleanState = cleanParam(state);
+        String cleanDistrict = cleanParam(district);
+        String cleanArea = cleanParam(area);
+        String cleanPincode = cleanParam(pincode);
+        String cleanSearch = cleanParam(search);
+        String cleanLocation = cleanParam(location);
+        String businessTypeStr = businessType != null ? businessType.name() : null;
+
+        if (latitude != null && longitude != null) {
+            double effectiveRadius = (radiusKm != null && radiusKm > 0) ? Math.min(radiusKm, 100.0) : 10.0;
+            double latDelta = effectiveRadius / 111.0;
+            double cosLat = Math.cos(Math.toRadians(latitude));
+            if (cosLat < 0.0001) cosLat = 0.0001;
+            double lngDelta = effectiveRadius / (111.0 * cosLat);
+            double minLat = latitude - latDelta;
+            double maxLat = latitude + latDelta;
+            double minLng = longitude - lngDelta;
+            double maxLng = longitude + lngDelta;
+
+            String cleanSortBy = (sortBy != null && !sortBy.isBlank()) ? sortBy.trim().toLowerCase() : "distance";
+
+            List<ShopSummaryProjection> projections = shopRepository.findNearbyActiveShops(
+                    latitude, longitude, minLat, maxLat, minLng, maxLng, effectiveRadius,
+                    cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                    businessTypeStr, cleanSearch, cleanSortBy, effectiveSize, offset
+            );
+            long total = shopRepository.countNearbyActiveShops(
+                    latitude, longitude, minLat, maxLat, minLng, maxLng, effectiveRadius,
+                    cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                    businessTypeStr, cleanSearch
+            );
+
+            List<StorefrontShopSummaryDTO> content = projections.stream()
+                    .map(this::mapProjectionToSummaryDTO)
+                    .collect(Collectors.toList());
+            return new PageImpl<>(content, PageRequest.of(effectivePage, effectiveSize), total);
+        } else {
+            String cleanSortBy = (sortBy != null && !sortBy.isBlank()) ? sortBy.trim().toLowerCase() : "rating";
+
+            List<ShopSummaryProjection> projections = shopRepository.findActiveShopsWithSummary(
+                    cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                    businessTypeStr, cleanSearch, cleanLocation, cleanSortBy, effectiveSize, offset
+            );
+            long total = shopRepository.countActiveShops(
+                    cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                    businessTypeStr, cleanSearch, cleanLocation
+            );
+
+            List<StorefrontShopSummaryDTO> content = projections.stream()
+                    .map(this::mapProjectionToSummaryDTO)
+                    .collect(Collectors.toList());
+            return new PageImpl<>(content, PageRequest.of(effectivePage, effectiveSize), total);
+        }
+    }
+
+    public List<StorefrontShopSummaryDTO> discoverShops(
+            String country,
+            String state,
+            String district,
+            String city,
+            String area,
+            String pincode,
+            BusinessType businessType,
+            String search,
+            String location,
+            Double latitude,
+            Double longitude,
+            Double radiusKm,
+            String sortBy
+    ) {
+        Page<StorefrontShopSummaryDTO> page = discoverShopsPaged(
+                country, state, district, city, area, pincode, businessType,
+                search, location, latitude, longitude, radiusKm, sortBy, 0, 100
+        );
+        return page.getContent();
+    }
+
+    private StorefrontShopSummaryDTO mapProjectionToSummaryDTO(ShopSummaryProjection p) {
+        BusinessType bType = null;
+        if (p.getBusinessType() != null) {
+            try {
+                bType = BusinessType.valueOf(p.getBusinessType());
+            } catch (Exception ignored) {}
+        }
+        VerificationStatus vStatus = null;
+        if (p.getVerificationStatus() != null) {
+            try {
+                vStatus = VerificationStatus.valueOf(p.getVerificationStatus());
+            } catch (Exception ignored) {}
+        }
+
+        Double distanceKm = p.getDistanceKm();
+        if (distanceKm != null) {
+            distanceKm = Math.round(distanceKm * 100.0) / 100.0;
+        }
+
+        Double avgRating = p.getAvgRating();
+        if (avgRating != null) {
+            avgRating = Math.round(avgRating * 10.0) / 10.0;
+        }
+
+        return StorefrontShopSummaryDTO.builder()
+                .id(p.getId())
+                .businessName(p.getBusinessName())
+                .description(p.getDescription())
+                .businessType(bType)
+                .businessCategory(p.getBusinessCategory())
+                .logoUrl(p.getLogoUrl())
+                .coverImageUrl(p.getCoverImageUrl())
+                .address(p.getAddress())
+                .addressLine1(p.getAddressLine1())
+                .addressLine2(p.getAddressLine2())
+                .area(p.getArea())
+                .city(p.getCity())
+                .district(p.getDistrict())
+                .state(p.getState())
+                .pincode(p.getPincode())
+                .country("India")
+                .latitude(p.getLatitude())
+                .longitude(p.getLongitude())
+                .distanceKm(distanceKm)
+                .status(p.getStatus())
+                .verificationStatus(vStatus)
+                .averageRating(avgRating)
+                .totalReviews(p.getTotalReviews() != null ? p.getTotalReviews() : 0L)
+                .isPureVeg(false)
+                .build();
+    }
+
+    private String cleanParam(String val) {
+        if (val == null) return null;
+        String trimmed = val.trim();
+        if (trimmed.isEmpty() || isAllFilter(trimmed)) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    private boolean isAllFilter(String value) {
+        String trimmed = value.trim().toLowerCase();
+        return trimmed.equals("all") || trimmed.startsWith("all ");
+    }
+
     public List<com.cakeplatform.api.modules.product.dto.CategoryResponse> getShopCategories(Long shopId) {
         getActiveShop(shopId);
         return categoryRepository.findNonEmptyByShopId(shopId);
@@ -104,6 +384,45 @@ public class CustomerStorefrontService {
         response.setYearsInBusiness(shop.getYearsInBusiness());
         response.setFssaiRegistration(shop.getFssaiRegistration());
         response.setVerificationStatus(shop.getVerificationStatus() != null ? shop.getVerificationStatus().name() : null);
+
+        // Extended Shop Info
+        response.setAddressLine1(shop.getAddressLine1());
+        response.setAddressLine2(shop.getAddressLine2());
+        response.setEmail(shop.getEmail());
+        response.setAboutStory(shop.getAboutStory());
+        response.setAboutImageUrl(shop.getAboutImageUrl());
+        response.setShowAboutImage(shop.getShowAboutImage());
+        response.setWhatsappNumber(shop.getWhatsappNumber());
+        response.setMapLocationUrl(shop.getMapLocationUrl());
+
+        // Computed Real Feedback / Rating
+        if (feedbackRepository != null) {
+            Double avgRating = feedbackRepository.calculateAverageRatingByShopId(shop.getId());
+            Long totalReviews = feedbackRepository.countApprovedByShopId(shop.getId());
+            response.setAverageRating(avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : null);
+            response.setTotalReviews(totalReviews != null ? totalReviews : 0L);
+        } else {
+            response.setAverageRating(null);
+            response.setTotalReviews(0L);
+        }
+
+        // Storefront Components & Toggles
+        if (shopBannerRepository != null) {
+            response.setBanners(shopBannerRepository.findByShopIdAndIsActiveTrueOrderByDisplayOrderAsc(shop.getId()));
+        }
+        if (shopBusinessHoursRepository != null) {
+            response.setBusinessHours(shopBusinessHoursRepository.findByShopId(shop.getId()));
+        }
+        if (shopDeliveryConfigRepository != null) {
+            response.setDeliveryConfig(shopDeliveryConfigRepository.findByShopId(shop.getId()).orElse(null));
+        }
+        if (shopStorefrontSettingsRepository != null) {
+            response.setStorefrontSettings(shopStorefrontSettingsRepository.findByShopId(shop.getId()).orElse(null));
+        }
+        if (shopCustomFormFieldRepository != null) {
+            response.setCustomCakeFormFields(shopCustomFormFieldRepository.findByShopIdAndIsEnabledTrueOrderByDisplayOrderAsc(shop.getId()));
+        }
+
         return response;
     }
 
@@ -154,6 +473,29 @@ public class CustomerStorefrontService {
         // Return only active products for the storefront
         return productRepository.findByShopId(shopId).stream()
                 .filter(p -> p.getAvailability() && "ACTIVE".equals(p.getStatus()))
+                .collect(Collectors.toList());
+    }
+
+    public List<Product> getTopRatedProducts(Long shopId, int limit) {
+        getActiveShop(shopId);
+        List<Product> products = productRepository.findByShopId(shopId).stream()
+                .filter(p -> p.getAvailability() && "ACTIVE".equals(p.getStatus()))
+                .collect(Collectors.toList());
+
+        // Sort by real average rating descending, then total reviews descending
+        return products.stream()
+                .sorted((p1, p2) -> {
+                    Double r1 = productReviewRepository.calculateAverageRatingByProductId(p1.getId());
+                    Double r2 = productReviewRepository.calculateAverageRatingByProductId(p2.getId());
+                    double score1 = r1 != null ? r1 : 0.0;
+                    double score2 = r2 != null ? r2 : 0.0;
+                    int cmp = Double.compare(score2, score1);
+                    if (cmp != 0) return cmp;
+                    long count1 = productReviewRepository.countByProductId(p1.getId());
+                    long count2 = productReviewRepository.countByProductId(p2.getId());
+                    return Long.compare(count2, count1);
+                })
+                .limit(limit > 0 ? limit : 8)
                 .collect(Collectors.toList());
     }
 
@@ -235,13 +577,14 @@ public class CustomerStorefrontService {
             BigDecimal basePrice = product.getPrice();
             String variantName = null;
             
+            com.cakeplatform.api.modules.product.ProductVariant selectedVariant = null;
             if (itemRequest.getVariantId() != null) {
-                com.cakeplatform.api.modules.product.ProductVariant variant = product.getVariants().stream()
+                selectedVariant = product.getVariants().stream()
                     .filter(v -> v.getId().equals(itemRequest.getVariantId()) && v.getIsAvailable())
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Variant unavailable"));
-                basePrice = variant.getPrice();
-                variantName = variant.getName();
+                basePrice = selectedVariant.getPrice();
+                variantName = selectedVariant.getName();
             }
             
             // Addon processing
@@ -259,10 +602,12 @@ public class CustomerStorefrontService {
                 }
             }
 
-            // Dietary upcharge (Hardcoded logic for MVP, normally this is database driven)
+            // Dietary upcharge: real database-backed product pricing
             BigDecimal dietaryUpcharge = BigDecimal.ZERO;
-            if ("EGGLESS".equalsIgnoreCase(itemRequest.getDietaryPreference())) {
-                dietaryUpcharge = BigDecimal.valueOf(5.00); // e.g. $5 extra for eggless
+            if (Boolean.TRUE.equals(product.getAllowEggChoice())
+                    && "EGGLESS".equalsIgnoreCase(itemRequest.getDietaryPreference())
+                    && product.getEgglessPriceDiff() != null) {
+                dietaryUpcharge = product.getEgglessPriceDiff();
             } else if ("GLUTEN_FREE".equalsIgnoreCase(itemRequest.getDietaryPreference())) {
                 dietaryUpcharge = BigDecimal.valueOf(10.00);
             }
@@ -282,6 +627,17 @@ public class CustomerStorefrontService {
             orderItem.setPhotoReferenceUrl(itemRequest.getPhotoReferenceUrl());
             orderItem.setAddonsSummary(addonsSummary.toString());
 
+            // Variant-aware snapshotting of image and original price
+            String itemImageUrl = (selectedVariant != null && selectedVariant.getImageUrl() != null && !selectedVariant.getImageUrl().trim().isEmpty())
+                    ? selectedVariant.getImageUrl()
+                    : product.getImageUrl();
+            orderItem.setProductImageUrl(itemImageUrl);
+
+            BigDecimal itemOriginalPrice = (selectedVariant != null && selectedVariant.getOriginalPrice() != null)
+                    ? selectedVariant.getOriginalPrice()
+                    : product.getOriginalPrice();
+            orderItem.setOriginalPrice(itemOriginalPrice);
+
             BigDecimal itemTotal = unitPrice.multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
             orderItem.setTotalPrice(itemTotal);
             subtotal = subtotal.add(itemTotal);
@@ -290,7 +646,24 @@ public class CustomerStorefrontService {
         }
 
         order.setSubtotal(subtotal);
-        order.setDeliveryCharge(BigDecimal.valueOf(50.00)); // Flat delivery charge for MVP
+
+        // Authoritative Delivery Charge Calculation from shop_delivery_configs
+        BigDecimal calculatedDeliveryCharge = BigDecimal.valueOf(50.00); // Default fallback
+        com.cakeplatform.api.modules.shop.ShopDeliveryConfig deliveryConfig = (shopDeliveryConfigRepository != null)
+                ? shopDeliveryConfigRepository.findByShopId(shopId).orElse(null)
+                : null;
+        if (deliveryConfig != null) {
+            if ("FREE".equalsIgnoreCase(deliveryConfig.getDeliveryChargeType())) {
+                calculatedDeliveryCharge = BigDecimal.ZERO;
+            } else if ("FIXED".equalsIgnoreCase(deliveryConfig.getDeliveryChargeType())) {
+                calculatedDeliveryCharge = deliveryConfig.getFixedChargeAmount() != null ? deliveryConfig.getFixedChargeAmount() : BigDecimal.ZERO;
+                if (deliveryConfig.getMinOrderForFreeDelivery() != null 
+                        && subtotal.compareTo(deliveryConfig.getMinOrderForFreeDelivery()) >= 0) {
+                    calculatedDeliveryCharge = BigDecimal.ZERO;
+                }
+            }
+        }
+        order.setDeliveryCharge(calculatedDeliveryCharge);
         
         BigDecimal discount = BigDecimal.ZERO;
         

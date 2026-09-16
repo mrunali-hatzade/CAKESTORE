@@ -33,6 +33,12 @@ public class ShopResponse {
     private String logoUrl;
     private String coverImageUrl;
 
+    private String aboutStory;
+    private String aboutImageUrl;
+    private Boolean showAboutImage;
+    private String whatsappNumber;
+    private String mapLocationUrl;
+
     private ShopStatus status;
     private String verificationStatus;
     private LocalDateTime createdAt;

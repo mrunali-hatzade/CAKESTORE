@@ -53,4 +53,10 @@ public class OrderItem {
 
     @Column(name = "addons_summary", columnDefinition = "TEXT")
     private String addonsSummary;
+
+    @Column(name = "product_image_url")
+    private String productImageUrl;
+
+    @Column(name = "original_price")
+    private BigDecimal originalPrice;
 }

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Cake, Sparkles } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { Product, Category } from '@/types/product';
-import { StickyCategoryBar } from '../StickyCategoryBar';
+import { StickyCategoryBar, ProductSortOption } from '../StickyCategoryBar';
 import { ProductCard } from '../ProductCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useFavorites } from '@/context/FavoritesContext';
@@ -28,7 +28,10 @@ export const StorefrontShopTab: React.FC<StorefrontShopTabProps> = ({
 }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<'ALL' | 'SAVED' | number>('ALL');
   const [egglessOnly, setEgglessOnly] = useState<boolean>(false);
+  const [sortBy, setSortBy] = useState<ProductSortOption>('RECOMMENDED');
   const { isFavorite } = useFavorites();
+
+  const customCakesEnabled = shop.storefrontSettings?.customCakesEnabled !== false;
 
   // Enhanced search: checks name, description, category name, and category tag
   const filteredProducts = products.filter((p) => {
@@ -54,15 +57,27 @@ export const StorefrontShopTab: React.FC<StorefrontShopTabProps> = ({
     return matchesCategory && matchesSearch && matchesEggless;
   });
 
+  // Apply sorting
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (sortBy === 'PRICE_ASC') return a.price - b.price;
+    if (sortBy === 'PRICE_DESC') return b.price - a.price;
+    if (sortBy === 'TOP_RATED') return (b.rating || 0) - (a.rating || 0);
+    if (sortBy === 'NEWEST') return (b.id || 0) - (a.id || 0);
+    return 0; // RECOMMENDED
+  });
+
   return (
     <div className="space-y-6">
       {/* Sticky In-Store Category Navigation */}
       <StickyCategoryBar
+        shop={shop}
         categories={categories}
         selectedCategoryId={selectedCategoryId}
         onSelectCategory={setSelectedCategoryId}
         egglessOnly={egglessOnly}
         onToggleEggless={() => setEgglessOnly(!egglessOnly)}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
         onOpenCustomQuote={onOpenCustomQuote}
       />
 
@@ -79,8 +94,8 @@ export const StorefrontShopTab: React.FC<StorefrontShopTabProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-brand-muted">
-          <span className="font-semibold text-brand-espresso">{filteredProducts.length}</span>{' '}
-          {filteredProducts.length === 1 ? 'cake' : 'cakes'} available
+          <span className="font-semibold text-brand-espresso">{sortedProducts.length}</span>{' '}
+          {sortedProducts.length === 1 ? 'cake' : 'cakes'} available
           {selectedCategoryId === 'SAVED' && (
             <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold border border-rose-200 flex items-center gap-1">
               ❤️ Wishlist
@@ -100,7 +115,7 @@ export const StorefrontShopTab: React.FC<StorefrontShopTabProps> = ({
       </div>
 
       {/* Products Grid */}
-      {filteredProducts.length === 0 ? (
+      {sortedProducts.length === 0 ? (
         <EmptyState
           icon={<Cake className="w-7 h-7" />}
           title="No Cakes Found"
@@ -108,7 +123,7 @@ export const StorefrontShopTab: React.FC<StorefrontShopTabProps> = ({
         />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
-          {filteredProducts.map((product) => (
+          {sortedProducts.map((product) => (
             <ProductCard
               key={product.id}
               product={product}
@@ -119,29 +134,31 @@ export const StorefrontShopTab: React.FC<StorefrontShopTabProps> = ({
         </div>
       )}
 
-      {/* Bespoke Custom Cake In-Store Banner Card (Placed Below Cakes Section) */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-brand-blush via-white to-brand-cream border border-brand-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-soft mb-8">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-brand-plum text-white flex items-center justify-center shrink-0 shadow-xs">
-            <Sparkles className="w-5 h-5" />
+      {/* Bespoke Custom Cake In-Store Banner Card (Placed Below Cakes Section if enabled) */}
+      {customCakesEnabled && (
+        <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-brand-blush via-white to-brand-cream border border-brand-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-soft mb-8">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-brand-plum text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-serif font-bold text-sm sm:text-base text-brand-espresso">
+                Looking for a custom theme or photo cake?
+              </h3>
+              <p className="text-xs text-brand-muted mt-0.5">
+                Share reference photos and event specifications directly with {shop.businessName}&apos;s chef.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-serif font-bold text-sm sm:text-base text-brand-espresso">
-              Looking for a custom theme or photo cake?
-            </h3>
-            <p className="text-xs text-brand-muted mt-0.5">
-              Share reference photos and event specifications directly with {shop.businessName}&apos;s chef.
-            </p>
-          </div>
+          <button
+            onClick={onOpenCustomQuote}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-brand-plum hover:bg-brand-plum-hover text-white text-xs font-bold transition-all shadow-xs shrink-0 active:scale-95 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Request Custom Quote</span>
+          </button>
         </div>
-        <button
-          onClick={onOpenCustomQuote}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-brand-plum hover:bg-brand-plum-hover text-white text-xs font-bold transition-all shadow-xs shrink-0 active:scale-95 cursor-pointer"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Request Custom Quote</span>
-        </button>
-      </div>
+      )}
     </div>
   );
 };

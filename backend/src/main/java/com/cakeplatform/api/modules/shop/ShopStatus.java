@@ -4,5 +4,6 @@ public enum ShopStatus {
     PENDING,
     ACTIVE,
     INACTIVE,
-    SUSPENDED
+    SUSPENDED,
+    EXPIRED
 }

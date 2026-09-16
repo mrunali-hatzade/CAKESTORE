@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Component
+@org.springframework.context.annotation.Profile("!prod")
 @RequiredArgsConstructor
 @Slf4j
 public class AdminUserInitializer implements ApplicationRunner {
@@ -115,7 +116,7 @@ public class AdminUserInitializer implements ApplicationRunner {
             newUser.setEmail("mrunalithatzade20@gmail.com");
             newUser.setPasswordHash(passwordEncoder.encode("password123"));
             newUser.setFullName("Mrunali");
-            newUser.setMobile("9876543210");
+            newUser.setMobile("9876543211");
             newUser.setRole(UserRole.SHOP_OWNER);
             newUser.setStatus(UserStatus.ACTIVE);
             User savedOwner = userRepository.save(newUser);
@@ -124,7 +125,7 @@ public class AdminUserInitializer implements ApplicationRunner {
             shop.setOwner(savedOwner);
             shop.setBusinessName("Mrunali's Artisanal Bakery");
             shop.setEmail("mrunalithatzade20@gmail.com");
-            shop.setPhone("9876543210");
+            shop.setPhone("9876543211");
             shop.setDescription("Handcrafted custom cakes & bakery delicacies");
             shop.setCity("Pune");
             shop.setState("Maharashtra");

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
+import { Shop } from '@/types/shop';
+
 export type StorefrontTab =
   | 'home'
   | 'shop'
@@ -25,6 +27,7 @@ export type StorefrontTab =
   | 'checkout';
 
 interface StorefrontTabNavProps {
+  shop?: Shop | null;
   activeTab: StorefrontTab;
   onTabChange: (tab: StorefrontTab) => void;
   productCount?: number;
@@ -32,12 +35,15 @@ interface StorefrontTabNavProps {
 }
 
 export const StorefrontTabNav: React.FC<StorefrontTabNavProps> = ({
+  shop,
   activeTab,
   onTabChange,
   productCount = 0,
   offersCount = 0,
 }) => {
-  const tabs: { id: StorefrontTab; label: string; icon: React.ElementType; badge?: string | number }[] = [
+  const customCakesEnabled = shop?.storefrontSettings?.customCakesEnabled !== false;
+
+  const allTabs: { id: StorefrontTab; label: string; icon: React.ElementType; badge?: string | number }[] = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'shop', label: 'Shop Cakes', icon: ShoppingBag, badge: productCount > 0 ? productCount : undefined },
     { id: 'about', label: 'About Us', icon: Info },
@@ -47,6 +53,11 @@ export const StorefrontTabNav: React.FC<StorefrontTabNavProps> = ({
     { id: 'contact', label: 'Contact Us', icon: MessageSquare },
     { id: 'track', label: 'Track Order', icon: Truck },
   ];
+
+  const tabs = allTabs.filter((tab) => {
+    if (tab.id === 'custom-cakes' && !customCakesEnabled) return false;
+    return true;
+  });
 
   return (
     <div className="sticky top-16 z-20 bg-white/95 backdrop-blur-md border-b border-brand-border/60 shadow-2xs">

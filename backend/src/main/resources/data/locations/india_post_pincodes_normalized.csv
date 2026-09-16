@@ -1,0 +1,43 @@
+pincode,district_name,state_code,primary_office_name,office_type,delivery_status
+411035,Pune,MH,Akurdi SO,SO,Delivery
+411038,Pune,MH,Kothrud SO,SO,Delivery
+411001,Pune,MH,Pune H.O,HO,Delivery
+411045,Pune,MH,Baner SO,SO,Delivery
+411014,Pune,MH,Viman Nagar SO,SO,Delivery
+411057,Pune,MH,Hinjawadi SO,SO,Delivery
+411027,Pune,MH,Pimpri SO,SO,Delivery
+411033,Pune,MH,Chinchwad SO,SO,Delivery
+400001,Mumbai City,MH,Mumbai G.P.O,HO,Delivery
+400028,Mumbai City,MH,Dadar SO,SO,Delivery
+400050,Mumbai Suburban,MH,Bandra West SO,SO,Delivery
+400053,Mumbai Suburban,MH,Andheri West SO,SO,Delivery
+400049,Mumbai Suburban,MH,Juhu SO,SO,Delivery
+400076,Mumbai Suburban,MH,Powai SO,SO,Delivery
+440001,Nagpur,MH,Nagpur G.P.O,HO,Delivery
+441904,Bhandara,MH,Bhandara H.O,HO,Delivery
+560001,Bengaluru Urban,KA,Bangalore G.P.O,HO,Delivery
+560038,Bengaluru Urban,KA,Indiranagar SO,SO,Delivery
+560034,Bengaluru Urban,KA,Koramangala SO,SO,Delivery
+560066,Bengaluru Urban,KA,Whitefield SO,SO,Delivery
+560102,Bengaluru Urban,KA,HSR Layout SO,SO,Delivery
+110001,New Delhi,DL,Connaught Place SO,SO,Delivery
+110016,New Delhi,DL,Hauz Khas SO,SO,Delivery
+110049,New Delhi,DL,South Extension SO,SO,Delivery
+380001,Ahmedabad,GJ,Ahmedabad G.P.O,HO,Delivery
+380015,Ahmedabad,GJ,Satellite SO,SO,Delivery
+395001,Surat,GJ,Surat H.O,HO,Delivery
+600001,Chennai,TN,Chennai G.P.O,HO,Delivery
+600017,Chennai,TN,T. Nagar SO,SO,Delivery
+500001,Hyderabad,TS,Hyderabad G.P.O,HO,Delivery
+500081,Hyderabad,TS,Hitec City SO,SO,Delivery
+700001,Kolkata,WB,Kolkata G.P.O,HO,Delivery
+700016,Kolkata,WB,Park Street SO,SO,Delivery
+302001,Jaipur,RJ,Jaipur G.P.O,HO,Delivery
+226001,Lucknow,UP,Lucknow G.P.O,HO,Delivery
+201301,Gautam Buddha Nagar,UP,Noida Sector 16 SO,SO,Delivery
+244901,Rampur,UP,Rampur H.O,HO,Delivery
+682001,Ernakulam,KL,Ernakulam H.O,HO,Delivery
+160017,Chandigarh,CH,Chandigarh Sector 17 SO,SO,Delivery
+174001,Bilaspur,HP,Bilaspur H.O,HO,Delivery
+495001,Bilaspur,CG,Bilaspur H.O,HO,Delivery
+122001,Gurugram,HR,Gurugram H.O,HO,Delivery

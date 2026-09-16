@@ -20,7 +20,11 @@ import {
   Leaf,
   Layers,
   Heart,
+  MessageCircle,
+  ExternalLink,
+  Share2,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Product } from '@/types/product';
 import { Shop } from '@/types/shop';
 import { useCart } from '@/context/CartContext';
@@ -29,6 +33,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/common/Toast';
 import { reviewsApi, ProductReviewsSummary } from '@/lib/api/reviews';
+import { getSafeImageUrl, isDummyOrInvalidImageUrl, FALLBACK_CAKE_IMAGE } from '@/lib/utils/image';
 
 interface ProductDetailModalProps {
   isOpen: boolean;
@@ -38,14 +43,7 @@ interface ProductDetailModalProps {
   onOpenCustomQuote?: () => void;
 }
 
-const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80';
-
-const WEIGHT_OPTIONS = [
-  { weight: 0.5, label: '0.5 kg', serves: '4-6 serves' },
-  { weight: 1.0, label: '1.0 kg', serves: '8-12 serves' },
-  { weight: 1.5, label: '1.5 kg', serves: '14-18 serves' },
-  { weight: 2.0, label: '2.0 kg', serves: '20-25 serves' },
-];
+const FALLBACK_CAKE = FALLBACK_CAKE_IMAGE;
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   isOpen,
@@ -60,10 +58,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [quantity, setQuantity] = useState(1);
   const [customMessage, setCustomMessage] = useState('');
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
-  const [selectedWeight, setSelectedWeight] = useState<number>(1); // kg
   const [selectedVariantId, setSelectedVariantId] = useState<number | undefined>(undefined);
   const [selectedAddonIds, setSelectedAddonIds] = useState<number[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isEgglessPreference, setIsEgglessPreference] = useState<boolean>(
+    product?.isEggless ?? (product?.eggPreferenceDefault === 'EGGLESS')
+  );
 
   // Accordion state
   const [openAccordions, setOpenAccordions] = useState<{ [key: string]: boolean }>({
@@ -83,9 +83,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       setQuantity(1);
       setCustomMessage('');
       setShowConflictPrompt(false);
-      setSelectedWeight(1);
       setSelectedAddonIds([]);
       setSelectedImageIndex(0);
+      setIsEgglessPreference(product.isEggless ?? (product.eggPreferenceDefault === 'EGGLESS'));
       setOpenAccordions({
         about: true,
         ingredients: false,
@@ -113,28 +113,40 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   if (!product) return null;
 
-  // Build 3-image multi-thumbnail gallery (product image + editorial angle perspectives)
-  const baseImg = product.imageUrl || FALLBACK_CAKE;
-  const galleryThumbnails = [
-    baseImg,
-    baseImg.includes('unsplash.com')
-      ? baseImg.replace(/&w=\d+/, '&w=900&auto=format&fit=crop')
-      : baseImg,
-    'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=800&q=80',
-  ];
+  // Dynamic image gallery from real product images (filtered of dummy/mock domains)
+  const validImages = [
+    product.imageUrl,
+    ...(product.images || []).map((img) => img.imageUrl),
+  ].filter((url): url is string => Boolean(url) && !isDummyOrInvalidImageUrl(url));
+  const galleryThumbnails = validImages.length > 0 ? validImages : [FALLBACK_CAKE];
 
   const hasVariants = Boolean(product.variants && product.variants.length > 0);
   const selectedVariant = hasVariants
     ? product.variants?.find((v) => v.id === selectedVariantId) || product.variants?.[0]
     : null;
 
-  const baseUnitPrice = selectedVariant ? Number(selectedVariant.price) : Number(product.price) * selectedWeight;
+  const egglessDiff = Boolean(product.allowEggChoice && isEgglessPreference && product.egglessPriceDiff)
+    ? Number(product.egglessPriceDiff)
+    : 0;
+
+  const baseUnitPrice = selectedVariant ? Number(selectedVariant.price) : Number(product.price);
 
   const addonsTotal = (product.addons || [])
     .filter((a) => a.id && selectedAddonIds.includes(a.id))
     .reduce((sum, a) => sum + Number(a.price), 0);
 
-  const unitPrice = baseUnitPrice + addonsTotal;
+  const unitPrice = baseUnitPrice + addonsTotal + egglessDiff;
+  const isVariantAvailable = selectedVariant ? selectedVariant.isAvailable !== false : true;
+  const isAvailable = product.availability !== false && product.inStock !== false && isVariantAvailable;
+  const ratingsEnabled = shop.storefrontSettings?.ratingsEnabled !== false;
+
+  const effectiveOriginalPrice = selectedVariant
+    ? (selectedVariant.originalPrice ? Number(selectedVariant.originalPrice) : null)
+    : (product.originalPrice ? Number(product.originalPrice) : null);
+
+  const discountPercent = effectiveOriginalPrice && effectiveOriginalPrice > unitPrice
+    ? Math.round(((effectiveOriginalPrice - unitPrice) / effectiveOriginalPrice) * 100)
+    : 0;
 
   const toggleAccordion = (key: string) => {
     setOpenAccordions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -144,8 +156,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     let name = product.name;
     if (selectedVariant) {
       name += ` (${selectedVariant.name})`;
-    } else {
-      name += ` (${selectedWeight} kg)`;
     }
     const selectedAddons = (product.addons || []).filter((a) => a.id && selectedAddonIds.includes(a.id));
     if (selectedAddons.length > 0) {
@@ -160,11 +170,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       name: getFullItemName(),
       price: unitPrice,
       quantity,
-      imageUrl: product.imageUrl || FALLBACK_CAKE,
-      isEggless: product.isEggless,
+      imageUrl: selectedVariant?.imageUrl || galleryThumbnails[selectedImageIndex] || product.imageUrl || FALLBACK_CAKE,
+      isEggless: isEgglessPreference,
       customMessage: customMessage.trim() || undefined,
       shopId: shop.id,
       shopName: shop.businessName,
+      variantId: selectedVariant?.id,
+      variantName: selectedVariant?.name,
+      weight: selectedVariant ? selectedVariant.name : undefined,
+      dietaryPreference: isEgglessPreference ? 'EGGLESS' : 'REGULAR',
     });
 
     if (result.conflict) {
@@ -183,11 +197,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       name: getFullItemName(),
       price: unitPrice,
       quantity,
-      imageUrl: product.imageUrl || FALLBACK_CAKE,
-      isEggless: product.isEggless,
+      imageUrl: selectedVariant?.imageUrl || galleryThumbnails[selectedImageIndex] || product.imageUrl || FALLBACK_CAKE,
+      isEggless: isEgglessPreference,
       customMessage: customMessage.trim() || undefined,
       shopId: shop.id,
       shopName: shop.businessName,
+      variantId: selectedVariant?.id,
+      variantName: selectedVariant?.name,
+      weight: selectedVariant ? selectedVariant.name : undefined,
+      dietaryPreference: isEgglessPreference ? 'EGGLESS' : 'REGULAR',
     });
     setShowConflictPrompt(false);
     toast.success(`Cart updated for "${shop.businessName}"!`);
@@ -195,7 +213,46 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   };
 
   const totalReviews = reviewsSummary?.totalReviews ?? 0;
-  const averageRating = reviewsSummary?.averageRating ?? 4.8;
+  const averageRating = reviewsSummary?.averageRating ?? 0;
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/shop/${shop.id}/product/${product.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} at ${shop.businessName}!`,
+          url,
+        });
+        return;
+      } catch {}
+    }
+    navigator.clipboard.writeText(url);
+    toast.success('Product link copied to clipboard!');
+  };
+
+  const cleanPhone = (shop.businessPhone || shop.phone || '').replace(/\D/g, '');
+  const phoneWithCountry = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+
+  const handleWhatsAppOrder = () => {
+    if (!cleanPhone) {
+      toast.error('Bakery has not configured a WhatsApp contact number.');
+      return;
+    }
+    const specs = [
+      product.name,
+      selectedVariant ? selectedVariant.name : null,
+      product.isEggless ? '100% Pure Veg (Eggless)' : 'Contains Egg',
+    ].filter(Boolean);
+    let msg = `Hi ${shop.businessName}, I would like to order *${specs.join(' • ')}* (Qty: ${quantity}, Price: ₹${unitPrice * quantity}).`;
+    if (customMessage.trim()) {
+      msg += `\n*Cake Message:* "${customMessage.trim()}"`;
+    }
+    msg += `\nPlease confirm preparation and delivery availability. Thank you!`;
+
+    const url = `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="xl" title={product.name}>
@@ -224,12 +281,42 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Header Sub-bar with Category & Standalone Link */}
+          <div className="flex items-center justify-between pb-3 border-b border-brand-border/60 -mt-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#C5A880]">
+              {product.categoryName || product.category?.replace(/_/g, ' ') || 'Artisanal Creation'}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex items-center gap-1 text-xs text-brand-muted hover:text-brand-plum transition-colors cursor-pointer"
+                title="Share product"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Share</span>
+              </button>
+              <Link
+                href={`/shop/${shop.id}/product/${product.id}`}
+                className="inline-flex items-center gap-1.5 text-xs text-brand-plum hover:text-brand-plum-hover font-semibold transition-colors group"
+              >
+                <span>View Standalone Page</span>
+                <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+            </div>
+          </div>
+
           {/* Multi-Thumbnail Gallery & Highlights Section */}
           <div className="space-y-3">
             {/* Main High-Resolution Photo */}
             <div className="relative h-60 sm:h-72 w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-[#FAF7F2] border border-brand-border/60">
               <Image
-                src={galleryThumbnails[selectedImageIndex] || FALLBACK_CAKE}
+                src={getSafeImageUrl(
+                  selectedVariant?.imageUrl && selectedImageIndex === 0
+                    ? selectedVariant.imageUrl
+                    : galleryThumbnails[selectedImageIndex],
+                  FALLBACK_CAKE
+                )}
                 alt={product.name}
                 fill
                 priority
@@ -245,7 +332,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       product.isEggless ? 'bg-emerald-600 ring-2 ring-emerald-600/20' : 'bg-amber-600'
                     }`}
                   />
-                  <span>{product.isEggless ? '100% Pure Veg' : 'Contains Egg'}</span>
+                  <span>{isEgglessPreference ? '100% Pure Veg' : 'Contains Egg'}</span>
                 </span>
 
                 {(product.categoryName || product.category) && (
@@ -258,19 +345,37 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               {/* Bottom Price Overlay */}
               <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between text-white">
                 <div>
-                  <span className="text-2xl sm:text-3xl font-serif font-bold drop-shadow-md">
-                    ₹{unitPrice}
-                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl sm:text-3xl font-serif font-bold drop-shadow-md">
+                      ₹{unitPrice}
+                    </span>
+                    {effectiveOriginalPrice && discountPercent >= 1 ? (
+                      <>
+                        <span className="text-xs text-white/70 line-through">
+                          ₹{effectiveOriginalPrice}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-300 bg-emerald-900/60 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                          {discountPercent}% OFF
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
                   <span className="text-xs text-white/80 ml-1.5 font-light">
-                    {hasVariants ? (selectedVariant?.name || 'per cake') : `for ${selectedWeight} kg`}
+                    {hasVariants ? (selectedVariant?.name || 'per cake') : 'per cake'}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 text-xs font-bold">
-                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                  <span>{averageRating > 0 ? averageRating.toFixed(1) : '4.8'}</span>
-                  <span className="text-white/70 font-normal">({totalReviews || 24})</span>
-                </div>
+                {ratingsEnabled && averageRating > 0 ? (
+                  <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 text-xs font-bold">
+                    <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                    <span>{averageRating.toFixed(1)}</span>
+                    <span className="text-white/70 font-normal">({totalReviews})</span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] font-medium bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 text-white/90">
+                    Freshly Baked
+                  </div>
+                )}
               </div>
             </div>
 
@@ -287,7 +392,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       : 'border-brand-border/80 opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <Image src={thumb} alt={`Angle ${idx + 1}`} fill className="object-cover" />
+                  <Image src={getSafeImageUrl(thumb, FALLBACK_CAKE)} alt={`Angle ${idx + 1}`} fill className="object-cover" />
                 </button>
               ))}
               <div className="text-xs text-brand-muted pl-2 hidden sm:block">
@@ -299,8 +404,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
           {/* Configuration Form Controls */}
           <div className="space-y-4 bg-[#FAF7F2] p-4 sm:p-5 rounded-2xl border border-brand-border/60">
-            {/* Variants OR Weight Selector */}
-            {hasVariants ? (
+            {/* Variants Selector (Only when real variants exist in database) */}
+            {hasVariants && (
               <div className="space-y-2">
                 <label className="text-xs font-bold text-[#2C1A1D] block">
                   Select Size & Flavor Variant
@@ -332,42 +437,59 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   })}
                 </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#2C1A1D]">
-                    Select Weight & Serving Size
-                  </label>
-                  <span className="text-[11px] text-[#5C1D2E] font-medium">
-                    {WEIGHT_OPTIONS.find((w) => w.weight === selectedWeight)?.serves}
-                  </span>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {WEIGHT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.weight}
-                      type="button"
-                      onClick={() => setSelectedWeight(opt.weight)}
-                      className={`py-2 px-1 rounded-xl text-center border transition-all ${
-                        selectedWeight === opt.weight
-                          ? 'bg-[#5C1D2E] text-white border-[#5C1D2E] shadow-xs'
-                          : 'bg-white text-brand-espresso border-brand-border hover:bg-brand-cream/50'
-                      }`}
-                    >
-                      <span className="block text-xs font-bold">{opt.label}</span>
-                      <span
-                        className={`block text-[10px] mt-0.5 ${
-                          selectedWeight === opt.weight ? 'text-white/80' : 'text-brand-muted'
-                        }`}
-                      >
-                        {opt.serves}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
 
+                        {/* Egg Choice Selector (when allowed by product) */}
+            {product.allowEggChoice ? (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#2C1A1D] block">
+                  Egg Preference
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEgglessPreference(true)}
+                    className={`p-2.5 rounded-xl text-center border transition-all cursor-pointer ${
+                      isEgglessPreference
+                        ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                        : 'bg-white text-brand-espresso border-brand-border hover:bg-emerald-50'
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">🌱 100% Eggless</span>
+                    {product.egglessPriceDiff && Number(product.egglessPriceDiff) > 0 ? (
+                      <span className="text-[10px] opacity-90">+₹{product.egglessPriceDiff}</span>
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEgglessPreference(false)}
+                    className={`p-2.5 rounded-xl text-center border transition-all cursor-pointer ${
+                      !isEgglessPreference
+                        ? 'bg-[#5C1D2E] text-white border-[#5C1D2E] shadow-xs'
+                        : 'bg-white text-brand-espresso border-brand-border hover:bg-brand-cream/50'
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">Contains Egg</span>
+                    <span className="text-[10px] opacity-80">Regular Recipe</span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Product Highlights Badges */}
+            {product.highlights && product.highlights.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {product.highlights.map((h, i) => (
+                  <span
+                    key={h.id || i}
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-plum bg-brand-blush/60 border border-brand-plum/20 px-2.5 py-1 rounded-full"
+                  >
+                    <Sparkles className="w-3 h-3 text-[#C5A880]" />
+                    <span>{h.highlightText}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             {/* Custom Message Plaque */}
             <div className="pt-1">
               <div className="flex items-center justify-between mb-1">
@@ -417,10 +539,30 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </div>
               </div>
 
-              <Button onClick={handleAddToCart} size="md" className="gap-2 bg-[#5C1D2E] hover:bg-[#4a1525] font-bold">
-                <ShoppingBag className="w-4 h-4" />
-                <span>Add to Basket &bull; ₹{unitPrice * quantity}</span>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {cleanPhone && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleWhatsAppOrder}
+                    className="gap-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50 font-bold h-10 px-3.5 shadow-2xs cursor-pointer"
+                    title="Inquire or order on WhatsApp"
+                  >
+                    <MessageCircle className="w-4 h-4 text-emerald-600 fill-current" />
+                    <span>WhatsApp Order</span>
+                  </Button>
+                )}
+
+                <Button
+                  onClick={handleAddToCart}
+                  size="md"
+                  disabled={!isAvailable}
+                  className="gap-2 bg-[#5C1D2E] hover:bg-[#4a1525] font-bold flex-1 sm:flex-none shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>{!isAvailable ? 'Sold Out' : `Add to Basket • ₹${unitPrice * quantity}`}</span>
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -455,46 +597,47 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
             )}
 
-            {/* 2. Ingredients & Dietary Safety (Always visible with real custom data or artisan standards) */}
-            <div className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white shadow-2xs">
-              <button
-                type="button"
-                onClick={() => toggleAccordion('ingredients')}
-                className="w-full px-4 py-3 text-left flex items-center justify-between font-serif font-bold text-sm text-[#2C1A1D] hover:bg-brand-cream/30 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Leaf className="w-4 h-4 text-emerald-600" />
-                  <span>Ingredients &amp; Dietary Safety</span>
-                </div>
-                {openAccordions.ingredients ? <ChevronUp className="w-4 h-4 text-brand-muted" /> : <ChevronDown className="w-4 h-4 text-brand-muted" />}
-              </button>
-              {openAccordions.ingredients && (
-                <div className="px-4 pb-4 pt-1 text-xs text-brand-muted leading-relaxed border-t border-brand-border/40 space-y-2.5">
-                  <div>
-                    <strong className="text-brand-espresso font-semibold block text-[11px] uppercase tracking-wider">Ingredients Used:</strong>
-                    <p className="mt-0.5 whitespace-pre-line">
-                      {product.ingredients?.trim() ||
-                        'Handmade with premium unbleached flour, pure dairy butter, rich cane sugar, fresh dairy cream, and natural flavor extracts. Free from artificial preservatives.'}
-                    </p>
+            {/* 2. Ingredients & Dietary Safety (Only if ingredients or allergens are provided) */}
+            {(product.ingredients || product.allergens) && (
+              <div className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => toggleAccordion('ingredients')}
+                  className="w-full px-4 py-3 text-left flex items-center justify-between font-serif font-bold text-sm text-[#2C1A1D] hover:bg-brand-cream/30 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Leaf className="w-4 h-4 text-emerald-600" />
+                    <span>Ingredients &amp; Dietary Safety</span>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/60">
-                    <strong className="text-amber-900 font-semibold block text-[11px]">Allergen Notice:</strong>
-                    <p className="text-amber-900/90 mt-0.5 text-[11px] whitespace-pre-line">
-                      {product.allergens?.trim() ||
-                        'Contains wheat (gluten) and dairy. Prepared in an artisanal kitchen handling nuts, seeds, and chocolate. Please contact the baker for specific allergy requests.'}
-                    </p>
+                  {openAccordions.ingredients ? <ChevronUp className="w-4 h-4 text-brand-muted" /> : <ChevronDown className="w-4 h-4 text-brand-muted" />}
+                </button>
+                {openAccordions.ingredients && (
+                  <div className="px-4 pb-4 pt-1 text-xs text-brand-muted leading-relaxed border-t border-brand-border/40 space-y-2.5">
+                    {product.ingredients && product.ingredients.trim() && (
+                      <div>
+                        <strong className="text-brand-espresso font-semibold block text-[11px] uppercase tracking-wider">Ingredients Used:</strong>
+                        <p className="mt-0.5 whitespace-pre-line">
+                          {product.ingredients.trim()}
+                        </p>
+                      </div>
+                    )}
+                    {product.allergens && product.allergens.trim() && (
+                      <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/60">
+                        <strong className="text-amber-900 font-semibold block text-[11px]">Allergen Notice:</strong>
+                        <p className="text-amber-900/90 mt-0.5 text-[11px] whitespace-pre-line">
+                          {product.allergens.trim()}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                        {isEgglessPreference ? '🌱 100% Pure Veg (Eggless)' : 'Contains Egg'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                      {product.isEggless ? '🌱 100% Pure Veg (Eggless)' : 'Contains Egg'}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-white text-brand-muted text-[10px] font-medium border border-brand-border/50">
-                      Zero Preservatives
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* 3. Delivery & Storage */}
             <div className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white shadow-2xs">
@@ -525,72 +668,74 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
 
             {/* 4. Verified Customer Reviews */}
-            <div className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white shadow-2xs">
-              <button
-                type="button"
-                onClick={() => toggleAccordion('reviews')}
-                className="w-full px-4 py-3 text-left flex items-center justify-between font-serif font-bold text-sm text-[#2C1A1D] hover:bg-brand-cream/30 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                  <span>Verified Customer Reviews ({totalReviews || 24})</span>
-                </div>
-                {openAccordions.reviews ? <ChevronUp className="w-4 h-4 text-brand-muted" /> : <ChevronDown className="w-4 h-4 text-brand-muted" />}
-              </button>
-              {openAccordions.reviews && (
-                <div className="px-4 pb-4 pt-2 border-t border-brand-border/40 space-y-4">
-                  {/* Rating Breakdown Header */}
-                  <div className="bg-[#FAF7F2] rounded-xl p-3 border border-brand-border/60 flex items-center justify-between">
-                    <div>
-                      <div className="text-2xl font-serif font-bold text-brand-espresso">
-                        {averageRating > 0 ? averageRating.toFixed(1) : '4.8'}★
-                      </div>
-                      <p className="text-[10px] text-brand-muted">
-                        Verified Celebration Ratings
-                      </p>
-                    </div>
-                    <div className="text-right text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>100% Authentic Purchases</span>
-                    </div>
+            {ratingsEnabled && (
+              <div className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => toggleAccordion('reviews')}
+                  className="w-full px-4 py-3 text-left flex items-center justify-between font-serif font-bold text-sm text-[#2C1A1D] hover:bg-brand-cream/30 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <span>Verified Customer Reviews ({totalReviews})</span>
                   </div>
-
-                  {/* Reviews List */}
-                  {loadingReviews ? (
-                    <div className="py-4 text-center text-xs text-brand-muted">Loading reviews...</div>
-                  ) : !reviewsSummary || reviewsSummary.reviews.length === 0 ? (
-                    <div className="py-4 text-center space-y-1">
-                      <p className="text-xs font-bold text-brand-espresso">Be the first to leave a verified review!</p>
-                      <p className="text-[11px] text-brand-muted">Order this cake to share your feedback post-delivery.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {reviewsSummary.reviews.map((rev) => (
-                        <div key={rev.id} className="p-3 rounded-xl bg-white border border-brand-border/60 space-y-1.5 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-brand-espresso">{rev.customerDisplayName}</span>
-                            <div className="flex items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((s) => (
-                                <Star
-                                  key={s}
-                                  className={`w-3 h-3 ${s <= rev.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          {rev.reviewText && <p className="text-brand-muted italic">&ldquo;{rev.reviewText}&rdquo;</p>}
-                          {rev.ownerReply && (
-                            <div className="p-2 rounded-lg bg-brand-blush/40 text-[11px] text-brand-plum font-medium">
-                              <strong>Chef&apos;s note:</strong> {rev.ownerReply}
-                            </div>
-                          )}
+                  {openAccordions.reviews ? <ChevronUp className="w-4 h-4 text-brand-muted" /> : <ChevronDown className="w-4 h-4 text-brand-muted" />}
+                </button>
+                {openAccordions.reviews && (
+                  <div className="px-4 pb-4 pt-2 border-t border-brand-border/40 space-y-4">
+                    {/* Rating Breakdown Header */}
+                    <div className="bg-[#FAF7F2] rounded-xl p-3 border border-brand-border/60 flex items-center justify-between">
+                      <div>
+                        <div className="text-2xl font-serif font-bold text-brand-espresso">
+                          {averageRating > 0 ? `${averageRating.toFixed(1)}★` : 'New'}
                         </div>
-                      ))}
+                        <p className="text-[10px] text-brand-muted">
+                          {totalReviews > 0 ? 'Verified Celebration Ratings' : 'No ratings yet'}
+                        </p>
+                      </div>
+                      <div className="text-right text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>100% Authentic Purchases</span>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+
+                    {/* Reviews List */}
+                    {loadingReviews ? (
+                      <div className="py-4 text-center text-xs text-brand-muted">Loading reviews...</div>
+                    ) : !reviewsSummary || reviewsSummary.reviews.length === 0 ? (
+                      <div className="py-4 text-center space-y-1">
+                        <p className="text-xs font-bold text-brand-espresso">No reviews yet for this cake</p>
+                        <p className="text-[11px] text-brand-muted">Order this cake to share your feedback post-delivery.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {reviewsSummary.reviews.map((rev) => (
+                          <div key={rev.id} className="p-3 rounded-xl bg-white border border-brand-border/60 space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-brand-espresso">{rev.customerDisplayName}</span>
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <Star
+                                    key={s}
+                                    className={`w-3 h-3 ${s <= rev.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            {rev.reviewText && <p className="text-brand-muted italic">&ldquo;{rev.reviewText}&rdquo;</p>}
+                            {rev.ownerReply && (
+                              <div className="p-2 rounded-lg bg-brand-blush/40 text-[11px] text-brand-plum font-medium">
+                                <strong>Chef&apos;s note:</strong> {rev.ownerReply}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -56,6 +56,37 @@ export default function AdminContactEnquiriesPage() {
     }
   };
 
+  const formatDate = (dateVal?: string | Date | null) => {
+    if (!dateVal) return 'N/A';
+    try {
+      const d = new Date(dateVal);
+      return isNaN(d.getTime())
+        ? 'N/A'
+        : d.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          });
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  const formatDateTime = (dateVal?: string | Date | null) => {
+    if (!dateVal) return 'N/A';
+    try {
+      const d = new Date(dateVal);
+      return isNaN(d.getTime())
+        ? 'N/A'
+        : d.toLocaleString('en-IN', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          });
+    } catch {
+      return 'N/A';
+    }
+  };
+
   const filteredEnquiries = useMemo(() => {
     return enquiries.filter((item) => {
       if (selectedFilter === 'UNREAD' && item.isRead) return false;
@@ -63,10 +94,10 @@ export default function AdminContactEnquiriesPage() {
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesName = item.name.toLowerCase().includes(q);
-        const matchesEmail = item.email.toLowerCase().includes(q);
-        const matchesSubj = item.subject.toLowerCase().includes(q);
-        const matchesMsg = item.message.toLowerCase().includes(q);
+        const matchesName = (item.name || '').toLowerCase().includes(q);
+        const matchesEmail = (item.email || '').toLowerCase().includes(q);
+        const matchesSubj = (item.subject || '').toLowerCase().includes(q);
+        const matchesMsg = (item.message || '').toLowerCase().includes(q);
         if (!matchesName && !matchesEmail && !matchesSubj && !matchesMsg) return false;
       }
       return true;
@@ -224,11 +255,7 @@ export default function AdminContactEnquiriesPage() {
                     )}
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5" />
-                      {new Date(e.createdAt).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
+                      {formatDate(e.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -304,11 +331,7 @@ export default function AdminContactEnquiriesPage() {
 
             <div className="flex items-center justify-between pt-2">
               <span className="text-[11px] text-slate-400">
-                Received:{' '}
-                {new Date(activeModalEnquiry.createdAt).toLocaleString('en-IN', {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                })}
+                Received: {formatDateTime(activeModalEnquiry.createdAt)}
               </span>
               <div className="flex items-center gap-2">
                 <a

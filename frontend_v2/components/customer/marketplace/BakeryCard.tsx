@@ -10,14 +10,16 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/common/StatusBadge';
 
+import { getSafeImageUrl, FALLBACK_BAKERY_COVER } from '@/lib/utils/image';
+
 interface BakeryCardProps {
   shop: Shop;
 }
 
-const FALLBACK_COVER = 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80';
-
 export const BakeryCard: React.FC<BakeryCardProps> = ({ shop }) => {
-  const [coverSrc, setCoverSrc] = useState(shop.coverImageUrl || shop.imageUrl || FALLBACK_COVER);
+  const [coverSrc, setCoverSrc] = useState(() =>
+    getSafeImageUrl(shop.coverImageUrl || shop.imageUrl, FALLBACK_BAKERY_COVER)
+  );
 
   return (
     <Card hoverEffect className="h-full flex flex-col overflow-hidden border border-brand-border/80 bg-white group p-0 rounded-3xl transition-all duration-300 hover:shadow-elevated hover:-translate-y-1">
@@ -29,17 +31,16 @@ export const BakeryCard: React.FC<BakeryCardProps> = ({ shop }) => {
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           className="object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
-          onError={() => setCoverSrc(FALLBACK_COVER)}
+          onError={() => setCoverSrc(FALLBACK_BAKERY_COVER)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
 
         {/* Top Badges Row */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <StatusBadge status={shop.status} />
             {shop.verificationStatus === 'VERIFIED' && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-600 text-white shadow-xs backdrop-blur-xs">
-                <ShieldCheck className="w-3 h-3" /> Verified
+                <ShieldCheck className="w-3 h-3" /> Verified ✓
               </span>
             )}
             {shop.isPureVeg && (
@@ -49,12 +50,12 @@ export const BakeryCard: React.FC<BakeryCardProps> = ({ shop }) => {
             )}
           </div>
 
-          {shop.rating ? (
+          {shop.averageRating || shop.rating ? (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-xs text-brand-espresso font-bold text-xs shadow-xs">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
-              <span>{shop.rating.toFixed(1)}</span>
-              {shop.reviewCount ? (
-                <span className="text-[10px] text-brand-muted font-normal">({shop.reviewCount})</span>
+              <span>{(shop.averageRating || shop.rating || 0).toFixed(1)}</span>
+              {(shop.totalReviews || shop.reviewCount) ? (
+                <span className="text-[10px] text-brand-muted font-normal">({shop.totalReviews || shop.reviewCount})</span>
               ) : null}
             </div>
           ) : (
@@ -64,9 +65,8 @@ export const BakeryCard: React.FC<BakeryCardProps> = ({ shop }) => {
           )}
         </div>
 
-        {/* Floating Brand Avatar Logo */}
         <div className="absolute -bottom-4 left-5 w-13 h-13 rounded-2xl bg-white border-2 border-white shadow-elevated overflow-hidden flex items-center justify-center text-brand-plum font-serif font-bold text-lg shrink-0">
-          {shop.logoUrl ? (
+          {shop.logoUrl && !shop.logoUrl.includes('example.com') ? (
             <img src={shop.logoUrl} alt={shop.businessName} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-blush to-brand-cream text-brand-plum font-serif font-bold">
@@ -83,17 +83,24 @@ export const BakeryCard: React.FC<BakeryCardProps> = ({ shop }) => {
           {shop.businessName}
         </h3>
 
-        {/* Location */}
-        <div className="flex items-center text-xs text-brand-muted mt-1 gap-1">
-          <MapPin className="w-3.5 h-3.5 text-brand-plum shrink-0" />
-          <span className="line-clamp-1">
-            {shop.area ? `${shop.area}, ` : ''}{shop.city}, {shop.state}
-          </span>
+        {/* Location & Distance */}
+        <div className="flex items-center justify-between text-xs text-brand-muted mt-1 gap-1">
+          <div className="flex items-center gap-1 min-w-0">
+            <MapPin className="w-3.5 h-3.5 text-brand-plum shrink-0" />
+            <span className="line-clamp-1">
+              {shop.area ? `${shop.area}, ` : ''}{shop.city}, {shop.state}
+            </span>
+          </div>
+          {shop.distanceKm != null && !isNaN(shop.distanceKm) && (
+            <span className="shrink-0 font-semibold text-brand-plum bg-brand-blush/80 px-2 py-0.5 rounded-full text-[11px] border border-brand-plum/20">
+              {shop.distanceKm < 1 ? `${Math.round(shop.distanceKm * 1000)} m away` : `${shop.distanceKm.toFixed(1)} km away`}
+            </span>
+          )}
         </div>
 
         {/* Description */}
         <p className="text-xs text-brand-muted mt-2.5 line-clamp-2 flex-1 leading-relaxed">
-          {shop.businessDescription || 'Artisanal cakes, cupcakes, and bespoke desserts crafted fresh with premium ingredients.'}
+          {shop.businessDescription || shop.description || 'Artisanal cakes, cupcakes, and bespoke desserts crafted fresh with premium ingredients.'}
         </p>
 
         {/* Meta Specs */}

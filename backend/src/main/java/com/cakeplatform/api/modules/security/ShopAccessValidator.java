@@ -7,6 +7,7 @@ import com.cakeplatform.api.modules.subscription.Subscription;
 import com.cakeplatform.api.modules.subscription.SubscriptionRepository;
 import com.cakeplatform.api.modules.subscription.SubscriptionStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +15,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ShopAccessValidator {
 
     private final ShopRepository shopRepository;
@@ -29,6 +31,10 @@ public class ShopAccessValidator {
         if (shops.isEmpty()) {
             throw new IllegalArgumentException("Shop not found for this user");
         }
+        if (shops.size() > 1) {
+            log.error("Data integrity violation: Owner ID {} owns {} shops. Strictly one shop allowed per owner.", ownerId, shops.size());
+            throw new IllegalStateException("Multiple shops found for single owner account");
+        }
         return shops.get(0);
     }
 
@@ -37,9 +43,8 @@ public class ShopAccessValidator {
      * Enforces:
      * 1. Shop exists for owner (Tenant Isolation)
      * 2. Shop is not SUSPENDED
-     * 3. Shop is VERIFIED
-     * 4. Shop has an ACTIVE (unexpired) Subscription
-     * 5. Shop status is ACTIVE
+     * 3. Shop has an ACTIVE (unexpired) Subscription
+     * 4. Shop status is ACTIVE
      */
     @Transactional(readOnly = true)
     public Shop getValidShopForOwner(Long ownerId) {
@@ -48,11 +53,6 @@ public class ShopAccessValidator {
         // Check 0: Suspended shops must be blocked from operational functions
         if (shop.getStatus() == com.cakeplatform.api.modules.shop.ShopStatus.SUSPENDED) {
             throw new com.cakeplatform.api.exception.SubscriptionExpiredException("Shop is suspended by administration. Please contact support.");
-        }
-
-        // Check 1: Must be VERIFIED
-        if (shop.getVerificationStatus() != VerificationStatus.VERIFIED) {
-            throw new com.cakeplatform.api.exception.SubscriptionExpiredException("Shop is not verified yet.");
         }
 
         // Check 2: Active Subscription

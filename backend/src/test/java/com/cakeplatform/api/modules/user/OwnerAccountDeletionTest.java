@@ -7,7 +7,7 @@ import com.cakeplatform.api.modules.interaction.Enquiry;
 import com.cakeplatform.api.modules.interaction.EnquiryRepository;
 import com.cakeplatform.api.modules.interaction.Feedback;
 import com.cakeplatform.api.modules.interaction.FeedbackRepository;
-import com.cakeplatform.api.modules.media.MediaUploadService;
+import com.cakeplatform.api.modules.media.StorageService;
 import com.cakeplatform.api.modules.notification.NotificationRepository;
 import com.cakeplatform.api.modules.order.Order;
 import com.cakeplatform.api.modules.order.OrderRepository;
@@ -63,7 +63,7 @@ public class OwnerAccountDeletionTest {
     @Mock private NotificationRepository notificationRepository;
     @Mock private PaymentRepository paymentRepository;
     @Mock private SubscriptionRepository subscriptionRepository;
-    @Mock private MediaUploadService mediaUploadService;
+    @Mock private StorageService storageService;
     @Mock private ActivityLoggerService activityLogger;
     @Mock private PasswordEncoder passwordEncoder;
 
@@ -81,7 +81,7 @@ public class OwnerAccountDeletionTest {
                 orderRepository, deliverySlotRepository, couponRepository, businessDocumentRepository,
                 payoutDetailsRepository, feedbackRepository, enquiryRepository, customCakeRequestRepository,
                 platformFeedbackRepository,
-                notificationRepository, paymentRepository, subscriptionRepository, mediaUploadService,
+                notificationRepository, paymentRepository, subscriptionRepository, storageService,
                 activityLogger, passwordEncoder
         );
         controller = new OwnerAccountController(deletionService);
@@ -162,7 +162,7 @@ public class OwnerAccountDeletionTest {
         deletionService.deleteOwnerAccount(10L, new DeleteAccountRequest("secret", "DELETE MY ACCOUNT"));
 
         verify(productRepository, times(1)).deleteAll(List.of(product));
-        verify(mediaUploadService, times(1)).deleteFileByUrl("/uploads/products/cake.png");
+        verify(storageService, times(1)).deleteFileByUrl("/uploads/products/cake.png");
     }
 
     // 5. Product categories deleted after products
@@ -208,7 +208,7 @@ public class OwnerAccountDeletionTest {
 
         deletionService.deleteOwnerAccount(10L, new DeleteAccountRequest("secret", "DELETE MY ACCOUNT"));
 
-        verify(mediaUploadService, times(1)).deleteFileByUrl("/uploads/documents/fssai.pdf");
+        verify(storageService, times(1)).deleteFileByUrl("/uploads/documents/fssai.pdf");
         verify(businessDocumentRepository, times(1)).deleteByShopId(100L);
     }
 

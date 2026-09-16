@@ -38,4 +38,10 @@ public class UpdateShopRequest {
     private String logoUrl;
 
     private String coverImageUrl;
+
+    private String aboutStory;
+    private String aboutImageUrl;
+    private Boolean showAboutImage;
+    private String whatsappNumber;
+    private String mapLocationUrl;
 }

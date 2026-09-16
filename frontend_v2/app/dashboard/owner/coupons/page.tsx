@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Tag,
   Plus,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { CouponRecord, CreateCouponPayload, DiscountType } from '@/types/owner';
+import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -27,6 +28,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function OwnerCouponsPage() {
+  const { registerRefreshHandler } = useOwner();
   const [coupons, setCoupons] = useState<CouponRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,7 +52,7 @@ export default function OwnerCouponsPage() {
   const [usageLimit, setUsageLimit] = useState<number | ''>('');
   const [isActive, setIsActive] = useState(true);
 
-  const fetchCoupons = async (isManual = false) => {
+  const fetchCoupons = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -64,11 +66,18 @@ export default function OwnerCouponsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCoupons();
-  }, []);
+  }, [fetchCoupons]);
+
+  useEffect(() => {
+    const unregister = registerRefreshHandler(async () => {
+      await fetchCoupons(true);
+    });
+    return unregister;
+  }, [registerRefreshHandler, fetchCoupons]);
 
   const copyToClipboard = (couponCode: string) => {
     navigator.clipboard?.writeText(couponCode);

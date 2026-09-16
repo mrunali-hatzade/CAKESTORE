@@ -11,10 +11,15 @@ import com.cakeplatform.api.modules.payment.RazorpayService;
 import com.cakeplatform.api.modules.shop.Shop;
 import com.cakeplatform.api.modules.shop.ShopRepository;
 import com.cakeplatform.api.modules.subscription.SubscriptionService;
+import com.cakeplatform.api.modules.subscription.SubscriptionPlan;
+import com.cakeplatform.api.modules.subscription.SubscriptionPlanRepository;
+import com.cakeplatform.api.modules.payment.WebhookEvent;
+import com.cakeplatform.api.modules.payment.WebhookEventRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -35,8 +40,10 @@ public class WebhookController {
     private final ShopRepository shopRepository;
     private final RazorpayService razorpayService;
     private final NotificationService notificationService;
+    private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final com.cakeplatform.api.modules.notification.AdminNotificationService adminNotificationService;
     private final ActivityLoggerService activityLogger;
+    private final WebhookEventRepository webhookEventRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -46,7 +53,14 @@ public class WebhookController {
     @PostMapping("/razorpay")
     public ResponseEntity<String> handleRazorpayWebhook(
             @RequestHeader(value = "X-Razorpay-Signature", required = false) String signature,
+            @RequestHeader(value = "X-Razorpay-Event-Id", required = false) String eventIdHeader,
             @RequestBody String rawPayload) {
+
+        // Validate webhook secret is not placeholder
+        if (razorpayService.getWebhookSecret() == null || razorpayService.getWebhookSecret().isBlank() || razorpayService.getWebhookSecret().contains("placeholder")) {
+            log.error("Webhook processing rejected: Webhook secret is not configured in production.");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Webhook configuration error");
+        }
 
         // 1. Validate signature presence
         if (signature == null || signature.trim().isEmpty()) {
@@ -61,10 +75,26 @@ public class WebhookController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid webhook signature");
         }
 
+        if (eventIdHeader == null || eventIdHeader.trim().isEmpty()) {
+            log.warn("Webhook rejected: missing X-Razorpay-Event-Id header");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing event ID");
+        }
+
         try {
             // 3. Parse JSON event
             Map<String, Object> payload = objectMapper.readValue(rawPayload, new TypeReference<Map<String, Object>>() {});
             String event = (String) payload.get("event");
+            
+            try {
+                WebhookEvent webhookEvent = new WebhookEvent();
+                webhookEvent.setEventId(eventIdHeader);
+                webhookEvent.setEventType(event);
+                webhookEventRepository.save(webhookEvent);
+            } catch (DataIntegrityViolationException ex) {
+                log.info("Webhook idempotency: Event {} already processed. Skipping duplicate.", eventIdHeader);
+                return ResponseEntity.ok("Webhook processed (idempotent duplicate)");
+            }
+
             @SuppressWarnings("unchecked")
             Map<String, Object> payloadData = (Map<String, Object>) payload.get("payload");
 
@@ -187,30 +217,61 @@ public class WebhookController {
                         Shop shop = shopRepository.findById(shopId).orElse(null);
 
                         if (shop != null && shop.getOwner() != null) {
-                            // Idempotency: check if payment ID is already recorded
-                            if (paymentRepository.findByProviderPaymentId(transactionId).isPresent()) {
-                                log.info("Webhook idempotency: Subscription payment {} already recorded. Skipping duplicate.", transactionId);
-                                return ResponseEntity.ok("Webhook processed (idempotent, subscription already active)");
+                            Payment paymentToUpdate = paymentRepository.findByProviderOrderId(razorpayOrderId)
+                                    .orElse(null);
+                            
+                            if (paymentToUpdate == null) {
+                                log.warn("Webhook rejected: PENDING Payment not found for razorpayOrderId={}", razorpayOrderId);
+                                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing local payment");
                             }
 
-                            int durationDays = 30;
-                            if (notes.containsKey("duration_days")) {
-                                try {
-                                    durationDays = Integer.parseInt(String.valueOf(notes.get("duration_days")));
-                                } catch (Exception ignored) {}
+                            if (!shopId.equals(paymentToUpdate.getShop().getId())) {
+                                log.warn("Webhook rejected: Shop mismatch");
+                                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Shop mismatch");
                             }
 
-                            Number amountNum = (Number) entity.get("amount");
-                            BigDecimal amount = amountNum != null
-                                    ? BigDecimal.valueOf(amountNum.longValue()).divide(BigDecimal.valueOf(100))
-                                    : BigDecimal.valueOf(350.00);
+                            SubscriptionPlan plan = paymentToUpdate.getPlan();
+                            if (plan == null) {
+                                log.warn("Webhook rejected: Missing plan on local Payment");
+                                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing plan");
+                            }
+
+                            // Validate Plan ID from notes if present
+                            if (notes != null && notes.containsKey("plan_id")) {
+                                Long notePlanId = Long.parseLong(String.valueOf(notes.get("plan_id")));
+                                if (!notePlanId.equals(plan.getId())) {
+                                    log.warn("Webhook rejected: Plan ID in notes does not match local Payment plan");
+                                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Plan mismatch");
+                                }
+                            }
+
+                            // Validate Amount
+                            Object amountObj = entity.get("amount");
+                            long capturedAmountPaise = amountObj instanceof Number ? ((Number) amountObj).longValue() : Long.parseLong(String.valueOf(amountObj));
+                            long expectedAmountPaise = paymentToUpdate.getAmount().multiply(BigDecimal.valueOf(100)).longValue();
+                            if (capturedAmountPaise != expectedAmountPaise) {
+                                log.warn("Webhook rejected: Amount mismatch. Expected {}, got {}", expectedAmountPaise, capturedAmountPaise);
+                                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Amount mismatch");
+                            }
+
+                            // Validate Currency
+                            String capturedCurrency = (String) entity.get("currency");
+                            if (!paymentToUpdate.getCurrency().equalsIgnoreCase(capturedCurrency)) {
+                                log.warn("Webhook rejected: Currency mismatch. Expected {}, got {}", paymentToUpdate.getCurrency(), capturedCurrency);
+                                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Currency mismatch");
+                            }
+
+                            if ("COMPLETED".equalsIgnoreCase(paymentToUpdate.getStatus())) {
+                                log.info("Webhook idempotency: Payment {} already COMPLETED. Skipping duplicate.", paymentToUpdate.getId());
+                                return ResponseEntity.ok("Webhook processed (idempotent, payment already completed)");
+                            }
 
                             subscriptionService.processSuccessfulPayment(
                                     shop.getOwner().getId(),
-                                    amount,
+                                    plan,
                                     razorpayOrderId,
                                     transactionId,
-                                    durationDays
+                                    paymentToUpdate
                             );
 
                             return ResponseEntity.ok("Webhook processed (subscription activated)");
@@ -239,6 +300,18 @@ public class WebhookController {
                     Order order = orderRepository.findByOrderNumber(orderNumber).orElse(null);
                     if (order != null) {
                         activityLogger.logActivity(null, order.getShop().getId(), "PAYMENT_FAILED_WEBHOOK", "ORDER", order.getId(), errorDescription);
+                    }
+                } else if (notes != null && (notes.containsKey("subscription_shop_id") || notes.containsKey("shop_id"))) {
+                    // Subscription payment failed
+                    if (razorpayOrderId != null) {
+                        Payment paymentToFail = paymentRepository.findByProviderOrderId(razorpayOrderId).orElse(null);
+                        if (paymentToFail != null && "PENDING".equalsIgnoreCase(paymentToFail.getStatus())) {
+                            paymentToFail.setStatus("FAILED");
+                            paymentToFail.setFailureReason(errorDescription);
+                            paymentToFail.setProviderPaymentId(transactionId);
+                            paymentRepository.save(paymentToFail);
+                            log.info("Subscription payment marked as FAILED for order {}", razorpayOrderId);
+                        }
                     }
                 }
 

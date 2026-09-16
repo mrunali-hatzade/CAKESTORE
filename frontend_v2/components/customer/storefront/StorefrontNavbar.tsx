@@ -8,6 +8,7 @@ import { useCart } from '@/context/CartContext';
 import { useFavorites } from '@/context/FavoritesContext';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { isDummyOrInvalidImageUrl } from '@/lib/utils/image';
 
 interface StorefrontNavbarProps {
   shop: Shop;
@@ -47,15 +48,23 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
           </Link>
 
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-brand-blush text-brand-plum flex items-center justify-center font-serif font-bold text-lg shadow-sm border border-brand-plum/10">
-              {shop.businessName.charAt(0)}
+            <div className="w-10 h-10 rounded-full bg-brand-blush text-brand-plum flex items-center justify-center font-serif font-bold text-lg shadow-sm border border-brand-plum/10 overflow-hidden shrink-0">
+              {!isDummyOrInvalidImageUrl(shop.logoUrl) ? (
+                <img
+                  src={shop.logoUrl}
+                  alt={shop.businessName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                shop.businessName.charAt(0)
+              )}
             </div>
             <div className="hidden sm:block">
               <h1 className="font-serif font-bold text-lg text-[#2C1A1D] leading-tight">
                 {shop.businessName}
               </h1>
               <span className="text-xs font-medium text-[#C5A880]">
-                Artisanal Bakery
+                {shop.businessCategory || (shop.businessType ? shop.businessType.replace(/_/g, ' ') : 'Artisanal Bakery')}
               </span>
             </div>
           </div>
@@ -89,13 +98,13 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
 
         {/* In-Store Actions */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          {shop.businessPhone && (
+          {shop.storefrontSettings?.phoneEnabled !== false && (shop.phone || shop.businessPhone) && (
             <a
-              href={`tel:${shop.businessPhone}`}
+              href={`tel:${shop.phone || shop.businessPhone}`}
               className="hidden lg:inline-flex items-center gap-1.5 text-xs font-medium text-brand-muted hover:text-[#5C1D2E] transition-colors"
             >
               <Phone className="w-4 h-4" />
-              <span>{shop.businessPhone}</span>
+              <span>{shop.phone || shop.businessPhone}</span>
             </a>
           )}
 

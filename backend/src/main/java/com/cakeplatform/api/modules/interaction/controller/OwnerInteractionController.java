@@ -44,6 +44,14 @@ public class OwnerInteractionController {
         return ResponseEntity.ok(Map.of("message", "Feedback deleted successfully"));
     }
 
+    @PatchMapping("/feedback/{id}/moderation")
+    public ResponseEntity<Feedback> moderateFeedback(
+            @PathVariable Long id,
+            @RequestParam boolean isApproved,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(ownerInteractionService.toggleFeedbackApproval(userDetails.getId(), id, isApproved));
+    }
+
     // --- Enquiries ---
     @GetMapping("/enquiries")
     public ResponseEntity<List<Enquiry>> getMyEnquiries(@AuthenticationPrincipal CustomUserDetails userDetails) {

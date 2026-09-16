@@ -5,7 +5,8 @@ import Link from 'next/link';
 import {
   Cake, ShoppingBag, TrendingUp, Clock, Plus, ArrowRight,
   Calendar, MessageSquareQuote, Settings, Globe,
-  AlertCircle, Truck, CheckCircle2, Award, AlertTriangle
+  AlertCircle, Truck, CheckCircle2, Award, AlertTriangle,
+  Sparkles, ExternalLink, Store,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { ordersApi } from '@/lib/api/orders';
@@ -39,6 +40,13 @@ export default function OwnerOverviewPage() {
     else setIsLoading(true);
     setError(null);
 
+    // If shop is PENDING, operational endpoints require active subscription and will return 403
+    if (shop?.status === 'PENDING') {
+      setIsLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       // Parallel fetch of all operational data without duplicate shop profile calls
       const [statsRes, ordersRes, analyticsRes, slotsRes, customCakesRes] = await Promise.allSettled([
@@ -65,7 +73,7 @@ export default function OwnerOverviewPage() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [shop?.status]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -127,6 +135,52 @@ export default function OwnerOverviewPage() {
     return <Badge variant="warning" size="sm">{s}</Badge>;
   };
 
+  const isPending = shop?.status === 'PENDING';
+  const isExpired = shop?.status === 'EXPIRED';
+
+  const checklistItems = [
+    {
+      title: 'Bakery Profile & Location Details',
+      description: 'Business name, contact phone, city address, and FSSAI registration number',
+      completed: Boolean(shop?.businessName && shop?.addressLine1 && (shop?.phone || shop?.city)),
+      href: '/dashboard/owner/settings',
+      badge: 'Step 1',
+    },
+    {
+      title: 'Storefront Branding & Visual Identity',
+      description: 'Upload bakery logo, brand cover banner, and custom about story',
+      completed: Boolean(shop?.logoUrl || shop?.coverImageUrl),
+      href: '/dashboard/owner/website',
+      badge: 'Step 2',
+    },
+    {
+      title: 'Delivery Windows & Preparation Lead Times',
+      description: 'Define available delivery intervals, cutoff times, and order slot capacity',
+      completed: deliverySlots.length > 0,
+      href: '/dashboard/owner/delivery-slots',
+      badge: 'Step 3',
+    },
+    {
+      title: 'First Signature Cake in Catalog',
+      description: 'Add your first cake product with flavor variants and eggless pricing',
+      completed: totalProducts > 0,
+      href: '/dashboard/owner/products',
+      badge: 'Step 4',
+    },
+    {
+      title: 'Preview Digital Storefront',
+      description: 'Review your live storefront presentation before sharing with customers',
+      completed: false,
+      href: `/shop/${shop?.id || ''}`,
+      external: true,
+      badge: 'Step 5',
+    },
+  ];
+
+  const completedSteps = checklistItems.filter((i) => i.completed).length;
+  const totalSteps = checklistItems.length;
+  const progressPercent = Math.round((completedSteps / totalSteps) * 100);
+
   return (
     <div className="space-y-6">
       {/* 1. Greeting Section — Time-based greeting with live date/time badge */}
@@ -139,8 +193,150 @@ export default function OwnerOverviewPage() {
         </div>
       )}
 
-      {/* 2. Primary KPI Row — Realized Revenue, Orders, Catalog, Pending */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* Onboarding Activation Hero Card (PENDING status) */}
+      {isPending && (
+        <div className="bg-gradient-to-r from-brand-espresso via-brand-plum to-brand-burgundy rounded-3xl p-6 sm:p-8 text-white shadow-card relative overflow-hidden">
+          <div className="relative z-10 max-w-2xl space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-brand-blush text-xs font-semibold backdrop-blur-xs">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Registration Complete &bull; Activation Required</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold font-serif leading-tight">
+              Activate Your Digital Bakery Storefront
+            </h2>
+            <p className="text-xs sm:text-sm text-brand-cream/85 leading-relaxed">
+              Your bakery registration is complete! Complete your platform subscription to activate your live storefront, start receiving customer orders, and unlock full access to orders, catalog, and kitchen management.
+            </p>
+            <div className="pt-2 flex flex-wrap items-center gap-4">
+              <Link href="/dashboard/owner/subscription">
+                <Button size="lg" className="bg-brand-gold hover:bg-brand-gold/90 text-brand-espresso font-bold gap-2 shadow-lg">
+                  <span>Activate Bakery</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+              <span className="text-xs text-brand-cream/70">
+                0% sales commission &bull; Instant activation
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expired Subscription Hero Card */}
+      {isExpired && (
+        <div className="bg-gradient-to-r from-rose-950 via-rose-900 to-brand-espresso rounded-3xl p-6 sm:p-8 text-white shadow-card relative overflow-hidden">
+          <div className="relative z-10 max-w-2xl space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 text-rose-200 text-xs font-semibold backdrop-blur-xs">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>License Expired</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold font-serif leading-tight">
+              Renew Your Bakery SaaS License
+            </h2>
+            <p className="text-xs sm:text-sm text-rose-100/85 leading-relaxed">
+              Your monthly CakeStore license has expired. Your storefront remains accessible to customers via direct URL, but management tools and order processing require an active subscription.
+            </p>
+            <div className="pt-2 flex flex-wrap items-center gap-4">
+              <Link href="/dashboard/owner/subscription">
+                <Button size="lg" className="bg-white hover:bg-rose-50 text-rose-900 font-bold gap-2 shadow-lg">
+                  <span>Renew Subscription</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+              <span className="text-xs text-rose-200/70">
+                Instant license extension &bull; 0% commission
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bakery Setup Checklist Section */}
+      <Card className="p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-owner-border">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-serif font-bold text-lg text-owner-heading">Bakery Setup Checklist</h3>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-blush text-brand-plum">
+                {completedSteps} of {totalSteps} Completed
+              </span>
+            </div>
+            <p className="text-xs text-owner-muted mt-0.5">
+              Essential steps to configure your commercial bakery and start delighting customers
+            </p>
+          </div>
+
+          <div className="w-full sm:w-48">
+            <div className="flex items-center justify-between text-[11px] font-medium text-owner-muted mb-1.5">
+              <span>Setup Readiness</span>
+              <span className="font-bold text-brand-plum">{progressPercent}%</span>
+            </div>
+            <div className="w-full bg-owner-canvas rounded-full h-2 overflow-hidden border border-owner-border/50">
+              <div
+                className="bg-brand-plum h-full rounded-full transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="divide-y divide-owner-border/60 pt-2">
+          {checklistItems.map((item, idx) => (
+            <div key={idx} className="py-3.5 flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="mt-0.5 shrink-0">
+                  {item.completed ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full border-2 border-owner-border flex items-center justify-center text-[10px] font-bold text-owner-muted">
+                      {idx + 1}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className={`text-sm font-semibold ${item.completed ? 'text-owner-muted line-through' : 'text-owner-heading'}`}>
+                      {item.title}
+                    </h4>
+                    <span className="text-[10px] font-medium text-owner-muted bg-owner-canvas px-1.5 py-0.2 rounded border border-owner-border">
+                      {item.badge}
+                    </span>
+                  </div>
+                  <p className="text-xs text-owner-muted truncate mt-0.5">
+                    {item.description}
+                  </p>
+                </div>
+              </div>
+
+              {item.external ? (
+                <Link
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-plum hover:text-brand-espresso transition-colors"
+                >
+                  <span>Preview</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              ) : (
+                <Link
+                  href={item.href}
+                  className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-brand-plum hover:text-brand-espresso transition-colors"
+                >
+                  <span>Configure</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Operational Dashboard: Only rendered when NOT pending and NOT expired */}
+      {!isPending && !isExpired && (
+        <>
+          {/* 2. Primary KPI Row — Realized Revenue, Orders, Catalog, Pending */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <Card className="p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-owner-muted">Active Cakes</span>
@@ -643,6 +839,8 @@ export default function OwnerOverviewPage() {
           </div>
         </Card>
       </div>
+        </>
+      )}
     </div>
   );
 }

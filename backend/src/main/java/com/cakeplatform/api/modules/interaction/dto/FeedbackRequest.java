@@ -19,4 +19,6 @@ public class FeedbackRequest {
     private String comment;
 
     private String orderReference;
+
+    private String customerEmail;
 }

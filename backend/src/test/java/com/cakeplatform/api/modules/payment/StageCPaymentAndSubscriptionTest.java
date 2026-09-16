@@ -94,6 +94,7 @@ public class StageCPaymentAndSubscriptionTest {
     void setUp() {
         razorpayService = new RazorpayService(TEST_KEY_ID, TEST_KEY_SECRET, TEST_WEBHOOK_SECRET);
 
+        com.cakeplatform.api.modules.payment.WebhookEventRepository webhookEventRepo = org.mockito.Mockito.mock(com.cakeplatform.api.modules.payment.WebhookEventRepository.class);
         webhookController = new WebhookController(
                 orderRepository,
                 paymentRepository,
@@ -101,8 +102,10 @@ public class StageCPaymentAndSubscriptionTest {
                 shopRepository,
                 razorpayService,
                 notificationService,
+                subscriptionPlanRepository,
                 adminNotificationService,
-                activityLogger
+                activityLogger,
+                webhookEventRepo
         );
 
         ownerPaymentController = new OwnerPaymentController(
@@ -243,7 +246,7 @@ public class StageCPaymentAndSubscriptionTest {
     @Test
     @DisplayName("C2.1: Webhook missing signature header returns HTTP 400")
     void testWebhook_MissingSignatureReturns400() {
-        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(null, "{\"event\":\"payment.captured\"}");
+        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(null, "evt_mock_id", "{\"event\":\"payment.captured\"}");
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertTrue(response.getBody().contains("Missing signature"));
     }
@@ -252,7 +255,7 @@ public class StageCPaymentAndSubscriptionTest {
     @DisplayName("C2.2: Webhook with invalid signature returns HTTP 400")
     void testWebhook_InvalidSignatureReturns400() {
         String payload = "{\"event\":\"payment.captured\"}";
-        ResponseEntity<String> response = webhookController.handleRazorpayWebhook("invalid_signature_hex", payload);
+        ResponseEntity<String> response = webhookController.handleRazorpayWebhook("invalid_signature_hex", "evt_mock_id", payload);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertTrue(response.getBody().contains("Invalid webhook signature"));
     }
@@ -295,7 +298,7 @@ public class StageCPaymentAndSubscriptionTest {
 
         String signature = calculateHmac(rawPayload, TEST_WEBHOOK_SECRET);
 
-        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(signature, rawPayload);
+        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(signature, "evt_mock_id", rawPayload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("PAID", order.getPaymentStatus());
@@ -343,7 +346,7 @@ public class StageCPaymentAndSubscriptionTest {
 
         String signature = calculateHmac(rawPayload, TEST_WEBHOOK_SECRET);
 
-        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(signature, rawPayload);
+        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(signature, "evt_mock_id", rawPayload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertTrue(response.getBody().contains("idempotent"));
@@ -361,6 +364,29 @@ public class StageCPaymentAndSubscriptionTest {
         String rzpOrderId = "order_sub_123";
 
         when(shopRepository.findById(shopId)).thenReturn(Optional.of(testShop));
+        SubscriptionPlan mockPlan = new SubscriptionPlan();
+        mockPlan.setId(1L);
+        mockPlan.setPrice(BigDecimal.valueOf(350));
+        mockPlan.setDurationDays(30);
+        mockPlan.setIsActive(true);
+
+        Payment pendingPayment = new Payment();
+        pendingPayment.setId(999L);
+        pendingPayment.setShop(testShop);
+        pendingPayment.setPlan(mockPlan);
+        pendingPayment.setAmount(BigDecimal.valueOf(350));
+        pendingPayment.setCurrency("INR");
+        pendingPayment.setProviderOrderId(rzpOrderId);
+        pendingPayment.setStatus("PENDING");
+
+        when(paymentRepository.findByProviderOrderId(rzpOrderId)).thenReturn(Optional.of(pendingPayment));
+
+        // Mock payment save to return a Payment with an ID
+        org.mockito.Mockito.lenient().when(paymentRepository.findByIdWithLock(anyLong())).thenAnswer(i -> { Payment p = new Payment(); p.setStatus("PENDING"); return java.util.Optional.of(p); }); org.mockito.Mockito.lenient().when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> {
+            Payment p = inv.getArgument(0);
+            if (p.getId() == null) p.setId(999L);
+            return p;
+        });
 
         String rawPayload = """
                 {
@@ -385,15 +411,10 @@ public class StageCPaymentAndSubscriptionTest {
 
         String signature = calculateHmac(rawPayload, TEST_WEBHOOK_SECRET);
 
-        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(signature, rawPayload);
+        ResponseEntity<String> response = webhookController.handleRazorpayWebhook(signature, "evt_mock_id", rawPayload);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(subscriptionService).processSuccessfulPayment(
-                eq(testOwner.getId()),
-                eq(BigDecimal.valueOf(350)),
-                eq(rzpOrderId),
-                eq(txId),
-                eq(30)
+        verify(subscriptionService).processSuccessfulPayment(eq(testOwner.getId()), any(), eq(rzpOrderId), eq(txId), any(com.cakeplatform.api.modules.payment.Payment.class)
         );
     }
 
@@ -495,13 +516,13 @@ public class StageCPaymentAndSubscriptionTest {
             s.setId(100L);
             return s;
         });
-        when(pRepo.save(any(Payment.class))).thenAnswer(inv -> {
+        when(pRepo.findByIdWithLock(anyLong())).thenAnswer(i -> { Payment pm = new Payment(); pm.setStatus("PENDING"); return java.util.Optional.of(pm); }); when(pRepo.save(any(Payment.class))).thenAnswer(inv -> {
             Payment p = inv.getArgument(0);
             p.setId(200L);
             return p;
         });
 
-        Payment payment = subService.processSuccessfulPayment(1L, BigDecimal.valueOf(350), "ord_sub_1", "pay_renewal_1", 30);
+        Payment payment = subService.processSuccessfulPayment(1L, new com.cakeplatform.api.modules.subscription.SubscriptionPlan() {{ setPrice(java.math.BigDecimal.valueOf(350)); setDurationDays(30); }}, "ord_sub_1", "pay_renewal_1", new com.cakeplatform.api.modules.payment.Payment() {{ setId(100L); }});
 
         assertNotNull(payment);
         assertEquals("COMPLETED", payment.getStatus());
@@ -534,13 +555,13 @@ public class StageCPaymentAndSubscriptionTest {
             s.setId(101L);
             return s;
         });
-        when(pRepo.save(any(Payment.class))).thenAnswer(inv -> {
+        when(pRepo.findByIdWithLock(anyLong())).thenAnswer(i -> { Payment pm = new Payment(); pm.setStatus("PENDING"); return java.util.Optional.of(pm); }); when(pRepo.save(any(Payment.class))).thenAnswer(inv -> {
             Payment p = inv.getArgument(0);
             p.setId(201L);
             return p;
         });
 
-        Payment payment = subService.processSuccessfulPayment(1L, BigDecimal.valueOf(350), "ord_sub_2", "pay_renewal_2", 30);
+        Payment payment = subService.processSuccessfulPayment(1L, new com.cakeplatform.api.modules.subscription.SubscriptionPlan() {{ setPrice(java.math.BigDecimal.valueOf(350)); setDurationDays(30); }}, "ord_sub_2", "pay_renewal_2", new com.cakeplatform.api.modules.payment.Payment() {{ setId(100L); }});
 
         assertNotNull(payment);
         // Crucial invariant: SUSPENDED must NOT be overturned by subscription renewal!
@@ -550,7 +571,7 @@ public class StageCPaymentAndSubscriptionTest {
     }
 
     @Test
-    @DisplayName("C4.3: Subscription renewal does NOT restore unverified shop to ACTIVE")
+    @DisplayName("C4.3: Payment success activates unverified shop to ACTIVE while preserving PROCESSING verification status")
     void testSubscriptionRenewal_DoesNotRestoreUnverifiedShop() {
         SubscriptionRepository subRepo = mock(SubscriptionRepository.class);
         PaymentRepository pRepo = mock(PaymentRepository.class);
@@ -565,7 +586,7 @@ public class StageCPaymentAndSubscriptionTest {
 
         Shop unverifiedShop = new Shop();
         unverifiedShop.setId(14L);
-        unverifiedShop.setStatus(ShopStatus.INACTIVE);
+        unverifiedShop.setStatus(ShopStatus.PENDING);
         unverifiedShop.setVerificationStatus(VerificationStatus.PROCESSING);
         unverifiedShop.setOwner(testOwner);
 
@@ -575,18 +596,19 @@ public class StageCPaymentAndSubscriptionTest {
             s.setId(102L);
             return s;
         });
-        when(pRepo.save(any(Payment.class))).thenAnswer(inv -> {
+        when(pRepo.findByIdWithLock(anyLong())).thenAnswer(i -> { Payment pm = new Payment(); pm.setStatus("PENDING"); return java.util.Optional.of(pm); }); when(pRepo.save(any(Payment.class))).thenAnswer(inv -> {
             Payment p = inv.getArgument(0);
             p.setId(202L);
             return p;
         });
 
-        Payment payment = subService.processSuccessfulPayment(1L, BigDecimal.valueOf(350), "ord_sub_3", "pay_renewal_3", 30);
+        Payment payment = subService.processSuccessfulPayment(1L, new com.cakeplatform.api.modules.subscription.SubscriptionPlan() {{ setPrice(java.math.BigDecimal.valueOf(350)); setDurationDays(30); }}, "ord_sub_3", "pay_renewal_3", new com.cakeplatform.api.modules.payment.Payment() {{ setId(100L); }});
 
         assertNotNull(payment);
-        verify(ssMgr, never()).activateShop(anyLong(), anyLong());
-        assertEquals(ShopStatus.INACTIVE, unverifiedShop.getStatus(),
-                "Unverified shop must not become ACTIVE upon subscription payment");
+        // Authoritative CakeStore V1 Rule: Payment success activates shop to ACTIVE
+        verify(ssMgr).activateShop(14L, 1L);
+        assertEquals(VerificationStatus.PROCESSING, unverifiedShop.getVerificationStatus(),
+                "Verification status must remain PROCESSING until admin explicitly approves");
     }
 
     // =========================================================================

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { 
@@ -36,7 +36,7 @@ export default function AdminShopDetailPage() {
   const [mutating, setMutating] = useState(false);
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
 
-  const fetchDetails = async (isManual = false) => {
+  const fetchDetails = useCallback(async (isManual = false) => {
     if (!shopId) return;
     if (isManual) setRefreshing(true);
     else setLoading(true);
@@ -52,11 +52,11 @@ export default function AdminShopDetailPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [shopId]);
 
   useEffect(() => {
     fetchDetails();
-  }, [shopId]);
+  }, [shopId, fetchDetails]);
 
   const handleUpdateStatus = async (newStatus: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE') => {
     if (!shopId) return;

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ShoppingBag,
   CheckCircle2,
@@ -24,6 +25,7 @@ import { Order } from '@/types/order';
 import { useCart } from '@/context/CartContext';
 import { ordersApi } from '@/lib/api/orders';
 import { deliverySlotsApi } from '@/lib/api/deliverySlots';
+import { storefrontApi } from '@/lib/api/storefront';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -31,16 +33,20 @@ import { Textarea } from '@/components/ui/Textarea';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/common/Toast';
 import { paymentsService } from '@/lib/services/payments';
+import { ShopDeliveryConfig } from '@/types/shop';
 
 interface StorefrontCheckoutTabProps {
   shop: Shop;
   onNavigateTab: (tab: any) => void;
 }
 
+const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80';
+
 export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
   shop,
   onNavigateTab,
 }) => {
+  const router = useRouter();
   const { items, totalPrice, clearCart, appliedCoupon } = useCart();
   const toast = useToast();
 
@@ -58,6 +64,10 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  // Always fetch the latest delivery config fresh from the API when checkout loads
+  const [liveDeliveryConfig, setLiveDeliveryConfig] = useState<ShopDeliveryConfig | null>(
+    shop.deliveryConfig || null
+  );
 
   useEffect(() => {
     if (shop?.id) {
@@ -68,7 +78,39 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
     }
   }, [shop?.id, deliveryDate]);
 
-  const deliveryCharge = items.length > 0 ? 50 : 0;
+  // Fetch fresh delivery config every time checkout tab is shown
+  useEffect(() => {
+    if (shop?.id) {
+      storefrontApi.getShopById(shop.id)
+        .then((freshShop) => {
+          if (freshShop?.deliveryConfig) {
+            setLiveDeliveryConfig(freshShop.deliveryConfig);
+          }
+        })
+        .catch(() => {/* keep existing config on error */});
+    }
+  }, [shop?.id]);
+
+  // Dynamic delivery charge calculation based on live deliveryConfig
+  const deliveryConfig = liveDeliveryConfig;
+  let deliveryCharge = 0;
+  if (items.length > 0) {
+    if (deliveryConfig?.deliveryChargeType === 'FIXED') {
+      const fixedAmount = Number(deliveryConfig.fixedChargeAmount) || 0;
+      const minFree = deliveryConfig.minOrderForFreeDelivery;
+      if (minFree && minFree > 0 && totalPrice >= minFree) {
+        deliveryCharge = 0;
+      } else {
+        deliveryCharge = fixedAmount;
+      }
+    } else if (deliveryConfig?.deliveryChargeType === 'FREE') {
+      deliveryCharge = 0;
+    } else {
+      // Default fallback if no config set
+      deliveryCharge = 0;
+    }
+  }
+
   const discountAmount = appliedCoupon ? appliedCoupon.discountAmount : 0;
   const finalTotal = Math.max(0, totalPrice - discountAmount + deliveryCharge);
 
@@ -130,6 +172,9 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
           productId: i.productId,
           quantity: i.quantity,
           customMessage: i.customMessage,
+          variantId: i.variantId,
+          dietaryPreference: i.dietaryPreference || (i.isEggless ? 'EGGLESS' : 'REGULAR'),
+          cakeMessage: i.customMessage,
         })),
       });
 
@@ -290,9 +335,17 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
       <div className="flex items-center justify-between pb-4 border-b border-brand-border/60">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => onNavigateTab('shop')}
-            className="p-2 -ml-2 rounded-full text-brand-muted hover:text-brand-espresso hover:bg-brand-cream transition-colors"
-            title="Back to menu"
+            onClick={() => {
+              if (items.length === 1 && items[0].productId) {
+                router.push(`/shop/${shop.id}/product/${items[0].productId}`);
+              } else if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back();
+              } else {
+                onNavigateTab('shop');
+              }
+            }}
+            className="p-2 -ml-2 rounded-full text-brand-muted hover:text-brand-espresso hover:bg-brand-cream transition-colors cursor-pointer"
+            title="Back to product"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -365,7 +418,7 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
             <Input
               label="Delivery Street Address"
               required
-              placeholder="Flat 302, Green Valley Apartments, Akurdi"
+              placeholder="e.g. Flat 302, Green Valley Apartments, MG Road"
               value={deliveryAddress}
               onChange={(e) => setDeliveryAddress(e.target.value)}
             />
@@ -476,18 +529,33 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
             </div>
 
             {/* Items List */}
-            <div className="max-h-56 overflow-y-auto divide-y divide-brand-border/40 space-y-3 pr-1 text-xs">
+            <div className="max-h-60 overflow-y-auto divide-y divide-brand-border/40 space-y-3 pr-1 text-xs">
               {items.map((i) => (
-                <div key={i.productId} className="pt-2.5 first:pt-0 flex justify-between items-start gap-3">
-                  <div>
-                    <span className="font-bold text-brand-espresso block">
-                      {i.name} &times; {i.quantity}
-                    </span>
-                    {i.customMessage && (
-                      <span className="block text-[11px] text-brand-plum italic mt-0.5">
-                        &quot;{i.customMessage}&quot;
+                <div key={i.productId} className="pt-2.5 first:pt-0 flex justify-between items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-brand-cream shrink-0 border border-brand-border/60">
+                      <img
+                        src={i.imageUrl || FALLBACK_CAKE}
+                        alt={i.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = FALLBACK_CAKE;
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="font-bold text-brand-espresso block truncate">
+                        {i.name} &times; {i.quantity}
                       </span>
-                    )}
+                      <span className="text-[11px] text-brand-muted block">
+                        {i.isEggless ? '🌱 Eggless' : 'Contains Egg'}
+                      </span>
+                      {i.customMessage && (
+                        <span className="block text-[11px] text-brand-plum italic truncate">
+                          Plaque: &quot;{i.customMessage}&quot;
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span className="font-serif font-bold text-brand-espresso shrink-0">
                     ₹{i.price * i.quantity}
@@ -512,7 +580,13 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
 
               <div className="flex items-center justify-between text-brand-muted">
                 <span>Delivery Charge:</span>
-                <span className="font-medium text-brand-espresso">₹{deliveryCharge}</span>
+                <span className="font-medium text-brand-espresso">
+                  {deliveryCharge === 0 ? (
+                    <span className="text-emerald-700 font-semibold">FREE</span>
+                  ) : (
+                    `₹${deliveryCharge}`
+                  )}
+                </span>
               </div>
 
               <div className="pt-2.5 border-t border-brand-border/60 flex items-baseline justify-between font-bold text-sm">

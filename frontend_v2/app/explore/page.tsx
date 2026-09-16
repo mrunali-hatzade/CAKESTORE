@@ -16,6 +16,14 @@ function ExploreContent() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get('search') || '';
   const initialLocation = searchParams.get('location') || '';
+  const initialCity = searchParams.get('city') || '';
+  const initialState = searchParams.get('state') || '';
+  const initialDistrict = searchParams.get('district') || '';
+  const initialArea = searchParams.get('area') || '';
+  const initialPincode = searchParams.get('pincode') || '';
+  const initialLat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : undefined;
+  const initialLng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : undefined;
+  const initialRadius = searchParams.get('radius') ? parseFloat(searchParams.get('radius')!) : 10;
   const initialType = searchParams.get('businessType') || undefined;
 
   const [shops, setShops] = useState<Shop[]>([]);
@@ -25,8 +33,19 @@ function ExploreContent() {
   const [activeCategory, setActiveCategory] = useState<string>(initialType || 'ALL');
   const [activeBusinessType, setActiveBusinessType] = useState<string | undefined>(initialType);
   const [searchQuery, setSearchQuery] = useState<string>(initialSearch);
-  const [locationQuery, setLocationQuery] = useState<string>(initialLocation);
-  const [locationFilters, setLocationFilters] = useState<Partial<LocationFilterValues>>({});
+  const [locationQuery, setLocationQuery] = useState<string>(initialLocation || initialCity);
+  const [locationFilters, setLocationFilters] = useState<Partial<LocationFilterValues>>({
+    state: initialState || undefined,
+    district: initialDistrict || undefined,
+    city: initialCity || undefined,
+    area: initialArea || undefined,
+    pincode: initialPincode || undefined,
+  });
+  const [geoParams, setGeoParams] = useState<{ latitude?: number; longitude?: number; radiusKm?: number }>(
+    initialLat && initialLng
+      ? { latitude: initialLat, longitude: initialLng, radiusKm: initialRadius }
+      : {}
+  );
 
   const fetchShops = useCallback(async () => {
     setIsLoading(true);
@@ -39,6 +58,10 @@ function ExploreContent() {
         district: locationFilters.district,
         city: locationFilters.city,
         area: locationFilters.area,
+        pincode: locationFilters.pincode,
+        latitude: geoParams.latitude,
+        longitude: geoParams.longitude,
+        radiusKm: geoParams.radiusKm,
         businessType: activeBusinessType,
       });
       setShops(data || []);
@@ -47,43 +70,77 @@ function ExploreContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, locationQuery, locationFilters, activeBusinessType]);
+  }, [searchQuery, locationQuery, locationFilters, geoParams, activeBusinessType]);
 
   useEffect(() => {
     fetchShops();
   }, [fetchShops]);
 
-  const handleSearch = (params: { search: string; location: string }) => {
+  const handleSearch = useCallback((params: {
+    search: string;
+    location: string;
+    latitude?: number;
+    longitude?: number;
+    radiusKm?: number;
+  }) => {
     setSearchQuery(params.search);
     setLocationQuery(params.location);
-    setLocationFilters({});
-  };
+    if (params.latitude && params.longitude) {
+      setGeoParams({
+        latitude: params.latitude,
+        longitude: params.longitude,
+        radiusKm: params.radiusKm || 10,
+      });
+      setLocationFilters({});
+    } else {
+      setGeoParams({});
+      setLocationFilters({});
+    }
+  }, []);
 
-  const handleSelectCategory = (category: CategoryOption) => {
+  const handleSelectCategory = useCallback((category: CategoryOption) => {
     setActiveCategory(category.id);
     setActiveBusinessType(category.businessType);
-  };
+  }, []);
 
-  const handleLocationFilterChange = (filters: LocationFilterValues) => {
-    setLocationFilters({
-      state: filters.state,
-      district: filters.district,
-      city: filters.city,
-      area: filters.area,
-    });
-    setLocationQuery(filters.label === 'All Locations' ? '' : filters.label);
-  };
+  const handleLocationFilterChange = useCallback((filters: LocationFilterValues) => {
+    if (filters.mode === 'NEARBY' && filters.latitude && filters.longitude) {
+      setGeoParams({
+        latitude: filters.latitude,
+        longitude: filters.longitude,
+        radiusKm: filters.radiusKm || 10,
+      });
+      setLocationFilters({});
+      setLocationQuery(filters.label);
+    } else {
+      setGeoParams({});
+      setLocationFilters({
+        state: filters.state,
+        district: filters.district,
+        city: filters.city,
+        area: filters.area,
+        pincode: filters.pincode,
+      });
+      setLocationQuery(filters.label === 'All Locations' ? '' : filters.label);
+    }
+  }, []);
 
-  const handleClearFilters = () => {
+  const handleClearFilters = useCallback(() => {
     setActiveCategory('ALL');
     setActiveBusinessType(undefined);
     setSearchQuery('');
     setLocationQuery('');
+    setGeoParams({});
     setLocationFilters({});
-  };
+  }, []);
 
   const getTitle = () => {
-    const locPrefix = locationQuery ? `in ${locationQuery}` : 'Across India';
+    const isNearby = geoParams.latitude != null || locationQuery.toLowerCase().includes('near') || locationQuery.toLowerCase().includes('within');
+    const locPrefix = isNearby
+      ? 'Near You'
+      : locationQuery
+      ? `in ${locationQuery}`
+      : 'Across India';
     if (activeCategory !== 'ALL') {
       return `${activeCategory.replace(/_/g, ' ')} Bakeries ${locPrefix}`;
     }

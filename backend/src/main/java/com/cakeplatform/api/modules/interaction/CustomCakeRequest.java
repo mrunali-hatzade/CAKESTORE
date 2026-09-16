@@ -63,6 +63,9 @@ public class CustomCakeRequest {
     @Column(name = "owner_response", columnDefinition = "TEXT")
     private String ownerResponse;
 
+    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    private java.util.List<CustomCakeRequestFieldValue> fieldValues = new java.util.ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -31,7 +31,7 @@ Content-Type: application/json
     "name": "Chocolate Truffle Cake",
     "description": "Rich and dense chocolate cake with a truffle glaze.",
     "price": 25.99,
-    "imageUrl": "https://example.com/choco-truffle.jpg",
+    "imageUrl": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80",
     "availability": true,
     "variants": [
         {
@@ -67,7 +67,7 @@ Content-Type: application/json
     "name": "Strawberry Shortcake",
     "description": "Light sponge cake with fresh strawberries and whipped cream.",
     "price": 19.50,
-    "imageUrl": "https://example.com/strawberry.jpg",
+    "imageUrl": "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=800&q=80",
     "availability": true
 }
 
@@ -84,7 +84,7 @@ Content-Type: application/json
     "name": "Chocolate Truffle Cake (Premium)",
     "description": "Updated description with extra truffle.",
     "price": 29.99,
-    "imageUrl": "https://example.com/choco-truffle-premium.jpg",
+    "imageUrl": "https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?auto=format&fit=crop&w=800&q=80",
     "availability": false
 }
 

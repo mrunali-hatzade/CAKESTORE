@@ -108,15 +108,40 @@ public class OwnerPaymentController {
             @RequestBody Map<String, Object> payload) {
         Shop shop = shopAccessValidator.getShopByOwnerId(userDetails.getId());
 
-        String billingCycle = (String) payload.getOrDefault("billingCycle", "monthly");
-        BigDecimal amount = "yearly".equalsIgnoreCase(billingCycle)
-                ? BigDecimal.valueOf(3500.00)
-                : BigDecimal.valueOf(350.00);
-        int durationDays = "yearly".equalsIgnoreCase(billingCycle) ? 365 : 30;
+        Number planIdNum = (Number) payload.get("planId");
+        if (planIdNum == null) {
+            throw new IllegalArgumentException("planId is required");
+        }
 
-        String orderId = "order_sub_" + UUID.randomUUID().toString().substring(0, 10);
+        SubscriptionPlan plan = subscriptionPlanRepository.findById(planIdNum.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid subscription plan"));
+
+        if (!plan.getIsActive()) {
+            throw new IllegalStateException("Selected subscription plan is no longer active");
+        }
+
+        BigDecimal amount = plan.getPrice();
+        int durationDays = plan.getDurationDays();
+
+        // Create local Payment record in PENDING state
+        Payment payment = new Payment();
+        payment.setShop(shop);
+        payment.setPlan(plan);
+        payment.setAmount(amount);
+        payment.setCurrency("INR");
+        payment.setProvider("RAZORPAY");
+        payment.setStatus("PENDING");
+        payment = paymentRepository.save(payment);
+
+        String receiptId = "sub_rcpt_" + payment.getId();
+        String orderId = razorpayService.createSubscriptionOrder(amount, plan.getId(), shop.getId(), receiptId);
+        
+        // Save the razorpay order id back to payment
+        payment.setProviderOrderId(orderId);
+        paymentRepository.save(payment);
 
         return ResponseEntity.ok(Map.of(
+                "paymentId", payment.getId(),
                 "razorpayOrderId", orderId,
                 "amount", amount,
                 "amountPaise", amount.multiply(BigDecimal.valueOf(100)).longValue(),
@@ -133,36 +158,74 @@ public class OwnerPaymentController {
     @PostMapping("/verify-subscription")
     public ResponseEntity<Map<String, Object>> verifySubscriptionPayment(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestBody Map<String, String> payload) {
-        String razorpayOrderId = payload.get("razorpayOrderId");
-        String razorpayPaymentId = payload.get("razorpayPaymentId");
-        String razorpaySignature = payload.get("razorpaySignature");
-        String billingCycle = payload.getOrDefault("billingCycle", "monthly");
+            @RequestBody Map<String, Object> payload) {
+        String razorpayOrderId = (String) payload.get("razorpayOrderId");
+        String razorpayPaymentId = (String) payload.get("razorpayPaymentId");
+        String razorpaySignature = (String) payload.get("razorpaySignature");
+        
+        Number planIdNum = (Number) payload.get("planId");
+        if (planIdNum == null) {
+            throw new IllegalArgumentException("planId is required for verification");
+        }
+
+        SubscriptionPlan plan = subscriptionPlanRepository.findById(planIdNum.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid subscription plan"));
+
+        if (!plan.getIsActive()) {
+            throw new IllegalStateException("Selected subscription plan is no longer active");
+        }
 
         if (razorpayOrderId == null || razorpayPaymentId == null || razorpaySignature == null) {
             throw new IllegalArgumentException("Missing required payment verification parameters");
         }
 
-        // Signature verification (unless in test mock mode where placeholder credentials are active)
-        if (razorpayService.isConfigured()) {
+        // Signature verification
+        if (!razorpayService.isConfigured()) {
+            throw new IllegalArgumentException("Razorpay is not configured for production use.");
+        } else {
             boolean valid = razorpayService.verifyPaymentSignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
             if (!valid) {
                 log.warn("Subscription payment signature verification failed for user {}", userDetails.getId());
                 throw new IllegalArgumentException("Payment verification failed. Invalid signature.");
             }
+            // Double check that Razorpay recorded the expected amount and currency
+            razorpayService.verifyOrderDetails(razorpayOrderId, plan.getPrice(), "INR");
         }
 
-        BigDecimal authoritativeAmount = "yearly".equalsIgnoreCase(billingCycle)
-                ? BigDecimal.valueOf(3500.00)
-                : BigDecimal.valueOf(350.00);
-        int durationDays = "yearly".equalsIgnoreCase(billingCycle) ? 365 : 30;
+        Shop shop = shopAccessValidator.getShopByOwnerId(userDetails.getId());
+        Payment payment = paymentRepository.findByProviderOrderId(razorpayOrderId)
+                .orElseThrow(() -> new IllegalArgumentException("Payment order not found"));
 
-        Payment payment = subscriptionService.processSuccessfulPayment(
+        if (!payment.getShop().getId().equals(shop.getId())) {
+            throw new IllegalArgumentException("Payment does not belong to this shop");
+        }
+
+        if ("COMPLETED".equals(payment.getStatus())) {
+            return ResponseEntity.ok(Map.of(
+                    "status", "SUCCESS",
+                    "message", "Payment already verified",
+                    "paymentId", payment.getId()
+            ));
+        }
+
+        if (!"PENDING".equals(payment.getStatus())) {
+            throw new IllegalStateException("Payment is not in a pending state");
+        }
+
+        if (payment.getPlan() == null || !payment.getPlan().getId().equals(plan.getId())) {
+            throw new IllegalArgumentException("Payment plan mismatch. Security check failed.");
+        }
+
+        if (payment.getAmount().compareTo(plan.getPrice()) != 0) {
+            throw new IllegalArgumentException("Payment amount mismatch. Security check failed.");
+        }
+
+        payment = subscriptionService.processSuccessfulPayment(
                 userDetails.getId(),
-                authoritativeAmount,
+                plan,
                 razorpayOrderId,
                 razorpayPaymentId,
-                durationDays
+                payment
         );
 
         return ResponseEntity.ok(Map.of(
@@ -181,21 +244,39 @@ public class OwnerPaymentController {
     public ResponseEntity<?> processMockCheckout(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestBody Map<String, Object> payload) {
-        String billingCycle = (String) payload.getOrDefault("billingCycle", "monthly");
-        BigDecimal amount = "yearly".equalsIgnoreCase(billingCycle)
-                ? BigDecimal.valueOf(3500.00)
-                : BigDecimal.valueOf(350.00);
-        int durationDays = "yearly".equalsIgnoreCase(billingCycle) ? 365 : 30;
+        
+        Number planIdNum = (Number) payload.get("planId");
+        if (planIdNum == null) {
+            throw new IllegalArgumentException("planId is required for mock checkout");
+        }
+
+        SubscriptionPlan plan = subscriptionPlanRepository.findById(planIdNum.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid subscription plan"));
+
+        if (!plan.getIsActive()) {
+            throw new IllegalStateException("Selected subscription plan is no longer active");
+        }
 
         String mockOrderId = "order_mock_" + UUID.randomUUID().toString().substring(0, 8);
         String mockPaymentId = "pay_mock_" + UUID.randomUUID().toString().substring(0, 8);
 
-        Payment payment = subscriptionService.processSuccessfulPayment(
+        Shop shop = shopAccessValidator.getShopByOwnerId(userDetails.getId());
+        Payment payment = new Payment();
+        payment.setShop(shop);
+        payment.setPlan(plan);
+        payment.setAmount(plan.getPrice());
+        payment.setCurrency("INR");
+        payment.setProvider("MOCK");
+        payment.setProviderOrderId(mockOrderId);
+        payment.setStatus("PENDING");
+        payment = paymentRepository.save(payment);
+
+        payment = subscriptionService.processSuccessfulPayment(
                 userDetails.getId(),
-                amount,
+                plan,
                 mockOrderId,
                 mockPaymentId,
-                durationDays
+                payment
         );
 
         return ResponseEntity.ok(Map.of(

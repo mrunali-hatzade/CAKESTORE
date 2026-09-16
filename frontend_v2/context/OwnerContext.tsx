@@ -51,6 +51,34 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
     }
   }, [authLoading, isAuthenticated, fetchShop]);
 
+  const lastFocusRefreshRef = useRef<number>(0);
+
+  // Throttled window focus / visibility listener: refreshes active page and shop without duplicate calls or loops
+  useEffect(() => {
+    if (!isAuthenticated || authLoading) return;
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      // Throttle to at most once every 30 seconds
+      if (now - lastFocusRefreshRef.current < 30000) return;
+      lastFocusRefreshRef.current = now;
+
+      fetchShop().catch(() => {});
+      if (refreshHandlerRef.current) {
+        refreshHandlerRef.current().catch(() => {});
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [isAuthenticated, authLoading, fetchShop]);
+
   const updateShop = useCallback((newShop: ShopSettings) => {
     setShop(newShop);
   }, []);

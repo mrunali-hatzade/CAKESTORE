@@ -44,7 +44,7 @@ public class SecurityConfig {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
-                .headers(headers -> headers
+                .headers(headers -> headers.httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
                         .contentTypeOptions(Customizer.withDefaults())
                         .frameOptions(frame -> frame.sameOrigin())
                         .referrerPolicy(referrer -> referrer.policy(
@@ -54,8 +54,10 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/health").permitAll()
+                        .requestMatchers("/api/health", "/actuator/health").permitAll()
                         .requestMatchers("/api/storefront/**").permitAll()
+                        .requestMatchers("/api/customer/storefront/**").permitAll()
+                        .requestMatchers("/api/locations/**").permitAll()
                         .requestMatchers("/api/webhooks/**").permitAll()
                         .requestMatchers("/api/contact/enquiries").permitAll()
                         .requestMatchers("/uploads/**").permitAll()   // static media — no JWT needed

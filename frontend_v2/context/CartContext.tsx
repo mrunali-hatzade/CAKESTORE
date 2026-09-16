@@ -12,6 +12,10 @@ export interface CartItem {
   customMessage?: string;
   shopId: number;
   shopName: string;
+  variantId?: number;
+  variantName?: string;
+  weight?: string | number;
+  dietaryPreference?: string;
 }
 
 export interface AppliedCouponInfo {

@@ -613,7 +613,7 @@ public class PhaseGCommunicationTest {
         org.springframework.security.crypto.password.PasswordEncoder encoder = mock(org.springframework.security.crypto.password.PasswordEncoder.class);
         com.cakeplatform.api.security.JwtService jwtService = mock(com.cakeplatform.api.security.JwtService.class);
         org.springframework.security.authentication.AuthenticationManager authMgr = mock(org.springframework.security.authentication.AuthenticationManager.class);
-        com.cakeplatform.api.modules.media.MediaUploadService mediaService = mock(com.cakeplatform.api.modules.media.MediaUploadService.class);
+        com.cakeplatform.api.modules.media.LocalMediaUploadServiceImpl mediaService = mock(com.cakeplatform.api.modules.media.LocalMediaUploadServiceImpl.class);
         com.cakeplatform.api.modules.shop.BusinessDocumentRepository docRepo = mock(com.cakeplatform.api.modules.shop.BusinessDocumentRepository.class);
         AdminNotificationService mockAdminNotifService = mock(AdminNotificationService.class);
 
@@ -751,11 +751,9 @@ public class PhaseGCommunicationTest {
         AdminNotificationService mockAdminNotifService = mock(AdminNotificationService.class);
 
         com.cakeplatform.api.modules.order.controller.WebhookController webhookCtrl =
-                new com.cakeplatform.api.modules.order.controller.WebhookController(
-                        orderRepo, payRepo, subService, shopRepository, rzpService, notifService, mockAdminNotifService, actLogger
-                );
+                new com.cakeplatform.api.modules.order.controller.WebhookController(orderRepo, payRepo, subService, shopRepository, rzpService, notifService, org.mockito.Mockito.mock(com.cakeplatform.api.modules.subscription.SubscriptionPlanRepository.class), mockAdminNotifService, actLogger, org.mockito.Mockito.mock(com.cakeplatform.api.modules.payment.WebhookEventRepository.class));
 
-        when(rzpService.verifyWebhookSignature(any(), any())).thenReturn(true);
+        when(rzpService.getWebhookSecret()).thenReturn("valid_secret"); when(rzpService.verifyWebhookSignature(any(), any())).thenReturn(true);
 
         com.cakeplatform.api.modules.order.Order order = new com.cakeplatform.api.modules.order.Order();
         order.setId(500L);
@@ -782,7 +780,7 @@ public class PhaseGCommunicationTest {
                 }
                 """;
 
-        webhookCtrl.handleRazorpayWebhook("valid_signature", rawPayload);
+        webhookCtrl.handleRazorpayWebhook("valid_signature", "evt_mock_id", rawPayload);
 
         verify(mockAdminNotifService).dispatchAdminNotification(
                 eq(AdminNotificationType.PAYMENT_RECEIVED),
@@ -808,11 +806,9 @@ public class PhaseGCommunicationTest {
         AdminNotificationService mockAdminNotifService = mock(AdminNotificationService.class);
 
         com.cakeplatform.api.modules.order.controller.WebhookController webhookCtrl =
-                new com.cakeplatform.api.modules.order.controller.WebhookController(
-                        orderRepo, payRepo, subService, shopRepository, rzpService, notifService, mockAdminNotifService, actLogger
-                );
+                new com.cakeplatform.api.modules.order.controller.WebhookController(orderRepo, payRepo, subService, shopRepository, rzpService, notifService, org.mockito.Mockito.mock(com.cakeplatform.api.modules.subscription.SubscriptionPlanRepository.class), mockAdminNotifService, actLogger, org.mockito.Mockito.mock(com.cakeplatform.api.modules.payment.WebhookEventRepository.class));
 
-        when(rzpService.verifyWebhookSignature(any(), any())).thenReturn(true);
+        when(rzpService.getWebhookSecret()).thenReturn("valid_secret"); when(rzpService.verifyWebhookSignature(any(), any())).thenReturn(true);
 
         String rawPayload = """
                 {
@@ -828,7 +824,7 @@ public class PhaseGCommunicationTest {
                 }
                 """;
 
-        webhookCtrl.handleRazorpayWebhook("valid_sig", rawPayload);
+        webhookCtrl.handleRazorpayWebhook("valid_sig", "evt_mock_id", rawPayload);
 
         verify(mockAdminNotifService).dispatchAdminNotification(
                 eq(AdminNotificationType.PAYMENT_FAILED),
@@ -956,7 +952,18 @@ public class PhaseGCommunicationTest {
             return s;
         });
 
-        subService.processSuccessfulPayment(10L, java.math.BigDecimal.valueOf(350), "ord_sub_1", "pay_renew_77", 30);
+        com.cakeplatform.api.modules.subscription.SubscriptionPlan dummyPlan = new com.cakeplatform.api.modules.subscription.SubscriptionPlan();
+        dummyPlan.setId(1L);
+        dummyPlan.setPrice(java.math.BigDecimal.valueOf(350));
+        dummyPlan.setDurationDays(30);
+
+        com.cakeplatform.api.modules.payment.Payment dummyPayment = new com.cakeplatform.api.modules.payment.Payment();
+        dummyPayment.setId(888L);
+        dummyPayment.setStatus("PENDING");
+
+        when(payRepo.findByIdWithLock(888L)).thenReturn(java.util.Optional.of(dummyPayment));
+
+        subService.processSuccessfulPayment(10L, dummyPlan, "ord_sub_1", "pay_renew_77", dummyPayment);
 
         verify(mockAdminNotifService).dispatchAdminNotification(
                 eq(AdminNotificationType.SUBSCRIPTION_RENEWED),
@@ -1025,7 +1032,7 @@ public class PhaseGCommunicationTest {
         NotificationRepository notifRepo = mock(NotificationRepository.class);
         com.cakeplatform.api.modules.payment.PaymentRepository payRepo = mock(com.cakeplatform.api.modules.payment.PaymentRepository.class);
         com.cakeplatform.api.modules.subscription.SubscriptionRepository subRepo = mock(com.cakeplatform.api.modules.subscription.SubscriptionRepository.class);
-        com.cakeplatform.api.modules.media.MediaUploadService mediaService = mock(com.cakeplatform.api.modules.media.MediaUploadService.class);
+        com.cakeplatform.api.modules.media.LocalMediaUploadServiceImpl mediaService = mock(com.cakeplatform.api.modules.media.LocalMediaUploadServiceImpl.class);
         com.cakeplatform.api.modules.audit.ActivityLoggerService actLogger = mock(com.cakeplatform.api.modules.audit.ActivityLoggerService.class);
         org.springframework.security.crypto.password.PasswordEncoder encoder = mock(org.springframework.security.crypto.password.PasswordEncoder.class);
 

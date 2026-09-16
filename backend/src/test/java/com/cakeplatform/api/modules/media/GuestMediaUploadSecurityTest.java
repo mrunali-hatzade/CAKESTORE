@@ -43,7 +43,7 @@ import static org.mockito.Mockito.*;
 public class GuestMediaUploadSecurityTest {
 
     @Mock
-    private MediaUploadService mediaUploadService;
+    private StorageService storageService;
 
     @Mock
     private ShopRepository shopRepository;
@@ -68,8 +68,8 @@ public class GuestMediaUploadSecurityTest {
 
     @BeforeEach
     void setUp() {
-        customerMediaController = new CustomerMediaController(mediaUploadService);
-        ownerMediaController = new MediaController(mediaUploadService);
+        customerMediaController = new CustomerMediaController(storageService);
+        ownerMediaController = new MediaController(storageService);
         interactionService = new InteractionService(null, null, customCakeRequestRepository, shopRepository, notificationService);
         ownerInteractionService = new OwnerInteractionService(null, null, customCakeRequestRepository, shopAccessValidator);
 
@@ -96,7 +96,7 @@ public class GuestMediaUploadSecurityTest {
         byte[] jpegBytes = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10, 0x4A, 0x46};
         MockMultipartFile file = new MockMultipartFile("file", "cake-photo.jpg", "image/jpeg", jpegBytes);
 
-        when(mediaUploadService.storeFile(any(), eq("custom-cake-references")))
+        when(storageService.storeFile(any(), eq("custom-cake-references")))
                 .thenReturn("http://localhost:8080/uploads/custom-cake-references/uuid-12345.jpg");
 
         ResponseEntity<Map<String, String>> response = customerMediaController.uploadReferenceImage(file);
@@ -113,7 +113,7 @@ public class GuestMediaUploadSecurityTest {
         byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
         MockMultipartFile file = new MockMultipartFile("file", "sketch.png", "image/png", pngBytes);
 
-        when(mediaUploadService.storeFile(any(), eq("custom-cake-references")))
+        when(storageService.storeFile(any(), eq("custom-cake-references")))
                 .thenReturn("http://localhost:8080/uploads/custom-cake-references/uuid-png.png");
 
         ResponseEntity<Map<String, String>> response = customerMediaController.uploadReferenceImage(file);
@@ -131,7 +131,7 @@ public class GuestMediaUploadSecurityTest {
         };
         MockMultipartFile file = new MockMultipartFile("file", "modern.webp", "image/webp", webpBytes);
 
-        when(mediaUploadService.storeFile(any(), eq("custom-cake-references")))
+        when(storageService.storeFile(any(), eq("custom-cake-references")))
                 .thenReturn("http://localhost:8080/uploads/custom-cake-references/uuid-webp.webp");
 
         ResponseEntity<Map<String, String>> response = customerMediaController.uploadReferenceImage(file);
@@ -220,7 +220,7 @@ public class GuestMediaUploadSecurityTest {
         byte[] jpegBytes = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10};
         MockMultipartFile file = new MockMultipartFile("file", "../../etc/passwd.jpg", "image/jpeg", jpegBytes);
 
-        when(mediaUploadService.storeFile(any(), eq("custom-cake-references")))
+        when(storageService.storeFile(any(), eq("custom-cake-references")))
                 .thenReturn("http://localhost:8080/uploads/custom-cake-references/safe-uuid.jpg");
 
         ResponseEntity<Map<String, String>> response = customerMediaController.uploadReferenceImage(file);
@@ -329,7 +329,7 @@ public class GuestMediaUploadSecurityTest {
         byte[] jpegBytes = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
         MockMultipartFile file = new MockMultipartFile("file", "product.jpg", "image/jpeg", jpegBytes);
 
-        when(mediaUploadService.storeFile(any(), eq("products")))
+        when(storageService.storeFile(any(), eq("products")))
                 .thenReturn("http://localhost:8080/uploads/products/prod-123.jpg");
 
         ResponseEntity<Map<String, String>> response = ownerMediaController.uploadFile(file, "products");

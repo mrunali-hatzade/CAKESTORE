@@ -1,6 +1,6 @@
-﻿'use client';
+'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -18,14 +18,24 @@ import {
   Phone,
   Building2,
   FileCheck,
+  CreditCard,
+  AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
+import { ownerApi } from '@/lib/api/owner';
+import { paymentsService } from '@/lib/services/payments';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
+import CascadingLocationSelector from '@/components/owner/CascadingLocationSelector';
+import { CascadingLocationValues } from '@/types/location';
+
+import { plansApi, SubscriptionPlan } from '@/lib/api/plans';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -35,11 +45,44 @@ export default function OnboardingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Field-specific validation errors for Step 1
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Password visibility & confirmation
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Step 4 Payment states
+  const [isPaying, setIsPaying] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+
   // Step 1: Personal & Account
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [mobile, setMobile] = useState('');
+
+  // Password strength helper
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { label: 'Weak', score: 0, color: 'bg-neutral-200', text: 'text-neutral-500' };
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (pass.length >= 10) score += 1;
+    if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score += 1;
+    if (/\d/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+
+    if (score <= 2) return { label: 'Weak', score: 1, color: 'bg-red-500', text: 'text-red-600' };
+    if (score <= 4) return { label: 'Medium', score: 2, color: 'bg-amber-500', text: 'text-amber-600' };
+    return { label: 'Strong', score: 3, color: 'bg-emerald-500', text: 'text-emerald-600' };
+  };
 
   // Step 2: Bakery Identity
   const [businessName, setBusinessName] = useState('');
@@ -49,44 +92,175 @@ export default function OnboardingPage() {
 
   // Step 3: Location & License
   const [addressLine1, setAddressLine1] = useState('');
+  const [state, setState] = useState('');
+  const [district, setDistrict] = useState('');
   const [city, setCity] = useState('');
-  const [state, setState] = useState('Maharashtra');
+  const [area, setArea] = useState('');
   const [pincode, setPincode] = useState('');
   const [fssaiRegistration, setFssaiRegistration] = useState('');
+  const [locationErrors, setLocationErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (step === 4) {
+      setLoadingPlans(true);
+      plansApi.getActivePlans().then(data => {
+        setPlans(data);
+        if (data.length > 0) setSelectedPlanId(data[0].planId);
+      }).catch(err => console.error('Failed to load plans:', err))
+        .finally(() => setLoadingPlans(false));
+    }
+  }, [step]);
+
+  const handleLocationChange = (updated: Partial<CascadingLocationValues>) => {
+    if ('state' in updated) setState(updated.state || '');
+    if ('district' in updated) setDistrict(updated.district || '');
+    if ('city' in updated) setCity(updated.city || '');
+    if ('area' in updated) setArea(updated.area || '');
+    if ('pincode' in updated) setPincode(updated.pincode || '');
+    setLocationErrors((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(updated)) {
+        delete next[key];
+      }
+      return next;
+    });
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setEmailError(null);
+    setPhoneError(null);
+
+    // Canonical normalization before sending
+    const normalizedEmail = email.trim().toLowerCase();
+    const cleanMobile = mobile.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
+    const cleanBusinessPhone = (businessPhone || mobile).replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
 
     try {
       await authApi.register({
-        fullName,
-        email,
+        fullName: fullName.trim(),
+        email: normalizedEmail,
         password,
-        mobile,
-        businessName,
+        mobile: cleanMobile,
+        businessName: businessName.trim(),
         businessType,
         businessDescription,
-        businessPhone: businessPhone || mobile,
+        businessPhone: cleanBusinessPhone,
         addressLine1,
         city,
         state,
+        district: district || undefined,
+        area: area || undefined,
         pincode,
         fssaiRegistration,
       });
 
       // Direct auto-login with credentials
       try {
-        await login({ email, password });
+        await login({ email: normalizedEmail, password });
         setStep(4);
       } catch {
         router.push('/login');
       }
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please review your details.');
+      const respData = err?.response?.data || {};
+      const errorMessage = err?.message || err?.error || respData?.error || 'Registration failed. Please review your details.';
+      
+      const emailConflict = respData?.email || (errorMessage.toLowerCase().includes('email') ? 'This email is already registered. Please login or use another email.' : null);
+      const phoneConflict = respData?.mobile || respData?.phone || (errorMessage.toLowerCase().includes('phone') || errorMessage.toLowerCase().includes('mobile') ? 'This phone number is already registered. Please use another number.' : null);
+
+      if (emailConflict || phoneConflict) {
+        if (emailConflict) setEmailError(emailConflict);
+        if (phoneConflict) setPhoneError(phoneConflict);
+        setError(errorMessage);
+        setStep(1); // Return user to step 1 so they can resolve conflicting fields while keeping form data intact
+      } else {
+        const fieldErrors = respData?.fieldErrors || {};
+        if (Object.keys(fieldErrors).length > 0) {
+          setLocationErrors(fieldErrors);
+        }
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePaySubscription = async () => {
+    if (!selectedPlanId) return;
+    setIsPaying(true);
+    setPaymentError(null);
+    
+    const selectedPlan = plans.find(p => p.planId === selectedPlanId);
+
+    try {
+      const orderData = await ownerApi.initiateSubscriptionPayment(selectedPlanId);
+      const keyId = orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+
+      const isLoaded = await paymentsService.loadRazorpayScript();
+      if (!isLoaded && keyId && !keyId.includes('placeholder')) {
+        setPaymentError('Unable to load payment gateway. Please check your internet connection.');
+        setIsPaying(false);
+        return;
+      }
+
+      if (keyId && !keyId.includes('placeholder')) {
+        const rzpOptions = {
+          key: keyId,
+          amount: orderData.amountPaise,
+          currency: orderData.currency || 'INR',
+          name: 'CakeStore',
+          description: `Subscription for ${orderData.shopName || businessName || 'Bakery'}`,
+          prefill: {
+            name: fullName,
+            email: email,
+            contact: mobile || businessPhone || '',
+          },
+          theme: {
+            color: '#5C2434',
+          },
+          handler: async (response: any) => {
+            try {
+              await ownerApi.verifySubscriptionPayment({
+                razorpayOrderId: response.razorpay_order_id || orderData.razorpayOrderId,
+                razorpayPaymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
+                razorpaySignature: response.razorpay_signature || 'test_sig',
+                planId: selectedPlanId,
+              });
+              setPaymentSuccess(true);
+            } catch (err: any) {
+              setPaymentError(err?.message || 'Payment verification failed. Please try again.');
+            } finally {
+              setIsPaying(false);
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              setPaymentError('Payment was not completed. Please try again.');
+              setIsPaying(false);
+            },
+          },
+        };
+
+        const rzp = new (window as any).Razorpay(rzpOptions);
+        rzp.open();
+      } else {
+        // Sandbox simulation when test placeholder keys are active
+        const simulatedPaymentId = `pay_test_${Date.now()}`;
+        await ownerApi.verifySubscriptionPayment({
+          razorpayOrderId: orderData.razorpayOrderId,
+          razorpayPaymentId: simulatedPaymentId,
+          razorpaySignature: 'simulated_test_sig',
+          planId: selectedPlanId,
+        });
+        setPaymentSuccess(true);
+        setIsPaying(false);
+      }
+    } catch (err: any) {
+      setPaymentError(err?.message || 'Payment initiation failed. Please try again.');
+      setIsPaying(false);
     }
   };
 
@@ -94,6 +268,7 @@ export default function OnboardingPage() {
     { num: 1, label: 'Account', icon: User },
     { num: 2, label: 'Bakery Details', icon: Store },
     { num: 3, label: 'Location & FSSAI', icon: MapPin },
+    { num: 4, label: 'Subscription', icon: CreditCard },
   ];
 
   return (
@@ -130,7 +305,7 @@ export default function OnboardingPage() {
           <div className="text-center max-w-2xl mx-auto mb-8 space-y-3">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-blush border border-brand-blush-border text-brand-plum text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Start Your Free 14-Day Trial • 0% Commission</span>
+              <span>Create Your Bakery Store</span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-brand-espresso tracking-tight">
@@ -209,33 +384,123 @@ export default function OnboardingPage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                   />
-                  <Input
-                    label="Mobile Phone"
-                    required
-                    placeholder="9876543210"
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
-                  />
+                  <div>
+                    <Input
+                      label="Mobile Phone"
+                      required
+                      placeholder="9876543210"
+                      value={mobile}
+                      onChange={(e) => {
+                        setMobile(e.target.value);
+                        if (phoneError) setPhoneError(null);
+                      }}
+                      error={phoneError || undefined}
+                      helperText="10-digit Indian mobile number"
+                    />
+                  </div>
                 </div>
 
-                <Input
-                  label="Email Address (Login ID)"
-                  type="email"
-                  required
-                  placeholder="anita@bakes.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <div>
+                  <Input
+                    label="Email Address (Login ID)"
+                    type="email"
+                    required
+                    placeholder="anita@bakes.com"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (emailError) setEmailError(null);
+                    }}
+                    error={emailError || undefined}
+                  />
+                  {emailError && emailError.includes('already registered') && (
+                    <p className="text-xs text-brand-plum font-semibold mt-1">
+                      Already have an account?{' '}
+                      <Link href="/login" className="underline font-bold">
+                        Login instead &rarr;
+                      </Link>
+                    </p>
+                  )}
+                </div>
 
-                <Input
-                  label="Create Password (min 8 characters)"
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  helperText="Use a secure password to protect your kitchen orders and revenue."
-                />
+                {/* Password & Confirm Password */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="w-full space-y-1.5">
+                    <label className="block text-sm font-medium text-brand-espresso">
+                      Create Password <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (passwordError) setPasswordError(null);
+                        }}
+                        className={`w-full px-3.5 py-2.5 pr-10 bg-white rounded-xl border ${
+                          passwordError ? 'border-red-500' : 'border-brand-border'
+                        } text-brand-espresso placeholder:text-brand-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-colors`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-espresso transition-colors cursor-pointer"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Password Strength Indicator */}
+                    {password && (
+                      <div className="pt-1 space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-brand-muted">Strength:</span>
+                          <span className={`font-bold ${getPasswordStrength(password).text}`}>
+                            {getPasswordStrength(password).label}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden flex gap-1">
+                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(password).score >= 1 ? getPasswordStrength(password).color : 'bg-transparent'}`} />
+                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(password).score >= 2 ? getPasswordStrength(password).color : 'bg-transparent'}`} />
+                          <div className={`h-full flex-1 rounded-full ${getPasswordStrength(password).score >= 3 ? getPasswordStrength(password).color : 'bg-transparent'}`} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="w-full space-y-1.5">
+                    <label className="block text-sm font-medium text-brand-espresso">
+                      Confirm Password <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          if (passwordError) setPasswordError(null);
+                        }}
+                        className={`w-full px-3.5 py-2.5 pr-10 bg-white rounded-xl border ${
+                          passwordError ? 'border-red-500' : 'border-brand-border'
+                        } text-brand-espresso placeholder:text-brand-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-colors`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-espresso transition-colors cursor-pointer"
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {passwordError && <p className="text-xs text-red-600 font-medium -mt-2">{passwordError}</p>}
 
                 <div className="pt-4 flex justify-between items-center border-t border-brand-border/60">
                   <Link href="/login" className="text-xs font-semibold text-brand-plum hover:underline">
@@ -243,15 +508,41 @@ export default function OnboardingPage() {
                   </Link>
                   <Button
                     onClick={() => {
-                      if (!fullName || !email || !password || !mobile) {
+                      setEmailError(null);
+                      setPhoneError(null);
+                      setPasswordError(null);
+                      setError(null);
+
+                      if (!fullName || !email || !password || !confirmPassword || !mobile) {
                         setError('Please complete all required fields before continuing.');
                         return;
                       }
-                      if (password.length < 8) {
-                        setError('Password must be at least 8 characters long.');
+
+                      // Validate Email format
+                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+                        setEmailError('Please enter a valid email address.');
                         return;
                       }
-                      setError(null);
+
+                      // Validate Indian Phone format
+                      const cleanPhone = mobile.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
+                      if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+                        setPhoneError('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
+                        return;
+                      }
+
+                      // Validate Password Length
+                      if (password.length < 8) {
+                        setPasswordError('Password must be at least 8 characters long.');
+                        return;
+                      }
+
+                      // Validate Password Match
+                      if (password !== confirmPassword) {
+                        setPasswordError('Passwords do not match.');
+                        return;
+                      }
+
                       setStep(2);
                     }}
                     size="lg"
@@ -351,62 +642,20 @@ export default function OnboardingPage() {
                   onChange={(e) => setAddressLine1(e.target.value)}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="City"
-                    required
-                    placeholder="e.g. Mumbai, Pune, Bengaluru"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    list="onboarding-cities"
-                  />
-                  <Input
-                    label="State"
-                    required
-                    placeholder="e.g. Maharashtra, Karnataka"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    list="onboarding-states"
-                  />
-                </div>
+                <CascadingLocationSelector
+                  values={{ state, district, city, area, pincode }}
+                  onChange={handleLocationChange}
+                  fieldErrors={locationErrors}
+                  disabled={isLoading}
+                />
 
-                <datalist id="onboarding-cities">
-                  <option value="Mumbai" />
-                  <option value="Pune" />
-                  <option value="Bengaluru" />
-                  <option value="Delhi NCR" />
-                  <option value="Hyderabad" />
-                  <option value="Chennai" />
-                  <option value="Kolkata" />
-                  <option value="Ahmedabad" />
-                  <option value="Jaipur" />
-                </datalist>
-
-                <datalist id="onboarding-states">
-                  <option value="Maharashtra" />
-                  <option value="Karnataka" />
-                  <option value="Delhi NCR" />
-                  <option value="Telangana" />
-                  <option value="Tamil Nadu" />
-                  <option value="Gujarat" />
-                </datalist>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Pincode (6 digits)"
-                    required
-                    placeholder="400050"
-                    value={pincode}
-                    onChange={(e) => setPincode(e.target.value)}
-                  />
-                  <Input
-                    label="FSSAI Registration No. (Optional)"
-                    placeholder="11520000000000"
-                    value={fssaiRegistration}
-                    onChange={(e) => setFssaiRegistration(e.target.value)}
-                    helperText="Recommended to display verified trust badge."
-                  />
-                </div>
+                <Input
+                  label="FSSAI Registration No. (Optional)"
+                  placeholder="11520000000000"
+                  value={fssaiRegistration}
+                  onChange={(e) => setFssaiRegistration(e.target.value)}
+                  helperText="Recommended to display verified trust badge."
+                />
 
                 <div className="pt-4 flex justify-between items-center border-t border-brand-border/60">
                   <Button variant="ghost" type="button" onClick={() => setStep(2)}>
@@ -420,36 +669,133 @@ export default function OnboardingPage() {
               </form>
             )}
 
-            {/* STEP 4: Celebratory Live Screen */}
+            {/* STEP 4: Complete Subscription */}
             {step === 4 && (
               <div className="text-center py-8 space-y-6">
-                <div className="w-20 h-20 rounded-3xl bg-emerald-50 border-2 border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-soft">
-                  <Sparkles className="w-10 h-10" />
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-espresso">
-                    Your Bakery is Live! 🎉
-                  </h2>
-                  <p className="text-sm text-brand-muted max-w-md mx-auto leading-relaxed">
-                    Congratulations! <span className="font-semibold text-brand-espresso">{businessName || 'Your Bakery'}</span> is now registered on CakeStore. Your 14-day free trial has started.
-                  </p>
-                </div>
+                {!paymentSuccess ? (
+                  <>
+                    <div className="w-20 h-20 rounded-3xl bg-brand-blush/60 border-2 border-brand-plum/20 text-brand-plum flex items-center justify-center mx-auto shadow-soft">
+                      <CreditCard className="w-10 h-10" />
+                    </div>
 
-                <div className="p-4 rounded-2xl bg-brand-blush/60 border border-brand-blush-border max-w-md mx-auto text-left space-y-2 text-xs">
-                  <p className="font-bold text-brand-espresso">Next Recommended Steps:</p>
-                  <p className="text-brand-muted">1. Add your first signature cake to your digital menu</p>
-                  <p className="text-brand-muted">2. Set your daily delivery time windows</p>
-                  <p className="text-brand-muted">3. Share your custom storefront link with customers!</p>
-                </div>
+                    <div className="space-y-2">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold mb-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Registration Submitted Successfully</span>
+                      </div>
+                      <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-espresso">
+                        Activate Your Bakery
+                      </h2>
+                      <p className="text-sm text-brand-muted max-w-md mx-auto leading-relaxed">
+                        Complete your subscription to activate your bakery and start receiving customer orders.
+                      </p>
+                    </div>
 
-                <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
-                  <Link href="/dashboard/owner">
-                    <Button size="lg" className="w-full sm:w-auto font-bold shadow-soft">
-                      <span>Go to Owner Dashboard</span>
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </Link>
-                </div>
+                    {paymentError && (
+                      <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs text-left max-w-md mx-auto flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-semibold">{paymentError}</p>
+                          <p className="text-rose-600 mt-0.5">Please try again to activate your bakery.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loadingPlans ? (
+                      <div className="p-5 text-sm text-brand-muted">Loading subscription plans...</div>
+                    ) : plans.length === 0 ? (
+                      <div className="p-5 text-sm text-brand-muted">No subscription plans available.</div>
+                    ) : (
+                      <div className="max-w-md mx-auto space-y-4">
+                        {plans.map(plan => (
+                          <div 
+                            key={plan.planId}
+                            onClick={() => setSelectedPlanId(plan.planId)}
+                            className={`p-5 rounded-2xl border text-left space-y-3 shadow-2xs cursor-pointer transition-all ${
+                              selectedPlanId === plan.planId ? 'border-brand-plum bg-brand-blush/20 ring-1 ring-brand-plum' : 'border-brand-border/80 bg-white hover:border-brand-plum/50'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center pb-3 border-b border-brand-border/60">
+                              <div>
+                                <p className="font-bold text-brand-espresso">{plan.name}</p>
+                                <p className="text-xs text-brand-muted capitalize">{plan.billingCycle} billing cycle</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xl font-bold text-brand-plum font-serif">₹{plan.price}</p>
+                                <p className="text-[10px] text-brand-muted">/ {plan.billingCycle === 'monthly' ? 'month' : 'year'}</p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5 text-xs text-brand-muted">
+                              {(() => {
+                                let parsedFeatures: string[] = [];
+                                try {
+                                  parsedFeatures = JSON.parse(plan.features);
+                                } catch (e) {
+                                  // fallback if it's not a JSON string
+                                  parsedFeatures = [plan.description];
+                                }
+                                return parsedFeatures.map((feature, idx) => (
+                                  <div key={idx} className="flex items-start gap-2">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                                    <span>{feature}</span>
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
+                      <Button
+                        size="lg"
+                        className="w-full font-bold shadow-soft gap-2 text-sm"
+                        onClick={handlePaySubscription}
+                        isLoading={isPaying}
+                        disabled={!selectedPlanId || loadingPlans}
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>Pay {selectedPlanId ? `₹${plans.find(p => p.planId === selectedPlanId)?.price}` : ''}</span>
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-20 h-20 rounded-3xl bg-emerald-50 border-2 border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-soft">
+                      <Sparkles className="w-10 h-10" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-espresso">
+                        Payment Successful! 🎉
+                      </h2>
+                      <p className="text-sm font-semibold text-emerald-700">
+                        Your bakery is now active.
+                      </p>
+                      <p className="text-xs text-brand-muted max-w-md mx-auto leading-relaxed">
+                        Your bakery is available on CakeStore while our team completes verification. You can now configure your delivery slots, add signature cakes, and customize your storefront.
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-brand-blush/60 border border-brand-blush-border max-w-md mx-auto text-left space-y-2 text-xs">
+                      <p className="font-bold text-brand-espresso">Next Steps:</p>
+                      <p className="text-brand-muted">1. Configure your daily delivery slots & radius</p>
+                      <p className="text-brand-muted">2. Add your signature cakes & eggless options</p>
+                      <p className="text-brand-muted">3. Share your custom storefront link with customers!</p>
+                    </div>
+
+                    <div className="pt-2 flex justify-center">
+                      <Link href="/dashboard/owner">
+                        <Button size="lg" className="font-bold shadow-soft">
+                          <span>Continue to Owner Dashboard</span>
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </Card>
@@ -465,7 +811,7 @@ export default function OnboardingPage() {
           </div>
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>No credit card required for trial</span>
+            <span>Razorpay Test Mode checkout</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Store className="w-4 h-4 text-brand-plum" />
