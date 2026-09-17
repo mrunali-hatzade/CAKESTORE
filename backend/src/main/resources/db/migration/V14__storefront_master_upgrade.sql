@@ -224,16 +224,20 @@ SET about_story = 'Founded with a passion for European confectionery artistry, A
 WHERE id = 6;
 
 INSERT INTO shop_banners (shop_id, image_url, title, subtitle, button_text, button_url, display_order, is_active)
-SELECT 6, 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1600&q=80',
+SELECT s.id, 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1600&q=80',
        'Handcrafted Artisan Cakes', 'Pure butter, Belgian couverture chocolate, and bespoke designs baked fresh daily.',
        'Explore Menu', '?tab=shop', 1, TRUE
-WHERE NOT EXISTS (SELECT 1 FROM shop_banners WHERE shop_id = 6 AND display_order = 1);
+FROM shops s
+WHERE s.id = 6
+  AND NOT EXISTS (SELECT 1 FROM shop_banners WHERE shop_id = s.id AND display_order = 1);
 
 INSERT INTO shop_banners (shop_id, image_url, title, subtitle, button_text, button_url, display_order, is_active)
-SELECT 6, 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=1600&q=80',
+SELECT s.id, 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=1600&q=80',
        'Dream Wedding & Tiered Creations', 'Custom crafted centerpiece cakes designed specifically for your memorable day.',
        'Custom Inquiry', '?tab=custom-cakes', 2, TRUE
-WHERE NOT EXISTS (SELECT 1 FROM shop_banners WHERE shop_id = 6 AND display_order = 2);
+FROM shops s
+WHERE s.id = 6
+  AND NOT EXISTS (SELECT 1 FROM shop_banners WHERE shop_id = s.id AND display_order = 2);
 
 UPDATE products
 SET price = 650.00,
@@ -246,43 +250,61 @@ SET price = 650.00,
 WHERE id = 17;
 
 INSERT INTO product_images (product_id, image_url, display_order, alt_text)
-SELECT 17, 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=900&q=80', 1, 'Angle Slice View'
-WHERE NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = 17 AND display_order = 1);
+SELECT p.id, 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=900&q=80', 1, 'Angle Slice View'
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = p.id AND display_order = 1);
 
 INSERT INTO product_images (product_id, image_url, display_order, alt_text)
-SELECT 17, 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=900&q=80', 2, 'Top Ganache Texture'
-WHERE NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = 17 AND display_order = 2);
+SELECT p.id, 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=900&q=80', 2, 'Top Ganache Texture'
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = p.id AND display_order = 2);
 
 INSERT INTO product_images (product_id, image_url, display_order, alt_text)
-SELECT 17, 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=900&q=80', 3, 'Layered Presentation'
-WHERE NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = 17 AND display_order = 3);
+SELECT p.id, 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=900&q=80', 3, 'Layered Presentation'
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_images WHERE product_id = p.id AND display_order = 3);
 
 INSERT INTO product_highlights (product_id, highlight_text, display_order)
-SELECT 17, '100% Pure Veg (Eggless Available)', 1
-WHERE NOT EXISTS (SELECT 1 FROM product_highlights WHERE product_id = 17 AND display_order = 1);
+SELECT p.id, '100% Pure Veg (Eggless Available)', 1
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_highlights WHERE product_id = p.id AND display_order = 1);
 
 INSERT INTO product_highlights (product_id, highlight_text, display_order)
-SELECT 17, 'Zero Preservatives', 2
-WHERE NOT EXISTS (SELECT 1 FROM product_highlights WHERE product_id = 17 AND display_order = 2);
+SELECT p.id, 'Zero Preservatives', 2
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_highlights WHERE product_id = p.id AND display_order = 2);
 
 INSERT INTO product_highlights (product_id, highlight_text, display_order)
-SELECT 17, 'Baked Fresh to Order', 3
-WHERE NOT EXISTS (SELECT 1 FROM product_highlights WHERE product_id = 17 AND display_order = 3);
+SELECT p.id, 'Baked Fresh to Order', 3
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_highlights WHERE product_id = p.id AND display_order = 3);
 
 INSERT INTO product_variants (product_id, name, price, original_price, image_url, description, is_available, display_order, variant_type)
-SELECT 17, 'Belgian Dark Truffle', 650.00, 799.00,
+SELECT p.id, 'Belgian Dark Truffle', 650.00, 799.00,
        'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80',
        'Rich 70% dark chocolate ganache layered with moist sponge', TRUE, 1, 'FLAVOUR'
-WHERE NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id = 17 AND name = 'Belgian Dark Truffle');
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id = p.id AND name = 'Belgian Dark Truffle');
 
 INSERT INTO product_variants (product_id, name, price, original_price, image_url, description, is_available, display_order, variant_type)
-SELECT 17, 'Royal Milk Chocolate Drip', 680.00, 820.00,
+SELECT p.id, 'Royal Milk Chocolate Drip', 680.00, 820.00,
        'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=800&q=80',
        'Velvety Swiss milk chocolate with gold foil pearls and caramel drizzle', TRUE, 2, 'FLAVOUR'
-WHERE NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id = 17 AND name = 'Royal Milk Chocolate Drip');
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id = p.id AND name = 'Royal Milk Chocolate Drip');
 
 INSERT INTO product_variants (product_id, name, price, original_price, image_url, description, is_available, display_order, variant_type)
-SELECT 17, 'Hazelnut Praline Truffle', 720.00, 875.00,
+SELECT p.id, 'Hazelnut Praline Truffle', 720.00, 875.00,
        'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=800&q=80',
        'Roasted Piedmont hazelnuts blended with dark truffle cream', TRUE, 3, 'FLAVOUR'
-WHERE NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id = 17 AND name = 'Hazelnut Praline Truffle');
+FROM products p
+WHERE p.id = 17
+  AND NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id = p.id AND name = 'Hazelnut Praline Truffle');
