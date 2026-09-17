@@ -17,6 +17,27 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
 
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: cake_platform
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d cake_platform"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/cake_platform
+      DB_USERNAME: postgres
+      DB_PASSWORD: password
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
