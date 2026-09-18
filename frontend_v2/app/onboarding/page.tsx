@@ -213,6 +213,7 @@ export default function OnboardingPage() {
           currency: orderData.currency || 'INR',
           name: 'CakeStore',
           description: `Subscription for ${orderData.shopName || businessName || 'Bakery'}`,
+          order_id: orderData.razorpayOrderId, // MUST pass order_id to get a signature back!
           prefill: {
             name: fullName || businessName || '',
             email: email || '',

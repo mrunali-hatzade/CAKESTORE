@@ -127,6 +127,7 @@ export default function OwnerSubscriptionPage() {
           currency: orderData.currency || 'INR',
           name: 'CakeStore',
           description: `Platform License for ${shop?.businessName || 'Bakery'}`,
+          order_id: orderData.razorpayOrderId, // MUST pass order_id to get a signature back!
           prefill: {
             name: shop?.businessName || '',
             email: user?.email || '',
