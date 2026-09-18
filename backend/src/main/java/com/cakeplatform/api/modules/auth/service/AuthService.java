@@ -265,7 +265,13 @@ public class AuthService {
 
         // 4. Process Verification Document
         if (request.getVerificationFile() != null && !request.getVerificationFile().isEmpty()) {
-            String fileUrl = storageService.storeFile(request.getVerificationFile(), "verifications");
+            com.cakeplatform.api.modules.security.ShopContextHolder.setShopId(savedShop.getId());
+            String fileUrl;
+            try {
+                fileUrl = storageService.storeFile(request.getVerificationFile(), "verifications");
+            } finally {
+                com.cakeplatform.api.modules.security.ShopContextHolder.clear();
+            }
             
             BusinessDocument doc = new BusinessDocument();
             doc.setShop(savedShop);

@@ -14,7 +14,7 @@ public class EmailServiceImpl implements EmailService {
     private final JavaMailSender mailSender;
     private final DevEmailSink devEmailSink;
 
-    @Value("${spring.mail.username:noreply@cakeplatform.com}")
+    @Value("${MAIL_FROM_ADDRESS:noreply@cakeplatform.com}")
     private String fromEmail;
 
     public EmailServiceImpl(
