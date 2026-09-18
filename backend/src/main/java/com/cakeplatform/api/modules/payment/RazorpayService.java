@@ -31,9 +31,9 @@ public class RazorpayService {
             @Value("${razorpay.key-id:rzp_test_placeholder}") String keyId,
             @Value("${razorpay.key-secret:secret_placeholder}") String keySecret,
             @Value("${razorpay.webhook-secret:webhook_secret_placeholder}") String webhookSecret) {
-        this.keyId = keyId;
-        this.keySecret = keySecret;
-        this.webhookSecret = webhookSecret;
+        this.keyId = keyId != null ? keyId.trim() : null;
+        this.keySecret = keySecret != null ? keySecret.trim() : null;
+        this.webhookSecret = webhookSecret != null ? webhookSecret.trim() : null;
     }
 
     /**
@@ -41,19 +41,34 @@ public class RazorpayService {
      * Expected signature payload: HMAC_SHA256(orderId + "|" + paymentId, keySecret).
      */
     public boolean verifyPaymentSignature(String razorpayOrderId, String razorpayPaymentId, String razorpaySignature) {
+        log.info("Starting Razorpay signature verification. OrderId: {}, PaymentId: {}", razorpayOrderId, razorpayPaymentId);
+        
         if (razorpayOrderId == null || razorpayPaymentId == null || razorpaySignature == null) {
             log.warn("Missing payment signature component: orderId={}, paymentId={}, signature={}",
                     razorpayOrderId, razorpayPaymentId, (razorpaySignature != null ? "[PRESENT]" : "[NULL]"));
             return false;
         }
 
+        boolean secretPresent = (this.keySecret != null && !this.keySecret.isBlank());
+        int secretLength = secretPresent ? this.keySecret.length() : 0;
+        
+        String maskedKeyId = (this.keyId != null && this.keyId.length() > 8) 
+            ? this.keyId.substring(0, 8) + "..." 
+            : "[MISSING/SHORT]";
+            
+        log.info("Verification context - KeyId: {}, Secret present: {}, Secret length: {}", 
+            maskedKeyId, secretPresent, secretLength);
+
         String data = razorpayOrderId + "|" + razorpayPaymentId;
         String expectedSignature = calculateHmacSha256(data, keySecret);
         if (expectedSignature == null) {
+            log.error("Failed to calculate expected HMAC signature (returned null)");
             return false;
         }
 
-        return constantTimeEquals(expectedSignature, razorpaySignature.trim());
+        boolean match = constantTimeEquals(expectedSignature, razorpaySignature.trim());
+        log.info("Signature match result: {}", match);
+        return match;
     }
 
     /**

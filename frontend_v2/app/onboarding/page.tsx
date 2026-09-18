@@ -197,7 +197,7 @@ export default function OnboardingPage() {
 
     try {
       const orderData = await ownerApi.initiateSubscriptionPayment(selectedPlanId);
-      const keyId = orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+      const keyId = orderData.keyId;
 
       const isLoaded = await paymentsService.loadRazorpayScript();
       if (!isLoaded && keyId && !keyId.includes('placeholder')) {
@@ -214,8 +214,8 @@ export default function OnboardingPage() {
           name: 'CakeStore',
           description: `Subscription for ${orderData.shopName || businessName || 'Bakery'}`,
           prefill: {
-            name: fullName,
-            email: email,
+            name: fullName || businessName || '',
+            email: email || '',
             contact: mobile || businessPhone || '',
           },
           theme: {
@@ -223,10 +223,14 @@ export default function OnboardingPage() {
           },
           handler: async (response: any) => {
             try {
+              if (!response.razorpay_order_id || !response.razorpay_payment_id || !response.razorpay_signature) {
+                throw new Error('Incomplete payment details received from Razorpay.');
+              }
+
               await ownerApi.verifySubscriptionPayment({
-                razorpayOrderId: response.razorpay_order_id || orderData.razorpayOrderId,
-                razorpayPaymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
-                razorpaySignature: response.razorpay_signature || 'test_sig',
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
                 planId: selectedPlanId,
               });
               setPaymentSuccess(true);
