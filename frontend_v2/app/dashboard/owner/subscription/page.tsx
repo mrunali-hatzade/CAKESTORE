@@ -139,7 +139,9 @@ export default function OwnerSubscriptionPage() {
           handler: async (response: any) => {
             try {
               if (!response.razorpay_order_id || !response.razorpay_payment_id || !response.razorpay_signature) {
-                throw new Error('Incomplete payment details received from Razorpay.');
+                const errorMsg = `Incomplete payment details. Received -> order: ${response.razorpay_order_id || 'MISSING'}, payment: ${response.razorpay_payment_id || 'MISSING'}, sig: ${response.razorpay_signature ? 'PRESENT' : 'MISSING'}`;
+                console.error(errorMsg, response);
+                throw new Error(errorMsg);
               }
 
               const result = await ownerApi.verifySubscriptionPayment({
