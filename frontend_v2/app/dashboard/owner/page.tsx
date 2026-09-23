@@ -20,6 +20,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { SetupChecklist } from '@/components/owner/SetupChecklist';
 
 export default function OwnerOverviewPage() {
   // Authoritative shop state strictly from OwnerContext
@@ -59,7 +60,7 @@ export default function OwnerOverviewPage() {
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value);
       if (ordersRes.status === 'fulfilled') {
-        const sorted = [...(ordersRes.value || [])].sort(
+        const sorted = [...(ordersRes.value?.content || [])].sort(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setOrders(sorted);
@@ -138,48 +139,6 @@ export default function OwnerOverviewPage() {
   const isPending = shop?.status === 'PENDING';
   const isExpired = shop?.status === 'EXPIRED';
 
-  const checklistItems = [
-    {
-      title: 'Bakery Profile & Location Details',
-      description: 'Business name, contact phone, city address, and FSSAI registration number',
-      completed: Boolean(shop?.businessName && shop?.addressLine1 && (shop?.phone || shop?.city)),
-      href: '/dashboard/owner/settings',
-      badge: 'Step 1',
-    },
-    {
-      title: 'Storefront Branding & Visual Identity',
-      description: 'Upload bakery logo, brand cover banner, and custom about story',
-      completed: Boolean(shop?.logoUrl || shop?.coverImageUrl),
-      href: '/dashboard/owner/website',
-      badge: 'Step 2',
-    },
-    {
-      title: 'Delivery Windows & Preparation Lead Times',
-      description: 'Define available delivery intervals, cutoff times, and order slot capacity',
-      completed: deliverySlots.length > 0,
-      href: '/dashboard/owner/delivery-slots',
-      badge: 'Step 3',
-    },
-    {
-      title: 'First Signature Cake in Catalog',
-      description: 'Add your first cake product with flavor variants and eggless pricing',
-      completed: totalProducts > 0,
-      href: '/dashboard/owner/products',
-      badge: 'Step 4',
-    },
-    {
-      title: 'Preview Digital Storefront',
-      description: 'Review your live storefront presentation before sharing with customers',
-      completed: false,
-      href: `/shop/${shop?.id || ''}`,
-      external: true,
-      badge: 'Step 5',
-    },
-  ];
-
-  const completedSteps = checklistItems.filter((i) => i.completed).length;
-  const totalSteps = checklistItems.length;
-  const progressPercent = Math.round((completedSteps / totalSteps) * 100);
 
   return (
     <div className="space-y-6">
@@ -252,85 +211,7 @@ export default function OwnerOverviewPage() {
       )}
 
       {/* Bakery Setup Checklist Section */}
-      <Card className="p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-owner-border">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-serif font-bold text-lg text-owner-heading">Bakery Setup Checklist</h3>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-blush text-brand-plum">
-                {completedSteps} of {totalSteps} Completed
-              </span>
-            </div>
-            <p className="text-xs text-owner-muted mt-0.5">
-              Essential steps to configure your commercial bakery and start delighting customers
-            </p>
-          </div>
-
-          <div className="w-full sm:w-48">
-            <div className="flex items-center justify-between text-[11px] font-medium text-owner-muted mb-1.5">
-              <span>Setup Readiness</span>
-              <span className="font-bold text-brand-plum">{progressPercent}%</span>
-            </div>
-            <div className="w-full bg-owner-canvas rounded-full h-2 overflow-hidden border border-owner-border/50">
-              <div
-                className="bg-brand-plum h-full rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="divide-y divide-owner-border/60 pt-2">
-          {checklistItems.map((item, idx) => (
-            <div key={idx} className="py-3.5 flex items-center justify-between gap-4">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="mt-0.5 shrink-0">
-                  {item.completed ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full border-2 border-owner-border flex items-center justify-center text-[10px] font-bold text-owner-muted">
-                      {idx + 1}
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className={`text-sm font-semibold ${item.completed ? 'text-owner-muted line-through' : 'text-owner-heading'}`}>
-                      {item.title}
-                    </h4>
-                    <span className="text-[10px] font-medium text-owner-muted bg-owner-canvas px-1.5 py-0.2 rounded border border-owner-border">
-                      {item.badge}
-                    </span>
-                  </div>
-                  <p className="text-xs text-owner-muted truncate mt-0.5">
-                    {item.description}
-                  </p>
-                </div>
-              </div>
-
-              {item.external ? (
-                <Link
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-plum hover:text-brand-espresso transition-colors"
-                >
-                  <span>Preview</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
-              ) : (
-                <Link
-                  href={item.href}
-                  className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-brand-plum hover:text-brand-espresso transition-colors"
-                >
-                  <span>Configure</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
-      </Card>
+      <SetupChecklist shop={shop} stats={stats} deliverySlots={deliverySlots} />
 
       {/* Operational Dashboard: Only rendered when NOT pending and NOT expired */}
       {!isPending && !isExpired && (

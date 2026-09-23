@@ -38,10 +38,10 @@ export default function AdminOverviewPage() {
     try {
       const [statsData, shopsData] = await Promise.all([
         getPlatformStats(),
-        getAllShops(),
+        getAllShops(0, 5), // Only need top 5 for the dashboard
       ]);
       setStats(statsData);
-      setRecentShops(shopsData.slice(0, 5));
+      setRecentShops(shopsData.content || []);
     } catch (err: any) {
       console.warn('Failed to load admin stats:', err);
     } finally {

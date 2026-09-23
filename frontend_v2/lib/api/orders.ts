@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { Order, GuestOrderRequest, OrderStatus } from '@/types/order';
+import { Order, GuestOrderRequest, OrderStatus, PaginatedResponse } from '@/types/order';
 
 export const ordersApi = {
   createGuestOrder: async (shopId: number | string, orderData: GuestOrderRequest): Promise<Order> => {
@@ -10,8 +10,39 @@ export const ordersApi = {
     return apiClient.get<Order>(`/api/storefront/shops/orders/${orderNumber}`);
   },
 
-  getOwnerOrders: async (status?: string): Promise<Order[]> => {
-    return apiClient.get<Order[]>('/api/owner/orders', { params: { status } });
+  createPaymentOrder: async (orderNumber: string): Promise<{
+    orderNumber: string;
+    razorpayOrderId: string;
+    amount: number;
+    amountPaise: number;
+    currency: string;
+    keyId: string;
+    shopName: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+  }> => {
+    return apiClient.post(`/api/storefront/orders/${orderNumber}/create-payment-order`);
+  },
+
+  verifyPayment: async (
+    orderNumber: string,
+    payload: {
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    }
+  ): Promise<{
+    status: string;
+    message: string;
+    orderNumber: string;
+    paymentId?: number;
+  }> => {
+    return apiClient.post(`/api/storefront/orders/${orderNumber}/verify-payment`, payload);
+  },
+
+  getOwnerOrders: async (status?: string, page = 0, size = 20): Promise<PaginatedResponse<Order>> => {
+    return apiClient.get<PaginatedResponse<Order>>('/api/owner/orders', { params: { status, page, size } });
   },
 
   updateOrderStatus: async (orderId: number, status: string): Promise<Order> => {
@@ -44,6 +75,20 @@ export const ordersApi = {
     link.click();
     link.parentNode?.removeChild(link);
     window.URL.revokeObjectURL(url);
+  },
+
+  requestTrackingOtp: async (phone: string): Promise<void> => {
+    return apiClient.post('/api/customer/storefront/tracking/request-otp', { phone });
+  },
+
+  verifyTrackingOtp: async (phone: string, otp: string): Promise<{ token: string }> => {
+    return apiClient.post('/api/customer/storefront/tracking/verify-otp', { phone, otp });
+  },
+
+  getMyOrders: async (token: string, page = 0, size = 10): Promise<{ content: Order[], totalElements: number, totalPages: number }> => {
+    return apiClient.get(`/api/customer/storefront/tracking/orders?page=${page}&size=${size}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
   },
 
   downloadStorefrontInvoice: async (orderNumber: string): Promise<void> => {

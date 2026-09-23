@@ -66,7 +66,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-blush/90 border border-brand-blush-border text-brand-plum text-xs font-semibold tracking-wide shadow-2xs mb-4 backdrop-blur-xs animate-in fade-in slide-in-from-bottom-2 duration-300">
           <Sparkles className="w-3.5 h-3.5 text-brand-plum" />
-          <span>India&apos;s Curated Artisanal Bakery Marketplace</span>
+          <span>Discover Local Home Bakers &amp; Artisanal Cake Studios</span>
         </div>
 
         {/* Hero Title */}

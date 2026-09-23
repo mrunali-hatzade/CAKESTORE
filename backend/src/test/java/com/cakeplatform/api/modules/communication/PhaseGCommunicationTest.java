@@ -909,7 +909,7 @@ public class PhaseGCommunicationTest {
         sub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
         sub.setExpiryDate(LocalDateTime.now().plusDays(3));
 
-        when(subRepo.findAll()).thenReturn(List.of(sub));
+        when(subRepo.findByStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE)).thenReturn(List.of(sub));
 
         scheduler.processSubscriptionExpiries();
 

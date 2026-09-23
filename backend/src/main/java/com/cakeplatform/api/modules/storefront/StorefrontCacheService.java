@@ -36,4 +36,27 @@ public class StorefrontCacheService {
             log.warn("Failed to evict storefront shopDetails cache for shopId: {}: {}", shopId, e.getMessage());
         }
     }
+
+    /**
+     * Safely evicts the cached storefront product catalog for a specific bakery.
+     * Ensures newly created, updated, or removed products reflect immediately on customer storefront requests.
+     *
+     * @param shopId the unique ID of the bakery shop
+     */
+    public void evictShopProducts(Long shopId) {
+        if (shopId == null) {
+            return;
+        }
+        try {
+            if (cacheManager != null) {
+                Cache cache = cacheManager.getCache("shopProducts");
+                if (cache != null) {
+                    cache.evict(shopId);
+                    log.info("Successfully evicted storefront shopProducts cache for shopId: {}", shopId);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to evict storefront shopProducts cache for shopId: {}: {}", shopId, e.getMessage());
+        }
+    }
 }

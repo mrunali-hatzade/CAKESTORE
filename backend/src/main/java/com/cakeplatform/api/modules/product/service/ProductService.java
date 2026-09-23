@@ -21,6 +21,7 @@ public class ProductService {
     private final com.cakeplatform.api.modules.product.ProductCategoryRepository categoryRepository;
     private final com.cakeplatform.api.modules.security.ShopAccessValidator shopAccessValidator;
     private final ActivityLoggerService activityLogger;
+    private final com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
 
     private Shop getShopByOwnerId(Long ownerId) {
         return shopAccessValidator.getValidShopForOwner(ownerId);
@@ -52,6 +53,9 @@ public class ProductService {
         applyProductAddons(product, request.getAddons());
 
         Product saved = productRepository.save(product);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopProducts(shop.getId());
+        }
         activityLogger.logActivity(userId, shop.getId(), "PRODUCT_CREATED", "PRODUCT", saved.getId(), "Name: " + saved.getName());
         return saved;
     }
@@ -86,6 +90,9 @@ public class ProductService {
         }
 
         Product updated = productRepository.save(product);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopProducts(shop.getId());
+        }
         activityLogger.logActivity(userId, shop.getId(), "PRODUCT_UPDATED", "PRODUCT", updated.getId(), null);
         return updated;
     }
@@ -183,6 +190,9 @@ public class ProductService {
                 .orElseThrow(() -> new RuntimeException("Product not found or unauthorized"));
 
         productRepository.delete(product);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopProducts(shop.getId());
+        }
         activityLogger.logActivity(userId, shop.getId(), "PRODUCT_DELETED", "PRODUCT", productId, null);
     }
 }

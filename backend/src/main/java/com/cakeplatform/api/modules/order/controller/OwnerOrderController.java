@@ -19,10 +19,20 @@ import java.util.Map;
 public class OwnerOrderController {
 
     private final OrderService orderService;
+    private final com.cakeplatform.api.modules.order.InvoiceService invoiceService;
 
     @GetMapping
-    public ResponseEntity<List<Order>> getOrders(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(orderService.getOrdersByUserId(userDetails.getId()));
+    public ResponseEntity<org.springframework.data.domain.Page<Order>> getOrders(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        if (size > 100) size = 100;
+        if (size < 1) size = 20;
+        if (page < 0) page = 0;
+        
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        return ResponseEntity.ok(orderService.getPaginatedOrdersByUserId(userDetails.getId(), pageable));
     }
 
     @GetMapping("/{id}")
@@ -46,8 +56,7 @@ public class OwnerOrderController {
     @GetMapping("/{id}/invoice")
     public ResponseEntity<byte[]> downloadInvoice(
             @PathVariable Long id,
-            @AuthenticationPrincipal CustomUserDetails userDetails,
-            @org.springframework.beans.factory.annotation.Autowired com.cakeplatform.api.modules.order.InvoiceService invoiceService) throws Exception {
+            @AuthenticationPrincipal CustomUserDetails userDetails) throws Exception {
             
         Order order = orderService.getOrderDetails(userDetails.getId(), id);
         byte[] pdfBytes = invoiceService.generateInvoice(order);

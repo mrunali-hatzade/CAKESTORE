@@ -29,6 +29,12 @@ export const authApi = {
     if (formData.verificationFile) {
       data.append('verificationFile', formData.verificationFile);
     }
+    if (formData.latitude !== undefined && formData.latitude !== null) {
+      data.append('latitude', String(formData.latitude));
+    }
+    if (formData.longitude !== undefined && formData.longitude !== null) {
+      data.append('longitude', String(formData.longitude));
+    }
 
     return apiClient.post('/api/auth/register', data);
   },

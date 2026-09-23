@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export interface CartItem {
+  cartLineId?: string;
   productId: number;
   name: string;
   price: number;
@@ -16,6 +17,7 @@ export interface CartItem {
   variantName?: string;
   weight?: string | number;
   dietaryPreference?: string;
+  addonIds?: number[];
 }
 
 export interface AppliedCouponInfo {
@@ -25,11 +27,20 @@ export interface AppliedCouponInfo {
   discountAmount: number;
 }
 
+export const generateCartLineId = (item: CartItem): string => {
+  const dietary = item.dietaryPreference || (item.isEggless ? 'EGGLESS' : 'REGULAR');
+  const customMsg = item.customMessage?.trim().toLowerCase() || '';
+  const addons = Array.isArray(item.addonIds) && item.addonIds.length > 0 
+    ? Array.from(new Set(item.addonIds)).sort((a, b) => a - b).join(',') 
+    : '';
+  return `${item.productId}-${item.variantId || 0}-${dietary}-${customMsg}-${addons}`;
+};
+
 interface CartContextType {
   items: CartItem[];
   addItem: (item: CartItem) => { success: boolean; conflict?: boolean };
-  removeItem: (productId: number) => void;
-  updateQuantity: (productId: number, quantity: number) => void;
+  removeItem: (cartLineId: string) => void;
+  updateQuantity: (cartLineId: string, quantity: number) => void;
   clearCart: () => void;
   totalPrice: number;
   totalItems: number;
@@ -53,7 +64,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const stored = localStorage.getItem('cakestore_v2_cart');
       if (stored) {
-        setItems(JSON.parse(stored));
+        const parsedItems: CartItem[] = JSON.parse(stored);
+        // Ensure all loaded items have a cartLineId
+        const hydratedItems = parsedItems.map(item => ({
+          ...item,
+          cartLineId: item.cartLineId || generateCartLineId(item),
+        }));
+        setItems(hydratedItems);
       }
     } catch (e) {
       console.error('Failed to load cart from storage', e);
@@ -78,33 +95,33 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, conflict: true };
     }
 
+    const newLineId = generateCartLineId(newItem);
+    const itemWithId = { ...newItem, cartLineId: newLineId };
+
     setItems((prev) => {
-      const existingIndex = prev.findIndex((i) => i.productId === newItem.productId);
+      const existingIndex = prev.findIndex((i) => i.cartLineId === newLineId);
       if (existingIndex > -1) {
         const updated = [...prev];
         updated[existingIndex].quantity += newItem.quantity;
-        if (newItem.customMessage) {
-          updated[existingIndex].customMessage = newItem.customMessage;
-        }
         return updated;
       }
-      return [...prev, newItem];
+      return [...prev, itemWithId];
     });
 
     return { success: true };
   };
 
-  const removeItem = (productId: number) => {
-    setItems((prev) => prev.filter((i) => i.productId !== productId));
+  const removeItem = (cartLineId: string) => {
+    setItems((prev) => prev.filter((i) => i.cartLineId !== cartLineId));
   };
 
-  const updateQuantity = (productId: number, quantity: number) => {
+  const updateQuantity = (cartLineId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeItem(productId);
+      removeItem(cartLineId);
       return;
     }
     setItems((prev) =>
-      prev.map((i) => (i.productId === productId ? { ...i, quantity } : i))
+      prev.map((i) => (i.cartLineId === cartLineId ? { ...i, quantity } : i))
     );
   };
 

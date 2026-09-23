@@ -29,11 +29,11 @@ spring:
     locations: classpath:db/migration
     detect-encoding: true
 
-  # Allow uploads up to 5MB (controller validates at 5MB; Spring Boot default is 1MB)
+  # Allow uploads up to 25MB for review videos (controller validates images at 5MB and videos at 25MB)
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 6MB
+      max-file-size: 25MB
+      max-request-size: 30MB
 
 server:
   port: 8080
@@ -61,6 +61,6 @@ azure:
   client-id: ${AZURE_CLIENT_ID:}
 
 razorpay:
-  key-id: ${RAZORPAY_KEY_ID:rzp_test_placeholder}
-  key-secret: ${RAZORPAY_KEY_SECRET:secret_placeholder}
-  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:webhook_secret_placeholder}
+  key-id: ${RAZORPAY_KEY_ID:rzp_test_TdPzvNBScn0bGP}
+  key-secret: ${RAZORPAY_KEY_SECRET:Jmo03m2bhD23IoG1Xe0m2ffu}
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:f0de5f0c082e3cf16acfafb2251f427b81518df5fb12eb66ce95a3970ef05188}

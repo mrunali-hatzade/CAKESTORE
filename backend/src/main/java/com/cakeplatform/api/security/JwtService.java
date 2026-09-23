@@ -60,6 +60,44 @@ public class JwtService {
         return extractExpiration(token).before(new Date());
     }
 
+    public String generateGuestToken(String phoneNumber) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("token_type", "GUEST_ORDER_TRACKER");
+        claims.put("purpose", "ORDER_HISTORY");
+        return Jwts
+                .builder()
+                .claims(claims)
+                .subject(phoneNumber)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + 15 * 60 * 1000)) // 15 mins
+                .signWith(getSignInKey(), Jwts.SIG.HS256)
+                .compact();
+    }
+
+    public boolean isGuestTokenValid(String token, String phoneNumber) {
+        try {
+            final Claims claims = extractAllClaims(token);
+            String tokenType = claims.get("token_type", String.class);
+            String purpose = claims.get("purpose", String.class);
+            return phoneNumber.equals(claims.getSubject()) && 
+                   "GUEST_ORDER_TRACKER".equals(tokenType) && 
+                   "ORDER_HISTORY".equals(purpose) && 
+                   !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public String extractGuestPhone(String token) {
+        try {
+            final Claims claims = extractAllClaims(token);
+            if ("GUEST_ORDER_TRACKER".equals(claims.get("token_type", String.class))) {
+                return claims.getSubject();
+            }
+        } catch (Exception ignored) { }
+        return null;
+    }
+
     private Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }

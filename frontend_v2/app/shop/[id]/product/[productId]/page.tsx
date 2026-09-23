@@ -120,14 +120,14 @@ function ProductDetailContent() {
       const currentProd = allProds.find((p) => String(p.id) === String(productId)) || null;
       if (currentProd) {
         setProduct(currentProd);
-        setIsEgglessPreference(currentProd.isEggless ?? true);
+        setIsEgglessPreference(currentProd.isEggless ?? (currentProd.eggPreferenceDefault === 'EGGLESS'));
         if (currentProd.variants && currentProd.variants.length > 0) {
           setSelectedVariantId(currentProd.variants[0].id);
         }
       } else {
         const directProd = await storefrontApi.getProductDetails(shopId, productId);
         setProduct(directProd);
-        setIsEgglessPreference(directProd.isEggless ?? true);
+        setIsEgglessPreference(directProd.isEggless ?? (directProd.eggPreferenceDefault === 'EGGLESS'));
         if (directProd.variants && directProd.variants.length > 0) {
           setSelectedVariantId(directProd.variants[0].id);
         }

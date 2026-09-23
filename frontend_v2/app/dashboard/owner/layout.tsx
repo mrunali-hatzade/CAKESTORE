@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Cake, ShoppingBag, Calendar, BarChart3,
   Tag, Users, MessageSquareQuote, Star, Settings, CreditCard,
   LogOut, Store, ExternalLink, Menu, Globe, X, RefreshCw, Images,
-  AlertCircle, Clock,
+  AlertCircle, Clock, ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { OwnerProvider, useOwner } from '@/context/OwnerContext';
@@ -23,6 +23,14 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
   const { shop, refreshDashboard, isRefreshing, refreshStatus, refreshError } = useOwner();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+
+  const handleBackNavigation = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/dashboard/owner');
+    }
+  };
 
   // Auth guard
   useEffect(() => {
@@ -161,7 +169,7 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="h-16 shrink-0 bg-white border-b border-owner-border px-4 sm:px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden p-2 text-owner-muted hover:text-owner-heading rounded-xl hover:bg-owner-canvas transition-colors"
@@ -169,6 +177,17 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
             >
               <Menu className="w-5 h-5" />
             </button>
+            {pathname !== '/dashboard/owner' && (
+              <button
+                type="button"
+                onClick={handleBackNavigation}
+                className="p-1.5 -ml-1 rounded-xl text-owner-muted hover:text-owner-heading hover:bg-owner-canvas border border-transparent hover:border-owner-border transition-all cursor-pointer"
+                title="Go back to previous page"
+                aria-label="Go back to previous page"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <h2 className="font-serif font-bold text-lg text-owner-heading">Bakery Management</h2>
           </div>
           <div className="flex items-center gap-2.5 sm:gap-3">

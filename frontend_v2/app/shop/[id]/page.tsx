@@ -161,6 +161,8 @@ function StorefrontContent() {
         shop={shop}
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
+        activeTab={activeTab}
+        onNavigateTab={handleTabChange}
       />
 
       {/* Bakery Hero Banner */}

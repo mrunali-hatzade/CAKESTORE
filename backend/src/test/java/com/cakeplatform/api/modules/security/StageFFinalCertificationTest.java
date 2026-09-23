@@ -63,6 +63,12 @@ public class StageFFinalCertificationTest {
     @Mock
     private ActivityLoggerService activityLogger;
 
+    @Mock
+    private com.cakeplatform.api.modules.notification.EmailService emailService;
+
+    @Mock
+    private com.cakeplatform.api.modules.notification.SmsService smsService;
+
     private OrderService orderService;
     private HealthController healthController;
 
@@ -73,7 +79,7 @@ public class StageFFinalCertificationTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(orderRepository, shopAccessValidator, activityLogger);
+        orderService = new OrderService(orderRepository, shopAccessValidator, activityLogger, emailService, smsService);
         healthController = new HealthController();
 
         ownerA = new User();

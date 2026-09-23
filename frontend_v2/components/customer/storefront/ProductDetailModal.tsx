@@ -179,6 +179,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       variantName: selectedVariant?.name,
       weight: selectedVariant ? selectedVariant.name : undefined,
       dietaryPreference: isEgglessPreference ? 'EGGLESS' : 'REGULAR',
+      addonIds: selectedAddonIds,
     });
 
     if (result.conflict) {
@@ -206,6 +207,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       variantName: selectedVariant?.name,
       weight: selectedVariant ? selectedVariant.name : undefined,
       dietaryPreference: isEgglessPreference ? 'EGGLESS' : 'REGULAR',
+      addonIds: selectedAddonIds,
     });
     setShowConflictPrompt(false);
     toast.success(`Cart updated for "${shop.businessName}"!`);

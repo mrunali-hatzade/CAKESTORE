@@ -8,6 +8,20 @@ export type OrderStatus =
   | 'DELIVERED'
   | 'CANCELLED';
 
+export interface PaginatedResponse<T> {
+  content: T[];
+  pageable: any;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+  size: number;
+  number: number;
+  sort: any;
+  numberOfElements: number;
+  first: boolean;
+  empty: boolean;
+}
+
 export interface OrderItem {
   id?: number;
   productId?: number;
@@ -28,6 +42,7 @@ export interface Order {
   id: number;
   orderNumber: string;
   shopId?: number;
+  shopName?: string;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;

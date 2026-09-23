@@ -15,6 +15,7 @@ import java.util.Optional;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByShopIdOrderByCreatedAtDesc(Long shopId);
+    org.springframework.data.domain.Page<Order> findByShopIdOrderByCreatedAtDesc(Long shopId, Pageable pageable);
     Optional<Order> findByIdAndShopId(Long id, Long shopId);
     Optional<Order> findByOrderNumber(String orderNumber);
     long countByShopId(Long shopId);
@@ -45,10 +46,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "ORDER BY SUM(oi.quantity) DESC")
     List<Object[]> findTopSellingProductsByShopId(@Param("shopId") Long shopId, Pageable pageable);
 
+    org.springframework.data.domain.Page<Order> findByCustomerPhoneOrderByCreatedAtDesc(String customerPhone, Pageable pageable);
+
     List<Order> findByShopIdAndCustomerEmailOrderByCreatedAtDesc(Long shopId, String customerEmail);
 
     @Query("SELECT DISTINCT o.customerEmail FROM Order o WHERE o.shop.id = :shopId AND o.customerEmail IS NOT NULL")
     List<String> findUniqueCustomerEmailsByShopId(@Param("shopId") Long shopId);
+
+    @Query("SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
+           "  MAX(o.customerName), " +
+           "  o.customerEmail, " +
+           "  MAX(o.customerPhone), " +
+           "  MAX(o.deliveryAddress), " +
+           "  COUNT(o.id), " +
+           "  SUM(CASE WHEN o.paymentStatus IN ('PAID', 'COMPLETED') THEN o.totalAmount ELSE 0 END), " +
+           "  MAX(o.createdAt) " +
+           ") " +
+           "FROM Order o " +
+           "WHERE o.shop.id = :shopId " +
+           "GROUP BY o.customerEmail")
+    org.springframework.data.domain.Page<com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse> findCustomerProfilesByShopId(
+           @Param("shopId") Long shopId, 
+           Pageable pageable);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
            "WHERE o.createdAt >= :startDate " +

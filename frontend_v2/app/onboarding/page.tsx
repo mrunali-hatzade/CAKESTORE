@@ -22,6 +22,8 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
+  Upload,
+  Crosshair,
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ownerApi } from '@/lib/api/owner';
@@ -98,7 +100,37 @@ export default function OnboardingPage() {
   const [area, setArea] = useState('');
   const [pincode, setPincode] = useState('');
   const [fssaiRegistration, setFssaiRegistration] = useState('');
+  const [verificationFile, setVerificationFile] = useState<File | null>(null);
+  const [latitude, setLatitude] = useState<number | undefined>(undefined);
+  const [longitude, setLongitude] = useState<number | undefined>(undefined);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationDetectNotice, setLocationDetectNotice] = useState<string | null>(null);
   const [locationErrors, setLocationErrors] = useState<Record<string, string>>({});
+
+  const handleDetectLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsDetectingLocation(true);
+    setLocationDetectNotice(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setLatitude(lat);
+        setLongitude(lng);
+        setIsDetectingLocation(false);
+        setLocationDetectNotice(`Coordinates locked: ${lat}, ${lng}`);
+      },
+      (err) => {
+        setIsDetectingLocation(false);
+        console.warn('Geolocation lookup failed:', err);
+        alert('Could not detect location. Please allow browser location access or continue manually.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   useEffect(() => {
     if (step === 4) {
@@ -155,6 +187,9 @@ export default function OnboardingPage() {
         area: area || undefined,
         pincode,
         fssaiRegistration,
+        verificationFile: verificationFile || undefined,
+        latitude,
+        longitude,
       });
 
       // Direct auto-login with credentials
@@ -656,6 +691,30 @@ export default function OnboardingPage() {
                   disabled={isLoading}
                 />
 
+                {/* GPS Coordinates Detector */}
+                <div className="p-3.5 bg-brand-cream/30 border border-brand-border rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-brand-espresso flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-brand-plum" />
+                      Storefront GPS Coordinates (Optional)
+                    </p>
+                    <p className="text-[11px] text-brand-muted mt-0.5">
+                      {latitude && longitude
+                        ? `GPS tagged: ${latitude.toFixed(4)}° N, ${longitude.toFixed(4)}° E`
+                        : 'Auto-detect coordinates for real-time buyer proximity matching.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDetectLocation}
+                    disabled={isDetectingLocation}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-brand-border text-brand-espresso hover:bg-brand-blush/30 hover:border-brand-plum/40 transition-colors shadow-2xs shrink-0 cursor-pointer disabled:opacity-60"
+                  >
+                    <Crosshair className={`w-3.5 h-3.5 text-brand-plum ${isDetectingLocation ? 'animate-spin' : ''}`} />
+                    <span>{isDetectingLocation ? 'Detecting...' : latitude ? 'Update GPS' : 'Detect GPS'}</span>
+                  </button>
+                </div>
+
                 <Input
                   label="FSSAI Registration No. (Optional)"
                   placeholder="11520000000000"
@@ -663,6 +722,53 @@ export default function OnboardingPage() {
                   onChange={(e) => setFssaiRegistration(e.target.value)}
                   helperText="Recommended to display verified trust badge."
                 />
+
+                {/* FSSAI Certificate File Upload */}
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-brand-espresso">
+                    FSSAI Certificate Document (Optional)
+                  </label>
+                  <div className="relative border-2 border-dashed border-brand-border hover:border-brand-plum/40 rounded-xl p-4 transition-colors bg-white text-center">
+                    <input
+                      type="file"
+                      accept=".pdf,image/png,image/jpeg,image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setVerificationFile(file);
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="flex flex-col items-center justify-center pointer-events-none">
+                      <Upload className="w-6 h-6 text-brand-plum mb-1.5" />
+                      {verificationFile ? (
+                        <p className="text-xs font-semibold text-brand-plum">
+                          Selected: {verificationFile.name} ({(verificationFile.size / 1024).toFixed(1)} KB)
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-xs font-semibold text-brand-espresso">
+                            Upload FSSAI License or Kitchen Registration PDF / Image
+                          </p>
+                          <p className="text-[11px] text-brand-muted mt-0.5">
+                            PDF, PNG, JPG up to 10MB. Fast-tracks your bakery verification badge.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {verificationFile && (
+                    <div className="flex justify-between items-center text-[11px] text-brand-muted px-1">
+                      <span className="text-emerald-600 font-medium">Ready for upload upon registration</span>
+                      <button
+                        type="button"
+                        onClick={() => setVerificationFile(null)}
+                        className="text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Remove file
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <div className="pt-4 flex justify-between items-center border-t border-brand-border/60">
                   <Button variant="ghost" type="button" onClick={() => setStep(2)}>

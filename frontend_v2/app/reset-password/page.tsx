@@ -20,10 +20,15 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Parse token from fragment #token=...
+    // Parse token from fragment #token=... or query parameter ?token=...
     const hash = window.location.hash;
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryToken = searchParams.get('token');
+
     if (hash && hash.startsWith('#token=')) {
       setToken(hash.substring(7));
+    } else if (queryToken) {
+      setToken(queryToken);
     } else {
       setError('Invalid or missing reset token.');
     }

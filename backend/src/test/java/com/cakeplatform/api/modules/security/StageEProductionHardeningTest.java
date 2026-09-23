@@ -349,6 +349,30 @@ public class StageEProductionHardeningTest {
         assertFalse(response.getBody().get("error").contains("users"));
     }
 
+    @Test
+    @DisplayName("GlobalExceptionHandler maps NoResourceFoundException to HTTP 404 NOT_FOUND")
+    void testExceptionHandler_NoResourceFound() {
+        org.springframework.web.servlet.resource.NoResourceFoundException ex = 
+                new org.springframework.web.servlet.resource.NoResourceFoundException(org.springframework.http.HttpMethod.GET, "/api/storefront/invalid");
+        ResponseEntity<Map<String, String>> response = exceptionHandler.handleNoResourceFoundException(ex);
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Resource not found", response.getBody().get("error"));
+    }
+
+    @Test
+    @DisplayName("GlobalExceptionHandler maps MissingServletRequestParameterException to HTTP 400 BAD_REQUEST")
+    void testExceptionHandler_MissingParameter() {
+        org.springframework.web.bind.MissingServletRequestParameterException ex = 
+                new org.springframework.web.bind.MissingServletRequestParameterException("districtId", "Integer");
+        ResponseEntity<Map<String, String>> response = exceptionHandler.handleMissingServletRequestParameterException(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().get("error").contains("districtId"));
+    }
+
     // =========================================================================
     // 6. MEDIA UPLOAD SERVICE PATH TRAVERSAL DEFENSE
     // =========================================================================

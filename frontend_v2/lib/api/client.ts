@@ -115,7 +115,12 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       if (response.status === 401) {
         clearStoredToken();
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          window.location.href = `/login?session=expired`;
+          const isProtectedRoute =
+            window.location.pathname.startsWith('/dashboard') ||
+            window.location.pathname.startsWith('/admin');
+          if (isProtectedRoute) {
+            window.location.href = `/login?session=expired`;
+          }
         }
       }
 

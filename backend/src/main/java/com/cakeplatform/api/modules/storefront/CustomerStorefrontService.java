@@ -235,11 +235,27 @@ public class CustomerStorefrontService {
 
             String cleanSortBy = (sortBy != null && !sortBy.isBlank()) ? sortBy.trim().toLowerCase() : "distance";
 
-            List<ShopSummaryProjection> projections = shopRepository.findNearbyActiveShops(
-                    latitude, longitude, minLat, maxLat, minLng, maxLng, effectiveRadius,
-                    cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
-                    businessTypeStr, cleanSearch, cleanSortBy, effectiveSize, offset
-            );
+            List<ShopSummaryProjection> projections;
+            if ("newest".equals(cleanSortBy)) {
+                projections = shopRepository.findNearbyActiveShopsOrderByNewest(
+                        latitude, longitude, minLat, maxLat, minLng, maxLng, effectiveRadius,
+                        cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                        businessTypeStr, cleanSearch, effectiveSize, offset
+                );
+            } else if ("rating".equals(cleanSortBy)) {
+                projections = shopRepository.findNearbyActiveShopsOrderByRating(
+                        latitude, longitude, minLat, maxLat, minLng, maxLng, effectiveRadius,
+                        cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                        businessTypeStr, cleanSearch, effectiveSize, offset
+                );
+            } else {
+                projections = shopRepository.findNearbyActiveShopsOrderByDistance(
+                        latitude, longitude, minLat, maxLat, minLng, maxLng, effectiveRadius,
+                        cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                        businessTypeStr, cleanSearch, effectiveSize, offset
+                );
+            }
+
             long total = shopRepository.countNearbyActiveShops(
                     latitude, longitude, minLat, maxLat, minLng, maxLng, effectiveRadius,
                     cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
@@ -253,10 +269,19 @@ public class CustomerStorefrontService {
         } else {
             String cleanSortBy = (sortBy != null && !sortBy.isBlank()) ? sortBy.trim().toLowerCase() : "rating";
 
-            List<ShopSummaryProjection> projections = shopRepository.findActiveShopsWithSummary(
-                    cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
-                    businessTypeStr, cleanSearch, cleanLocation, cleanSortBy, effectiveSize, offset
-            );
+            List<ShopSummaryProjection> projections;
+            if ("newest".equals(cleanSortBy)) {
+                projections = shopRepository.findActiveShopsWithSummaryOrderByNewest(
+                        cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                        businessTypeStr, cleanSearch, cleanLocation, effectiveSize, offset
+                );
+            } else {
+                projections = shopRepository.findActiveShopsWithSummaryOrderByRating(
+                        cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
+                        businessTypeStr, cleanSearch, cleanLocation, effectiveSize, offset
+                );
+            }
+            
             long total = shopRepository.countActiveShops(
                     cleanCity, cleanState, cleanDistrict, cleanArea, cleanPincode,
                     businessTypeStr, cleanSearch, cleanLocation
@@ -284,9 +309,30 @@ public class CustomerStorefrontService {
             Double radiusKm,
             String sortBy
     ) {
+        return discoverShops(country, state, district, city, area, pincode, businessType,
+                search, location, latitude, longitude, radiusKm, sortBy, null);
+    }
+
+    public List<StorefrontShopSummaryDTO> discoverShops(
+            String country,
+            String state,
+            String district,
+            String city,
+            String area,
+            String pincode,
+            BusinessType businessType,
+            String search,
+            String location,
+            Double latitude,
+            Double longitude,
+            Double radiusKm,
+            String sortBy,
+            Integer size
+    ) {
+        int effectiveSize = (size != null && size > 0) ? Math.min(size, 100) : 100;
         Page<StorefrontShopSummaryDTO> page = discoverShopsPaged(
                 country, state, district, city, area, pincode, businessType,
-                search, location, latitude, longitude, radiusKm, sortBy, 0, 100
+                search, location, latitude, longitude, radiusKm, sortBy, 0, effectiveSize
         );
         return page.getContent();
     }
@@ -598,7 +644,7 @@ public class CustomerStorefrontService {
                         .orElseThrow(() -> new RuntimeException("Addon unavailable"));
                     addonsTotal = addonsTotal.add(addon.getPrice());
                     if (addonsSummary.length() > 0) addonsSummary.append(", ");
-                    addonsSummary.append(addon.getName()).append(" (+$").append(addon.getPrice()).append(")");
+                    addonsSummary.append(addon.getName()).append(" (+₹").append(addon.getPrice()).append(")");
                 }
             }
 
@@ -784,9 +830,7 @@ public class CustomerStorefrontService {
     }
 
     public Order getGuestOrder(String orderNumber) {
-        return orderRepository.findAll().stream()
-                .filter(o -> orderNumber.equals(o.getOrderNumber()))
-                .findFirst()
+        return orderRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new RuntimeException("Order not found or invalid order number"));
     }
 

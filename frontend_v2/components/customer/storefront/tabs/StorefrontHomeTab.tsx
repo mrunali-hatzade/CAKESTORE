@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles,
   ArrowRight,
@@ -13,6 +13,11 @@ import {
   CheckCircle2,
   Plus,
   X,
+  Upload,
+  Loader2,
+  Play,
+  ShoppingBag,
+  ThumbsUp,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { Product, Category } from '@/types/product';
@@ -35,6 +40,13 @@ interface StorefrontHomeTabProps {
   onOpenCustomQuote: () => void;
 }
 
+const CUSTOM_CAKE_VALUE = '__custom__';
+
+/** Validate that a URL string is non-empty and not obviously invalid */
+function isValidMediaUrl(url?: string | null): url is string {
+  return typeof url === 'string' && url.trim().length > 4 && url.startsWith('http');
+}
+
 export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   shop,
   products,
@@ -44,6 +56,7 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   onOpenCustomQuote,
 }) => {
   const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [topRatedProducts, setTopRatedProducts] = useState<Product[]>([]);
   const [loadingTopRated, setLoadingTopRated] = useState<boolean>(true);
 
@@ -55,6 +68,17 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   const [reviewerName, setReviewerName] = useState<string>('');
   const [reviewerRating, setReviewerRating] = useState<number>(5);
   const [reviewerComment, setReviewerComment] = useState<string>('');
+  const [reviewerRecommendation, setReviewerRecommendation] = useState<string>('');
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [customCakeName, setCustomCakeName] = useState<string>('');
+
+  // Media upload state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [isFileVideo, setIsFileVideo] = useState<boolean>(false);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
 
   // Settings toggles
@@ -104,30 +128,122 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
     };
   }, [shop.id, topRatedEnabled, reviewsEnabled, products]);
 
+  // Cleanup preview object URL on unmount / file change
+  useEffect(() => {
+    return () => {
+      if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+    };
+  }, [filePreviewUrl]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Clean up previous preview
+    if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+
+    setSelectedFile(file);
+    setFilePreviewUrl(URL.createObjectURL(file));
+    setIsFileVideo(file.type.startsWith('video/'));
+    setUploadError(null);
+
+    // Reset input so the same file can be reselected after removal
+    e.target.value = '';
+  };
+
+  const handleRemoveFile = () => {
+    if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+    setSelectedFile(null);
+    setFilePreviewUrl(null);
+    setIsFileVideo(false);
+    setUploadError(null);
+  };
+
+  const resetForm = () => {
+    setReviewerName('');
+    setReviewerRating(5);
+    setReviewerComment('');
+    setReviewerRecommendation('');
+    setSelectedProductId('');
+    setCustomCakeName('');
+    handleRemoveFile();
+  };
+
+  const handleCloseModal = () => {
+    setIsFeedbackModalOpen(false);
+    resetForm();
+  };
+
   const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewerName.trim() || !reviewerComment.trim()) {
-      toast.error('Please enter your name and comments.');
+
+    if (!reviewerName.trim()) {
+      toast.error('Please enter your display name.');
+      return;
+    }
+    if (!reviewerComment.trim()) {
+      toast.error('Please share how your experience was.');
       return;
     }
 
+    // Resolve product selection
+    const isCustomCake = selectedProductId === CUSTOM_CAKE_VALUE;
+    const resolvedProductId = (!isCustomCake && selectedProductId)
+      ? parseInt(selectedProductId, 10)
+      : null;
+    const resolvedProductName = isCustomCake && customCakeName.trim()
+      ? customCakeName.trim()
+      : undefined;
+
+    let cakeImageUrl: string | undefined;
+    let cakeVideoUrl: string | undefined;
+
+    // Step 1: Upload media if selected
+    if (selectedFile) {
+      setIsUploading(true);
+      setUploadError(null);
+      try {
+        const uploadResult = await storefrontApi.uploadReviewMedia(selectedFile);
+        if (isFileVideo) {
+          cakeVideoUrl = uploadResult.url;
+        } else {
+          cakeImageUrl = uploadResult.url;
+        }
+      } catch (err: any) {
+        const msg = err.message || 'Media upload failed. Please try again.';
+        setUploadError(msg);
+        setIsUploading(false);
+        toast.error(msg);
+        return; // Do NOT proceed to submit
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    // Step 2: Submit feedback with all Phase 1 fields
     setIsSubmittingFeedback(true);
     try {
       await storefrontApi.submitFeedback(shop.id, {
         customerDisplayName: reviewerName.trim(),
         rating: reviewerRating,
         comment: reviewerComment.trim(),
+        recommendationText: reviewerRecommendation.trim() || undefined,
+        productId: resolvedProductId,
+        productName: resolvedProductName,
+        cakeImageUrl,
+        cakeVideoUrl,
       });
       toast.success('Thank you! Your review has been submitted for approval.');
-      setIsFeedbackModalOpen(false);
-      setReviewerName('');
-      setReviewerRating(5);
-      setReviewerComment('');
-      // Reload feedback
+      handleCloseModal();
+      // Refresh feedback list
       const updated = await storefrontApi.getShopFeedback(shop.id);
       setFeedbackList(updated || []);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to submit review. Please try again.');
+      const msg = err.message || 'Failed to submit review. Please try again.';
+      toast.error(msg);
+      if (selectedFile) {
+        toast.error('Note: Your photo/video was uploaded but the review submission failed. Please retry.');
+      }
     } finally {
       setIsSubmittingFeedback(false);
     }
@@ -135,6 +251,7 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
 
   const cleanPhone = (shop.phone || shop.businessPhone || '').replace(/\D/g, '');
   const displayProducts = topRatedProducts.length > 0 ? topRatedProducts : products.slice(0, 4);
+  const isProcessing = isUploading || isSubmittingFeedback;
 
   return (
     <div className="space-y-12 sm:space-y-16 pb-12">
@@ -148,7 +265,7 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
                 <span>Top Rated Cakes</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-espresso">
-                Signature Bakery Creations
+                Our Cake Collection
               </h2>
               <p className="text-xs sm:text-sm text-brand-muted mt-0.5">
                 Handcrafted with pure butter, couverture chocolate, and authentic fillings
@@ -301,7 +418,7 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
         </section>
       )}
 
-      {/* 4. Real Customer Feedback Highlights (Strictly Real Data Only) */}
+      {/* 4. Real Customer Feedback Highlights */}
       {reviewsEnabled && (
         <section className="space-y-5">
           <div className="flex items-center justify-between">
@@ -354,9 +471,10 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {feedbackList.slice(0, 3).map((item) => (
+              {feedbackList.slice(0, 6).map((item) => (
                 <Card key={item.id} className="p-5 space-y-3 flex flex-col justify-between">
                   <div className="space-y-2">
+                    {/* Rating + Date row */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
                         {[...Array(5)].map((_, i) => (
@@ -374,10 +492,56 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
                         {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recent'}
                       </span>
                     </div>
+
+                    {/* Product name badge */}
+                    {(item.productName) && (
+                      <div className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-plum bg-brand-blush px-2 py-0.5 rounded-full border border-brand-blush-border">
+                        <ShoppingBag className="w-2.5 h-2.5" />
+                        <span>{item.productName}</span>
+                      </div>
+                    )}
+
+                    {/* Review comment */}
                     <p className="text-xs text-brand-espresso leading-relaxed italic line-clamp-3">
                       &ldquo;{item.comment || 'Delicious and fresh!'}&rdquo;
                     </p>
+
+                    {/* Recommendation text */}
+                    {item.recommendationText && (
+                      <div className="flex items-start gap-1.5 pt-1">
+                        <ThumbsUp className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-brand-muted leading-relaxed line-clamp-2">
+                          {item.recommendationText}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Cake photo */}
+                    {isValidMediaUrl(item.cakeImageUrl) && (
+                      <div className="mt-2 rounded-xl overflow-hidden border border-brand-border/60 aspect-video bg-brand-cream">
+                        <img
+                          src={item.cakeImageUrl}
+                          alt="Customer cake photo"
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+
+                    {/* Cake video */}
+                    {isValidMediaUrl(item.cakeVideoUrl) && (
+                      <div className="mt-2 rounded-xl overflow-hidden border border-brand-border/60 aspect-video bg-black">
+                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                        <video
+                          src={item.cakeVideoUrl}
+                          controls
+                          preload="metadata"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    )}
                   </div>
+
                   <div className="pt-2 border-t border-brand-border/40 flex items-center justify-between text-[11px]">
                     <span className="font-semibold text-brand-espresso">
                       {item.customerDisplayName || 'Verified Customer'}
@@ -397,14 +561,17 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
       {/* Share Experience Modal */}
       <Modal
         isOpen={isFeedbackModalOpen}
-        onClose={() => setIsFeedbackModalOpen(false)}
-        maxWidth="md"
+        onClose={handleCloseModal}
+        maxWidth="lg"
         title={`Review ${shop.businessName}`}
+        description="Share your honest experience to help future cake lovers celebrate better."
       >
-        <form onSubmit={handleSubmitFeedback} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmitFeedback} className="space-y-5 pt-1">
+
+          {/* 1. Star Rating */}
           <div>
             <label className="block text-xs font-semibold text-brand-espresso mb-1.5">
-              Your Rating
+              Your Rating <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
               {[1, 2, 3, 4, 5].map((star) => (
@@ -413,9 +580,10 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
                   type="button"
                   onClick={() => setReviewerRating(star)}
                   className="p-1 hover:scale-110 transition-transform cursor-pointer"
+                  aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
                 >
                   <Star
-                    className={`w-6 h-6 ${
+                    className={`w-7 h-7 ${
                       star <= reviewerRating
                         ? 'text-amber-500 fill-amber-500'
                         : 'text-brand-border fill-transparent'
@@ -429,21 +597,156 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
             </div>
           </div>
 
-          <Input
-            label="Your Name / Display Name"
-            required
-            placeholder="Pooja Kulkarni"
-            value={reviewerName}
-            onChange={(e) => setReviewerName(e.target.value)}
-          />
+          {/* 2. Product / Cake selection */}
+          <div>
+            <label className="block text-xs font-semibold text-brand-espresso mb-1.5">
+              Which cake did you order? <span className="text-brand-muted font-normal">(optional)</span>
+            </label>
+            <select
+              value={selectedProductId}
+              onChange={(e) => {
+                setSelectedProductId(e.target.value);
+                if (e.target.value !== CUSTOM_CAKE_VALUE) setCustomCakeName('');
+              }}
+              className="w-full text-sm border border-brand-border rounded-xl px-3 py-2 bg-white text-brand-espresso focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all"
+            >
+              <option value="">— Select a cake (optional) —</option>
+              {products.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.name}
+                </option>
+              ))}
+              <option value={CUSTOM_CAKE_VALUE}>Custom Cake / Other</option>
+            </select>
+          </div>
 
+          {/* Custom cake name input */}
+          {selectedProductId === CUSTOM_CAKE_VALUE && (
+            <Input
+              label="Cake Name"
+              placeholder="e.g. Mango Truffle Custom Cake"
+              value={customCakeName}
+              onChange={(e) => setCustomCakeName(e.target.value)}
+            />
+          )}
+
+          {/* 3. Experience comment */}
           <Textarea
-            label="Your Review / Comments"
+            label="How was your experience? *"
             required
-            rows={4}
-            placeholder="Share how fresh the cake was, delivery experience, taste, and decoration..."
+            rows={3}
+            placeholder="Share how fresh the cake was, the taste, decoration quality, and delivery experience..."
             value={reviewerComment}
             onChange={(e) => setReviewerComment(e.target.value)}
+          />
+
+          {/* 4. Recommendation */}
+          <Textarea
+            label="What would you recommend to someone choosing this cake?"
+            rows={3}
+            placeholder="Describe the taste, flavor profile, portion size, best occasion, presentation quality, or delivery experience — any tip that would help others decide!"
+            value={reviewerRecommendation}
+            onChange={(e) => setReviewerRecommendation(e.target.value)}
+          />
+
+          {/* 5. Media upload */}
+          <div>
+            <label className="block text-xs font-semibold text-brand-espresso mb-1.5">
+              Cake Photo / Video <span className="text-brand-muted font-normal">(optional — images up to 5MB, videos up to 25MB)</span>
+            </label>
+
+            {!selectedFile ? (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-brand-border rounded-2xl p-5 flex flex-col items-center gap-2 text-brand-muted hover:border-brand-plum/50 hover:text-brand-plum hover:bg-brand-blush/20 transition-all cursor-pointer"
+              >
+                <Upload className="w-6 h-6" />
+                <span className="text-xs font-medium">Click to upload photo or video</span>
+                <span className="text-[10px]">JPEG, PNG, WEBP or MP4, WebM</span>
+              </button>
+            ) : (
+              <div className="relative rounded-2xl overflow-hidden border border-brand-border bg-brand-cream-light">
+                {/* Preview */}
+                {isFileVideo ? (
+                  <div className="aspect-video bg-black flex items-center justify-center">
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                    <video
+                      src={filePreviewUrl!}
+                      controls
+                      preload="metadata"
+                      className="max-h-48 max-w-full"
+                    />
+                  </div>
+                ) : (
+                  <div className="aspect-video flex items-center justify-center overflow-hidden">
+                    <img
+                      src={filePreviewUrl!}
+                      alt="Selected media preview"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                )}
+
+                {/* File info bar */}
+                <div className="flex items-center justify-between px-3 py-2 bg-white border-t border-brand-border/60">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {isFileVideo
+                      ? <Play className="w-3.5 h-3.5 text-brand-plum shrink-0" />
+                      : <Upload className="w-3.5 h-3.5 text-brand-plum shrink-0" />
+                    }
+                    <span className="text-[11px] text-brand-espresso truncate max-w-[160px]">
+                      {selectedFile.name}
+                    </span>
+                    <span className="text-[10px] text-brand-muted shrink-0">
+                      ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveFile}
+                    className="text-brand-muted hover:text-red-500 transition-colors p-1 cursor-pointer"
+                    aria-label="Remove selected file"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
+            {/* Upload error */}
+            {uploadError && (
+              <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                <X className="w-3.5 h-3.5 shrink-0" />
+                {uploadError}
+              </p>
+            )}
+
+            {/* Upload progress indicator */}
+            {isUploading && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-brand-muted">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-plum" />
+                <span>Uploading media...</span>
+              </div>
+            )}
+          </div>
+
+          {/* 6. Display name */}
+          <Input
+            label="Your Name / Display Name *"
+            required
+            placeholder="e.g. Pooja Kulkarni"
+            value={reviewerName}
+            onChange={(e) => setReviewerName(e.target.value)}
           />
 
           <div className="flex items-center justify-end gap-3 pt-2">
@@ -451,16 +754,18 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setIsFeedbackModalOpen(false)}
+              onClick={handleCloseModal}
+              disabled={isProcessing}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               size="sm"
-              disabled={isSubmittingFeedback}
+              disabled={isProcessing}
+              isLoading={isProcessing}
             >
-              {isSubmittingFeedback ? 'Submitting...' : 'Submit Review'}
+              {isUploading ? 'Uploading...' : isSubmittingFeedback ? 'Submitting...' : 'Submit Review'}
             </Button>
           </div>
         </form>

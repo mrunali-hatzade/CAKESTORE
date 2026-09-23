@@ -147,6 +147,35 @@ public class RazorpayService {
         }
     }
 
+    public String createCustomerOrder(BigDecimal amount, String orderNumber, Long shopId, String receiptId) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Razorpay credentials not configured.");
+        }
+        try {
+            RazorpayClient razorpayClient = new RazorpayClient(keyId, keySecret);
+            long amountPaise = amount.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.UNNECESSARY).longValueExact();
+            
+            JSONObject orderRequest = new JSONObject();
+            orderRequest.put("amount", amountPaise);
+            orderRequest.put("currency", "INR");
+            orderRequest.put("receipt", receiptId != null ? receiptId : orderNumber);
+            
+            JSONObject notes = new JSONObject();
+            notes.put("order_number", orderNumber);
+            notes.put("internal_order_number", orderNumber);
+            if (shopId != null) {
+                notes.put("shop_id", shopId);
+            }
+            orderRequest.put("notes", notes);
+            
+            Order order = razorpayClient.orders.create(orderRequest);
+            return order.get("id");
+        } catch (RazorpayException e) {
+            log.error("Failed to create Razorpay order for customer order {}: {}", orderNumber, e.getMessage());
+            throw new RuntimeException("Payment initiation failed. Please try again later.");
+        }
+    }
+
     public void verifyOrderDetails(String razorpayOrderId, BigDecimal expectedAmount, String expectedCurrency) {
         if (!isConfigured()) {
             return;

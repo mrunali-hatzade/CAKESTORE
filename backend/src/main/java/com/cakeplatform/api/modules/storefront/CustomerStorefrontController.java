@@ -16,10 +16,29 @@ import java.util.List;
 
 @RestController
 @RequestMapping({"/api/storefront/shops", "/api/customer/storefront"})
-@RequiredArgsConstructor
 public class CustomerStorefrontController {
-
     private final CustomerStorefrontService storefrontService;
+    private final com.cakeplatform.api.modules.order.InvoiceService invoiceService;
+    private final com.cakeplatform.api.security.JwtService jwtService;
+    private final org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
+
+    // Backward-compatible constructor for existing unit tests
+    public CustomerStorefrontController(CustomerStorefrontService storefrontService) {
+        this(storefrontService, null, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CustomerStorefrontController(
+            CustomerStorefrontService storefrontService,
+            com.cakeplatform.api.modules.order.InvoiceService invoiceService,
+            com.cakeplatform.api.security.JwtService jwtService,
+            org.springframework.security.core.userdetails.UserDetailsService userDetailsService
+    ) {
+        this.storefrontService = storefrontService;
+        this.invoiceService = invoiceService;
+        this.jwtService = jwtService;
+        this.userDetailsService = userDetailsService;
+    }
 
     @GetMapping("/locations/popular-cities")
     public ResponseEntity<List<com.cakeplatform.api.modules.storefront.dto.PopularCityDTO>> getPopularCities(
@@ -76,7 +95,7 @@ public class CustomerStorefrontController {
         } else {
             return ResponseEntity.ok(storefrontService.discoverShops(
                     country, state, district, city, area, pincode, parsedType, search, location,
-                    latitude, longitude, radiusKm, sortBy
+                    latitude, longitude, radiusKm, sortBy, size
             ));
         }
     }
@@ -149,22 +168,39 @@ public class CustomerStorefrontController {
     }
 
     @GetMapping("/orders/{orderNumber}")
-    public ResponseEntity<Order> getGuestOrderDetails(@PathVariable String orderNumber) {
-        return ResponseEntity.ok(storefrontService.getGuestOrder(orderNumber));
+    public ResponseEntity<Order> getGuestOrderDetails(
+            @PathVariable String orderNumber,
+            @RequestHeader(value = org.springframework.http.HttpHeaders.AUTHORIZATION, required = false) String authHeader
+    ) {
+        Order order = storefrontService.getGuestOrder(orderNumber);
+
+        // If an Authorization header is provided, enforce guest phone scope
+        if (jwtService != null && authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            String guestPhone = jwtService.extractGuestPhone(token);
+            if (guestPhone != null) {
+                if (jwtService.isGuestTokenValid(token, guestPhone) && !guestPhone.equals(order.getCustomerPhone())) {
+                    return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+                }
+            }
+        }
+
+        // Direct tracking is accessible by unguessable order number
+        return ResponseEntity.ok(order);
     }
 
     @GetMapping("/orders/{orderNumber}/invoice")
-    public ResponseEntity<byte[]> downloadInvoice(
-            @PathVariable String orderNumber,
-            @org.springframework.beans.factory.annotation.Autowired com.cakeplatform.api.modules.order.InvoiceService invoiceService) throws Exception {
-            
+    public ResponseEntity<byte[]> downloadInvoice(@PathVariable String orderNumber) throws Exception {
         Order order = storefrontService.getGuestOrder(orderNumber);
+        if (invoiceService == null) {
+            throw new IllegalStateException("Invoice service is currently unavailable");
+        }
         byte[] pdfBytes = invoiceService.generateInvoice(order);
-        
+
         org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
         headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
         headers.setContentDispositionFormData("attachment", "invoice-" + order.getOrderNumber() + ".pdf");
-        
+
         return new ResponseEntity<>(pdfBytes, headers, org.springframework.http.HttpStatus.OK);
     }
 }

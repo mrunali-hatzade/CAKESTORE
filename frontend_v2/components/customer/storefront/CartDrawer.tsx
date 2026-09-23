@@ -169,7 +169,7 @@ export const CartDrawer: React.FC = () => {
               <div className="space-y-3">
                 {items.map((item) => (
                   <div
-                    key={item.productId}
+                    key={item.cartLineId}
                     className="p-4 rounded-2xl border border-brand-border/80 bg-white shadow-subtle space-y-2.5"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -211,7 +211,7 @@ export const CartDrawer: React.FC = () => {
                       {/* Quantity Controls */}
                       <div className="flex items-center gap-2 border border-brand-border rounded-full px-2 py-0.5 bg-brand-cream-light/50">
                         <button
-                          onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                          onClick={() => updateQuantity(item.cartLineId!, item.quantity - 1)}
                           className="p-0.5 text-brand-muted hover:text-brand-espresso"
                         >
                           <Minus className="w-3 h-3" />
@@ -220,7 +220,7 @@ export const CartDrawer: React.FC = () => {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                          onClick={() => updateQuantity(item.cartLineId!, item.quantity + 1)}
                           className="p-0.5 text-brand-muted hover:text-brand-espresso"
                         >
                           <Plus className="w-3 h-3" />
@@ -228,7 +228,7 @@ export const CartDrawer: React.FC = () => {
                       </div>
 
                       <button
-                        onClick={() => removeItem(item.productId)}
+                        onClick={() => removeItem(item.cartLineId!)}
                         className="text-brand-muted hover:text-red-600 p-1 transition-colors"
                         title="Remove item"
                       >

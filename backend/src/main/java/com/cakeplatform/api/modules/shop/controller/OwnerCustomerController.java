@@ -28,15 +28,25 @@ public class OwnerCustomerController {
     private final ShopAccessValidator shopAccessValidator;
 
     @GetMapping
-    public ResponseEntity<List<CustomerProfileResponse>> getMyCustomers(@AuthenticationPrincipal CustomUserDetails userDetails) {
+    public ResponseEntity<org.springframework.data.domain.Page<CustomerProfileResponse>> getMyCustomers(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+            
+        // Enforce maximum page size
+        if (size > 50) {
+            size = 50;
+        }
+
         Shop shop = shopAccessValidator.getValidShopForOwner(userDetails.getId());
 
-        List<String> uniqueEmails = orderRepository.findUniqueCustomerEmailsByShopId(shop.getId());
-        List<CustomerProfileResponse> profiles = new ArrayList<>();
+        // Use the optimized JPQL grouped query, sorting by the latest order date
+        org.springframework.data.domain.Pageable pageable = 
+            org.springframework.data.domain.PageRequest.of(page, size, 
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "lastOrderDate"));
 
-        for (String email : uniqueEmails) {
-            profiles.add(buildProfile(shop.getId(), email));
-        }
+        org.springframework.data.domain.Page<CustomerProfileResponse> profiles = 
+            orderRepository.findCustomerProfilesByShopId(shop.getId(), pageable);
 
         return ResponseEntity.ok(profiles);
     }

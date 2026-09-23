@@ -137,10 +137,10 @@ public class StorefrontLocationDiscoveryTest {
     @Test
     @DisplayName("1. Nearby Search: Computes bounding box and calls findNearbyActiveShops")
     void testNearbySearch_BoundingBoxAndDistance() {
-        when(shopRepository.findNearbyActiveShops(
+        when(shopRepository.findNearbyActiveShopsOrderByDistance(
                 eq(18.5204), eq(73.8567), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
                 eq(10.0), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(),
-                eq("distance"), eq(20), eq(0)
+                eq(20), eq(0)
         )).thenReturn(List.of(mockNearbyShop));
 
         when(shopRepository.countNearbyActiveShops(
@@ -167,9 +167,9 @@ public class StorefrontLocationDiscoveryTest {
         // Verify bounding box calculation arguments
         ArgumentCaptor<Double> minLatCaptor = ArgumentCaptor.forClass(Double.class);
         ArgumentCaptor<Double> maxLatCaptor = ArgumentCaptor.forClass(Double.class);
-        verify(shopRepository).findNearbyActiveShops(
+        verify(shopRepository).findNearbyActiveShopsOrderByDistance(
                 eq(18.5204), eq(73.8567), minLatCaptor.capture(), maxLatCaptor.capture(),
-                anyDouble(), anyDouble(), eq(10.0), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()
+                anyDouble(), anyDouble(), eq(10.0), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()
         );
         assertTrue(minLatCaptor.getValue() < 18.5204);
         assertTrue(maxLatCaptor.getValue() > 18.5204);
@@ -178,9 +178,9 @@ public class StorefrontLocationDiscoveryTest {
     @Test
     @DisplayName("2. Hierarchy / Text Search: Includes shops with NULL coordinates with distanceKm = null")
     void testHierarchySearch_IncludesNullCoordsShops() {
-        when(shopRepository.findActiveShopsWithSummary(
+        when(shopRepository.findActiveShopsWithSummaryOrderByRating(
                 eq("Nagpur"), eq("Maharashtra"), isNull(), isNull(), isNull(),
-                isNull(), isNull(), isNull(), eq("rating"), eq(20), eq(0)
+                isNull(), isNull(), isNull(), eq(20), eq(0)
         )).thenReturn(List.of(mockHierarchyShopNullCoords));
 
         when(shopRepository.countActiveShops(
@@ -208,8 +208,8 @@ public class StorefrontLocationDiscoveryTest {
     @Test
     @DisplayName("3. Zero N+1 Queries: Exactly 1 data query + 1 count query issued, zero per-shop queries")
     void testZeroNPlusOneQueries() {
-        when(shopRepository.findActiveShopsWithSummary(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()
+        when(shopRepository.findActiveShopsWithSummaryOrderByRating(
+                any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()
         )).thenReturn(List.of(mockNearbyShop, mockHierarchyShopNullCoords));
 
         when(shopRepository.countActiveShops(
@@ -224,7 +224,7 @@ public class StorefrontLocationDiscoveryTest {
         assertEquals(2, page.getContent().size());
 
         // Verify exactly 1 data query + 1 count query were called on shopRepository
-        verify(shopRepository, times(1)).findActiveShopsWithSummary(any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt());
+        verify(shopRepository, times(1)).findActiveShopsWithSummaryOrderByRating(any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt());
         verify(shopRepository, times(1)).countActiveShops(any(), any(), any(), any(), any(), any(), any(), any());
 
         // Verify ZERO per-shop repository calls were made
@@ -271,8 +271,8 @@ public class StorefrontLocationDiscoveryTest {
     void testController_SearchEndpoints() {
         CustomerStorefrontController controller = new CustomerStorefrontController(storefrontService);
 
-        when(shopRepository.findActiveShopsWithSummary(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()
+        when(shopRepository.findActiveShopsWithSummaryOrderByRating(
+                any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()
         )).thenReturn(List.of(mockNearbyShop));
 
         when(shopRepository.countActiveShops(

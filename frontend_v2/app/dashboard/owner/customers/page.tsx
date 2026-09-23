@@ -39,6 +39,11 @@ export default function OwnerCustomersPage() {
   // Search
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
   // Selected customer for modal
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [customerDetail, setCustomerDetail] = useState<CustomerProfile | null>(null);
@@ -50,15 +55,17 @@ export default function OwnerCustomersPage() {
     setError(null);
 
     try {
-      const data = await ownerApi.getOwnerCustomers();
-      setCustomers(data || []);
+      const response = await ownerApi.getCustomers(page, 10);
+      setCustomers(response.content || []);
+      setTotalPages(response.totalPages || 0);
+      setTotalElements(response.totalElements || 0);
     } catch (err: any) {
       setError(err?.message || 'Failed to load customers');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchCustomers();

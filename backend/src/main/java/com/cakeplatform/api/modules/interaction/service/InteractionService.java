@@ -22,6 +22,7 @@ public class InteractionService {
     private final CustomCakeRequestFieldValueRepository customCakeRequestFieldValueRepository;
     private final ShopRepository shopRepository;
     private final NotificationService notificationService;
+    private final com.cakeplatform.api.modules.product.ProductRepository productRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     public InteractionService(
@@ -30,7 +31,8 @@ public class InteractionService {
             CustomCakeRequestRepository customCakeRequestRepository,
             CustomCakeRequestFieldValueRepository customCakeRequestFieldValueRepository,
             ShopRepository shopRepository,
-            NotificationService notificationService
+            NotificationService notificationService,
+            com.cakeplatform.api.modules.product.ProductRepository productRepository
     ) {
         this.feedbackRepository = feedbackRepository;
         this.enquiryRepository = enquiryRepository;
@@ -38,6 +40,19 @@ public class InteractionService {
         this.customCakeRequestFieldValueRepository = customCakeRequestFieldValueRepository;
         this.shopRepository = shopRepository;
         this.notificationService = notificationService;
+        this.productRepository = productRepository;
+    }
+
+    // Backward-compatible constructor for existing callers
+    public InteractionService(
+            FeedbackRepository feedbackRepository,
+            EnquiryRepository enquiryRepository,
+            CustomCakeRequestRepository customCakeRequestRepository,
+            CustomCakeRequestFieldValueRepository customCakeRequestFieldValueRepository,
+            ShopRepository shopRepository,
+            NotificationService notificationService
+    ) {
+        this(feedbackRepository, enquiryRepository, customCakeRequestRepository, customCakeRequestFieldValueRepository, shopRepository, notificationService, null);
     }
 
     // Backward-compatible constructor for existing tests
@@ -48,7 +63,7 @@ public class InteractionService {
             ShopRepository shopRepository,
             NotificationService notificationService
     ) {
-        this(feedbackRepository, enquiryRepository, customCakeRequestRepository, null, shopRepository, notificationService);
+        this(feedbackRepository, enquiryRepository, customCakeRequestRepository, null, shopRepository, notificationService, null);
     }
 
     private Shop getActiveShop(Long shopId) {
@@ -72,6 +87,35 @@ public class InteractionService {
         feedback.setOrderReference(request.getOrderReference());
         feedback.setCustomerEmail(request.getCustomerEmail());
         feedback.setIsApproved(true);
+
+        // Product association & validation
+        if (request.getProductId() != null) {
+            if (productRepository == null) {
+                throw new IllegalStateException("Product repository is not configured");
+            }
+            com.cakeplatform.api.modules.product.Product product = productRepository.findById(request.getProductId())
+                    .orElseThrow(() -> new IllegalArgumentException("Product not found with ID: " + request.getProductId()));
+            if (product.getShop() == null || !product.getShop().getId().equals(shop.getId())) {
+                throw new IllegalArgumentException("Product does not belong to this bakery");
+            }
+            feedback.setProduct(product);
+            // Derive authoritative product name from database
+            feedback.setProductName(product.getName());
+        } else if (request.getProductName() != null && !request.getProductName().isBlank()) {
+            feedback.setProductName(request.getProductName().trim());
+        }
+
+        if (request.getRecommendationText() != null && !request.getRecommendationText().isBlank()) {
+            feedback.setRecommendationText(request.getRecommendationText().trim());
+        }
+
+        if (request.getCakeImageUrl() != null && !request.getCakeImageUrl().isBlank()) {
+            feedback.setCakeImageUrl(request.getCakeImageUrl().trim());
+        }
+
+        if (request.getCakeVideoUrl() != null && !request.getCakeVideoUrl().isBlank()) {
+            feedback.setCakeVideoUrl(request.getCakeVideoUrl().trim());
+        }
         
         Feedback saved = feedbackRepository.save(feedback);
 

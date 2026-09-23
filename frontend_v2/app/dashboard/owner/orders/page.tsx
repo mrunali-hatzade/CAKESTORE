@@ -38,18 +38,28 @@ export default function OwnerOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const { registerRefreshHandler } = useOwner();
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const size = 15;
 
   const fetchOrders = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsLoading(true);
     try {
-      const data = await ordersApi.getOwnerOrders();
-      setOrders(data || []);
+      const data = await ordersApi.getOwnerOrders(undefined, page, size);
+      setOrders(data?.content || []);
+      setTotalPages(data?.totalPages || 0);
+      setTotalElements(data?.totalElements || 0);
     } catch {
       setOrders([]);
+      setTotalPages(0);
+      setTotalElements(0);
     } finally {
       if (!isSilent) setIsLoading(false);
     }
-  }, []);
+  }, [page, size]);
 
   useEffect(() => {
     fetchOrders();
@@ -71,7 +81,7 @@ export default function OwnerOrdersPage() {
         setSelectedOrder({ ...selectedOrder, ...updated, status: (updated.orderStatus || updated.status || status) as OrderStatus });
       }
     } catch (err: any) {
-      alert(err?.message || 'Failed to update status');
+      alert(err?.message || err?.response?.data?.message || 'Failed to update status. Invalid transition.');
     } finally {
       setUpdatingId(null);
     }
@@ -305,6 +315,36 @@ export default function OwnerOrdersPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t border-owner-border bg-white">
+              <span className="text-sm text-owner-muted">
+                Showing {orders.length} of {totalElements} orders
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                >
+                  Previous
+                </Button>
+                <span className="px-3 py-1.5 text-sm font-medium text-owner-heading">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

@@ -35,6 +35,27 @@ public class Feedback {
     @Column(name = "order_reference")
     private String orderReference;
 
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
+    private com.cakeplatform.api.modules.product.Product product;
+
+    @Column(name = "product_name")
+    private String productName;
+
+    @Column(name = "recommendation_text", columnDefinition = "TEXT")
+    private String recommendationText;
+
+    @Column(name = "cake_image_url", length = 1000)
+    private String cakeImageUrl;
+
+    @Column(name = "cake_video_url", length = 1000)
+    private String cakeVideoUrl;
+
+    public Long getProductId() {
+        return product != null ? product.getId() : null;
+    }
+
     @Column(name = "customer_email")
     private String customerEmail;
 

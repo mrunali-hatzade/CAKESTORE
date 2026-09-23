@@ -175,28 +175,64 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
           variantId: i.variantId,
           dietaryPreference: i.dietaryPreference || (i.isEggless ? 'EGGLESS' : 'REGULAR'),
           cakeMessage: i.customMessage,
+          addonIds: i.addonIds && i.addonIds.length > 0 ? i.addonIds : undefined,
         })),
       });
 
       if (paymentMethod === 'ONLINE') {
-        await paymentsService.initiatePayment({
-          orderId: order.orderNumber,
-          amount: finalTotal,
-          customerName: customerName.trim(),
-          customerEmail: customerEmail.trim(),
-          customerPhone: cleanPhone,
-          shopName: shop.businessName,
-          onSuccess: (paymentId) => {
-            clearCart();
-            setConfirmedOrder(order);
-            toast.success(`Payment verified (${paymentId})! Order confirmed.`);
-          },
-          onFailure: (_errMsg) => {
-            clearCart();
-            setConfirmedOrder(order);
-            toast.info('Order placed! Payment can be completed upon delivery.');
-          },
-        });
+        try {
+          const paymentOrderData = await ordersApi.createPaymentOrder(order.orderNumber);
+
+          await paymentsService.openCustomerRazorpayCheckout({
+            keyId: paymentOrderData.keyId,
+            razorpayOrderId: paymentOrderData.razorpayOrderId,
+            orderNumber: order.orderNumber,
+            amountPaise: paymentOrderData.amountPaise,
+            currency: paymentOrderData.currency,
+            shopName: paymentOrderData.shopName || shop.businessName,
+            customerName: customerName.trim(),
+            customerEmail: customerEmail.trim(),
+            customerPhone: cleanPhone,
+            onSuccess: async (rzpResponse) => {
+              setIsSubmitting(true);
+              try {
+                const verifyResult = await ordersApi.verifyPayment(order.orderNumber, {
+                  razorpayOrderId: rzpResponse.razorpay_order_id,
+                  razorpayPaymentId: rzpResponse.razorpay_payment_id,
+                  razorpaySignature: rzpResponse.razorpay_signature,
+                });
+
+                if (verifyResult?.status === 'SUCCESS') {
+                  clearCart();
+                  setConfirmedOrder({
+                    ...order,
+                    paymentStatus: 'PAID',
+                    orderStatus: 'CONFIRMED',
+                    transactionId: rzpResponse.razorpay_payment_id,
+                  });
+                  toast.success(`Payment verified! Order #${order.orderNumber} confirmed.`);
+                } else {
+                  setError(`Payment verification was not successful: ${verifyResult?.message || 'Verification error'}. Order #${order.orderNumber} remains pending.`);
+                }
+              } catch (verifyErr: any) {
+                setError(verifyErr?.message || `Payment verification failed. Your order #${order.orderNumber} is pending confirmation.`);
+              } finally {
+                setIsSubmitting(false);
+              }
+            },
+            onFailure: (errMsg) => {
+              setError(`Payment not completed: ${errMsg}. Order #${order.orderNumber} was saved as pending.`);
+              setIsSubmitting(false);
+            },
+            onDismiss: () => {
+              setError(`Payment window was closed. Order #${order.orderNumber} has been created and remains pending.`);
+              setIsSubmitting(false);
+            },
+          });
+        } catch (paymentInitErr: any) {
+          setError(paymentInitErr?.message || `Unable to initiate online payment for Order #${order.orderNumber}. Order was saved as pending.`);
+          setIsSubmitting(false);
+        }
       } else {
         clearCart();
         setConfirmedOrder(order);
@@ -531,7 +567,7 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
             {/* Items List */}
             <div className="max-h-60 overflow-y-auto divide-y divide-brand-border/40 space-y-3 pr-1 text-xs">
               {items.map((i) => (
-                <div key={i.productId} className="pt-2.5 first:pt-0 flex justify-between items-center gap-3">
+                <div key={i.cartLineId} className="pt-2.5 first:pt-0 flex justify-between items-center gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-brand-cream shrink-0 border border-brand-border/60">
                       <img

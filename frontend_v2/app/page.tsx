@@ -11,6 +11,7 @@ import { BakeryGrid } from '@/components/customer/marketplace/BakeryGrid';
 import { BespokeCakeBridge } from '@/components/customer/marketplace/BespokeCakeBridge';
 import { TrustBadges } from '@/components/customer/marketplace/TrustBadges';
 import { OwnerCTA } from '@/components/customer/marketplace/OwnerCTA';
+import { TopRatedSection } from '@/components/customer/marketplace/TopRatedSection';
 import { CategoryOption } from '@/components/customer/marketplace/CategoryPills';
 import { AdvancedLocationFilter, LocationFilterValues } from '@/components/customer/marketplace/AdvancedLocationFilter';
 
@@ -27,6 +28,11 @@ export default function HomePage() {
   const [locationQuery, setLocationQuery] = useState<string>('');
   const [locationFilters, setLocationFilters] = useState<Partial<LocationFilterValues>>({});
   const [geoParams, setGeoParams] = useState<{ latitude?: number; longitude?: number; radiusKm?: number }>({});
+  const [sortBy, setSortBy] = useState<string>('default');
+
+  const [topRatedShops, setTopRatedShops] = useState<Shop[]>([]);
+  const [isTopRatedLoading, setIsTopRatedLoading] = useState(true);
+  const [topRatedError, setTopRatedError] = useState<string | null>(null);
 
   const loadShops = useCallback(async () => {
     setIsLoading(true);
@@ -44,6 +50,7 @@ export default function HomePage() {
         longitude: geoParams.longitude,
         radiusKm: geoParams.radiusKm,
         businessType: activeBusinessType,
+        sortBy: sortBy === 'default' ? undefined : sortBy,
       });
       setShops(data || []);
     } catch (err: any) {
@@ -51,11 +58,39 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
+  }, [searchQuery, locationQuery, locationFilters, geoParams, activeBusinessType, sortBy]);
+
+  const loadTopRatedShops = useCallback(async () => {
+    setIsTopRatedLoading(true);
+    setTopRatedError(null);
+    try {
+      const data = await storefrontApi.searchShops({
+        search: searchQuery || undefined,
+        location: locationQuery || undefined,
+        state: locationFilters.state,
+        district: locationFilters.district,
+        city: locationFilters.city,
+        area: locationFilters.area,
+        pincode: locationFilters.pincode,
+        latitude: geoParams.latitude,
+        longitude: geoParams.longitude,
+        radiusKm: geoParams.radiusKm,
+        businessType: activeBusinessType,
+        sortBy: 'rating',
+        size: 4,
+      });
+      setTopRatedShops(data || []);
+    } catch (err: any) {
+      setTopRatedError(err.message || 'Failed to load top rated bakeries.');
+    } finally {
+      setIsTopRatedLoading(false);
+    }
   }, [searchQuery, locationQuery, locationFilters, geoParams, activeBusinessType]);
 
   useEffect(() => {
     loadShops();
-  }, [loadShops]);
+    loadTopRatedShops();
+  }, [loadShops, loadTopRatedShops]);
 
   const handleHeroSearch = (params: {
     search: string;
@@ -113,6 +148,7 @@ export default function HomePage() {
     setLocationQuery('');
     setGeoParams({});
     setLocationFilters({});
+    setSortBy('default');
   };
 
   // Dynamic grid title based on city and category
@@ -155,6 +191,13 @@ export default function HomePage() {
           />
         </div>
 
+        {/* Top Rated Bakeries Section */}
+        <TopRatedSection
+          shops={topRatedShops}
+          isLoading={isTopRatedLoading}
+          error={topRatedError}
+        />
+
         {/* Featured Bakeries Grid */}
         <BakeryGrid
           shops={shops}
@@ -163,6 +206,8 @@ export default function HomePage() {
           onRetry={loadShops}
           onClearFilters={handleClearFilters}
           title={getGridTitle()}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
           subtitle={
             locationQuery.toLowerCase().includes('near')
               ? 'Showing verified kitchens delivering freshly baked celebration cakes closest to your location'

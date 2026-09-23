@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Store,
@@ -34,22 +34,34 @@ export default function AdminShopsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [mutatingId, setMutatingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
   const toast = useToast();
 
-  const fetchShops = React.useCallback(async (isManual = false) => {
+  const fetchShops = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setIsLoading(true);
 
     try {
-      const data = await getAllShops();
-      setShops(data || []);
-    } catch {
-      toast.error('Failed to load bakery directory');
+      setError('');
+      const response = await getAllShops(page, 20);
+      setShops(response.content || []);
+      setTotalPages(response.totalPages || 0);
+      setTotalElements(response.totalElements || 0);
+    } catch (err: any) {
+      console.error('Failed to fetch shops:', err);
+      setError('Failed to load shops. Please try again.');
+      toast.error('Failed to load shops');
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [page, toast]);
 
   useEffect(() => {
     fetchShops();
@@ -332,6 +344,30 @@ export default function AdminShopsPage() {
               </tbody>
             </table>
           </div>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center border-t border-admin-border p-4 bg-gray-50/50">
+              <span className="text-sm text-admin-muted">
+                Showing page {page + 1} of {totalPages} ({totalElements} total shops)
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-4 py-2 text-sm rounded-xl font-medium border border-admin-border bg-white disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="px-4 py-2 text-sm rounded-xl font-medium border border-admin-border bg-white disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>

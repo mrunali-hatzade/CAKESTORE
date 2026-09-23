@@ -18,6 +18,25 @@ export interface RazorpayCheckoutOptions {
   onFailure: (error: string) => void;
 }
 
+export interface RazorpayCustomerCheckoutOptions {
+  keyId: string;
+  razorpayOrderId: string;
+  orderNumber: string;
+  amountPaise: number;
+  currency?: string;
+  shopName?: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  onSuccess: (response: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  }) => void;
+  onFailure: (error: string) => void;
+  onDismiss?: () => void;
+}
+
 export const paymentsService = {
   /**
    * Check if live Razorpay credentials are configured
@@ -40,6 +59,63 @@ export const paymentsService = {
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
+  },
+
+  /**
+   * Open real Razorpay Checkout for customer orders with real Razorpay order ID and authoritative HMAC signature handling.
+   */
+  openCustomerRazorpayCheckout: async (options: RazorpayCustomerCheckoutOptions): Promise<void> => {
+    const isLoaded = await paymentsService.loadRazorpayScript();
+    if (!isLoaded) {
+      options.onFailure('Unable to load payment gateway. Please check your internet connection.');
+      return;
+    }
+
+    const keyId = options.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+    if (!keyId) {
+      options.onFailure('Payment gateway public key is missing.');
+      return;
+    }
+
+    const rzpOptions = {
+      key: keyId,
+      order_id: options.razorpayOrderId,
+      amount: options.amountPaise,
+      currency: options.currency || 'INR',
+      name: options.shopName || 'CakeStore Marketplace',
+      description: `Celebration Cake Order #${options.orderNumber}`,
+      prefill: {
+        name: options.customerName,
+        email: options.customerEmail,
+        contact: options.customerPhone || '',
+      },
+      theme: {
+        color: '#5C2434', // Brand Plum
+      },
+      handler: (response: any) => {
+        if (response?.razorpay_payment_id && response?.razorpay_order_id && response?.razorpay_signature) {
+          options.onSuccess({
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+        } else {
+          options.onFailure('Payment gateway returned an incomplete response. Signature verification cannot proceed.');
+        }
+      },
+      modal: {
+        ondismiss: () => {
+          if (options.onDismiss) {
+            options.onDismiss();
+          } else {
+            options.onFailure('Payment was cancelled by the customer.');
+          }
+        },
+      },
+    };
+
+    const rzp = new (window as any).Razorpay(rzpOptions);
+    rzp.open();
   },
 
   /**

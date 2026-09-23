@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { PaginatedResponse } from '@/types/order';
 import {
   DashboardStats,
   AdminShopSummary,
@@ -21,12 +22,16 @@ export async function getPlatformStats(): Promise<DashboardStats> {
 /**
  * Fetch all registered bakery shops across the platform.
  */
-export async function getAllShops(): Promise<AdminShopSummary[]> {
-  return apiClient.get<AdminShopSummary[]>('/api/admin/shops');
+export async function getAllShops(page: number = 0, size: number = 20): Promise<PaginatedResponse<AdminShopSummary>> {
+  return apiClient.get<PaginatedResponse<AdminShopSummary>>('/api/admin/shops', {
+    params: { page, size }
+  });
 }
 
-export async function getAllAdminShops(): Promise<AdminShopSummary[]> {
-  return apiClient.get<AdminShopSummary[]>('/api/admin/shops');
+export async function getAllAdminShops(page: number = 0, size: number = 20): Promise<PaginatedResponse<AdminShopSummary>> {
+  return apiClient.get<PaginatedResponse<AdminShopSummary>>('/api/admin/shops', {
+    params: { page, size }
+  });
 }
 
 /**

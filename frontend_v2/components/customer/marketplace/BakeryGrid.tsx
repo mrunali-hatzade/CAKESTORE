@@ -15,6 +15,8 @@ interface BakeryGridProps {
   onClearFilters?: () => void;
   title?: string;
   subtitle?: string;
+  sortBy?: string;
+  onSortChange?: (sort: string) => void;
 }
 
 const BakeryCardSkeleton = () => (
@@ -47,13 +49,13 @@ export const BakeryGrid: React.FC<BakeryGridProps> = ({
   onClearFilters,
   title = 'Featured Bakeries',
   subtitle = 'Discover verified artisanal cake bakers in your area',
+  sortBy = 'default',
+  onSortChange,
 }) => {
-  const [sortBy, setSortBy] = useState<'default' | 'name' | 'city'>('default');
-
   const sortedShops = [...shops].sort((a, b) => {
     if (sortBy === 'name') return (a.businessName || '').localeCompare(b.businessName || '');
     if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '');
-    return 0;
+    return 0; // rating, newest, and default are pre-sorted by the backend
   });
 
   return (
@@ -84,10 +86,12 @@ export const BakeryGrid: React.FC<BakeryGridProps> = ({
               <SlidersHorizontal className="w-3.5 h-3.5 text-brand-plum shrink-0" />
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => onSortChange?.(e.target.value)}
                 className="bg-transparent focus:outline-none text-xs text-brand-espresso cursor-pointer"
               >
                 <option value="default">Default Order</option>
+                <option value="rating">Top Rated</option>
+                <option value="newest">Newest Bakeries</option>
                 <option value="name">Name (A-Z)</option>
                 <option value="city">City</option>
               </select>

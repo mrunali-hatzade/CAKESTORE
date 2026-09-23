@@ -11,6 +11,7 @@ import { SearchBar } from '@/components/common/SearchBar';
 import { BakeryGrid } from '@/components/customer/marketplace/BakeryGrid';
 import { CategoryPills, CategoryOption } from '@/components/customer/marketplace/CategoryPills';
 import { AdvancedLocationFilter, LocationFilterValues } from '@/components/customer/marketplace/AdvancedLocationFilter';
+import { TopRatedSection } from '@/components/customer/marketplace/TopRatedSection';
 
 function ExploreContent() {
   const searchParams = useSearchParams();
@@ -46,6 +47,11 @@ function ExploreContent() {
       ? { latitude: initialLat, longitude: initialLng, radiusKm: initialRadius }
       : {}
   );
+  const [sortBy, setSortBy] = useState<string>('default');
+
+  const [topRatedShops, setTopRatedShops] = useState<Shop[]>([]);
+  const [isTopRatedLoading, setIsTopRatedLoading] = useState(true);
+  const [topRatedError, setTopRatedError] = useState<string | null>(null);
 
   const fetchShops = useCallback(async () => {
     setIsLoading(true);
@@ -63,6 +69,7 @@ function ExploreContent() {
         longitude: geoParams.longitude,
         radiusKm: geoParams.radiusKm,
         businessType: activeBusinessType,
+        sortBy: sortBy === 'default' ? undefined : sortBy,
       });
       setShops(data || []);
     } catch (err: any) {
@@ -70,11 +77,39 @@ function ExploreContent() {
     } finally {
       setIsLoading(false);
     }
+  }, [searchQuery, locationQuery, locationFilters, geoParams, activeBusinessType, sortBy]);
+
+  const fetchTopRatedShops = useCallback(async () => {
+    setIsTopRatedLoading(true);
+    setTopRatedError(null);
+    try {
+      const data = await storefrontApi.searchShops({
+        search: searchQuery || undefined,
+        location: locationQuery || undefined,
+        state: locationFilters.state,
+        district: locationFilters.district,
+        city: locationFilters.city,
+        area: locationFilters.area,
+        pincode: locationFilters.pincode,
+        latitude: geoParams.latitude,
+        longitude: geoParams.longitude,
+        radiusKm: geoParams.radiusKm,
+        businessType: activeBusinessType,
+        sortBy: 'rating',
+        size: 4,
+      });
+      setTopRatedShops(data || []);
+    } catch (err: any) {
+      setTopRatedError(err.message || 'Failed to load top rated bakeries');
+    } finally {
+      setIsTopRatedLoading(false);
+    }
   }, [searchQuery, locationQuery, locationFilters, geoParams, activeBusinessType]);
 
   useEffect(() => {
     fetchShops();
-  }, [fetchShops]);
+    fetchTopRatedShops();
+  }, [fetchShops, fetchTopRatedShops]);
 
   const handleSearch = useCallback((params: {
     search: string;
@@ -132,6 +167,7 @@ function ExploreContent() {
     setLocationQuery('');
     setGeoParams({});
     setLocationFilters({});
+    setSortBy('default');
   }, []);
 
   const getTitle = () => {
@@ -234,6 +270,25 @@ function ExploreContent() {
         </div>
       )}
 
+      {/* Top Rated Bakeries in Customer's Area */}
+      <TopRatedSection
+        shops={topRatedShops}
+        isLoading={isTopRatedLoading}
+        error={topRatedError}
+        title={
+          geoParams.latitude != null || locationQuery.toLowerCase().includes('near')
+            ? 'Top Rated Bakeries Near You'
+            : locationQuery
+            ? `Top Rated Bakeries in ${locationQuery}`
+            : 'Top Rated Bakeries Across India'
+        }
+        subtitle={
+          locationQuery
+            ? `Highest rated cake studios delivering in ${locationQuery} based on verified customer reviews`
+            : 'Highest rated artisanal kitchens and home bakers across India'
+        }
+      />
+
       {/* Grid */}
       <BakeryGrid
         shops={shops}
@@ -241,6 +296,8 @@ function ExploreContent() {
         error={error}
         onRetry={fetchShops}
         onClearFilters={handleClearFilters}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
         title={getTitle()}
         subtitle={
           locationQuery

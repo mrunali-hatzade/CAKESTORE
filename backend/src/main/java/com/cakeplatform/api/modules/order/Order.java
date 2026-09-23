@@ -27,6 +27,16 @@ public class Order {
     @JoinColumn(name = "shop_id", nullable = false)
     private Shop shop;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("shopId")
+    public Long fetchShopId() {
+        return shop != null ? shop.getId() : null;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("shopName")
+    public String fetchShopName() {
+        return shop != null ? shop.getBusinessName() : null;
+    }
+
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")

@@ -14,6 +14,7 @@ import {
   OwnerDashboardStats,
   OwnerPaymentRecord,
 } from '@/types/owner';
+import { PaginatedResponse } from '@/types/order';
 
 export const ownerApi = {
   // Stats
@@ -52,8 +53,10 @@ export const ownerApi = {
   },
 
   // Customers
-  getCustomers: async (): Promise<CustomerProfile[]> => {
-    return apiClient.get<CustomerProfile[]>('/api/owner/customers');
+  getCustomers: async (page: number = 0, size: number = 10): Promise<PaginatedResponse<CustomerProfile>> => {
+    return apiClient.get<PaginatedResponse<CustomerProfile>>('/api/owner/customers', {
+      params: { page, size },
+    });
   },
 
   getOwnerCustomers: async (): Promise<CustomerProfile[]> => {

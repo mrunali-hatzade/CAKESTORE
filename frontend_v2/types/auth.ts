@@ -38,4 +38,6 @@ export interface RegisterFormData {
   pincode: string;
   fssaiRegistration?: string;
   verificationFile?: File | null;
+  latitude?: number;
+  longitude?: number;
 }

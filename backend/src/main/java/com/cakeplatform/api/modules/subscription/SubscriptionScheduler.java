@@ -29,9 +29,7 @@ public class SubscriptionScheduler {
     public void processSubscriptionExpiries() {
         log.info("Running daily subscription expiry check...");
         
-        List<Subscription> activeSubscriptions = subscriptionRepository.findAll().stream()
-                .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE)
-                .toList();
+        List<Subscription> activeSubscriptions = subscriptionRepository.findByStatus(SubscriptionStatus.ACTIVE);
 
         LocalDateTime now = LocalDateTime.now();
 

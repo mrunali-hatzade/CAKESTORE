@@ -133,22 +133,21 @@ public class AdminDashboardService {
         return stats;
     }
 
-    public List<AdminShopSummaryResponse> getAllShops() {
-        return shopRepository.findAll().stream().map(shop -> {
+    public org.springframework.data.domain.Page<AdminShopSummaryResponse> getAllShops(org.springframework.data.domain.Pageable pageable) {
+        return shopRepository.findAll(pageable).map(shop -> {
             AdminShopSummaryResponse summary = new AdminShopSummaryResponse();
             summary.setShopId(shop.getId());
             summary.setBusinessName(shop.getBusinessName());
-            summary.setShopStatus(shop.getStatus().name());
+            summary.setShopStatus(shop.getStatus() != null ? shop.getStatus().name() : "UNKNOWN");
             summary.setRegisteredAt(shop.getCreatedAt());
 
-            User owner = shop.getOwner();
+            com.cakeplatform.api.modules.user.User owner = shop.getOwner();
             if (owner != null) {
                 summary.setOwnerName(owner.getFullName());
                 summary.setOwnerEmail(owner.getEmail());
             }
-
             return summary;
-        }).collect(Collectors.toList());
+        });
     }
 
     public AdminShopDetailsResponse getShopDetails(Long shopId) {

@@ -92,7 +92,7 @@ public class StageCPaymentAndSubscriptionTest {
 
     @BeforeEach
     void setUp() {
-        razorpayService = new RazorpayService(TEST_KEY_ID, TEST_KEY_SECRET, TEST_WEBHOOK_SECRET);
+        razorpayService = spy(new RazorpayService(TEST_KEY_ID, TEST_KEY_SECRET, TEST_WEBHOOK_SECRET));
 
         com.cakeplatform.api.modules.payment.WebhookEventRepository webhookEventRepo = org.mockito.Mockito.mock(com.cakeplatform.api.modules.payment.WebhookEventRepository.class);
         webhookController = new WebhookController(
@@ -661,6 +661,8 @@ public class StageCPaymentAndSubscriptionTest {
         order.setCustomerName("Rohan Verma");
 
         when(orderRepository.findByOrderNumber("ORD-AUTH-100")).thenReturn(Optional.of(order));
+        doReturn("order_rzp_real_mock100").when(razorpayService)
+                .createCustomerOrder(eq(BigDecimal.valueOf(1850.50)), eq("ORD-AUTH-100"), any(), any());
 
         ResponseEntity<Map<String, Object>> response =
                 customerPaymentController.createCustomerPaymentOrder("ORD-AUTH-100");
@@ -672,6 +674,7 @@ public class StageCPaymentAndSubscriptionTest {
         assertEquals(185050L, body.get("amountPaise"));
         assertEquals(TEST_KEY_ID, body.get("keyId"));
         assertEquals("Sweet Delights Bakery", body.get("shopName"));
+        assertEquals("order_rzp_real_mock100", body.get("razorpayOrderId"));
     }
 
     @Test

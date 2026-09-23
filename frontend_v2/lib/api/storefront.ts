@@ -178,8 +178,35 @@ export const storefrontApi = {
       rating: number;
       comment: string;
       orderReference?: string;
+      productId?: number | null;
+      productName?: string;
+      recommendationText?: string;
+      cakeImageUrl?: string;
+      cakeVideoUrl?: string;
     }
   ): Promise<any> => {
     return apiClient.post(`/api/storefront/shops/${shopId}/feedback`, payload);
+  },
+
+  uploadReviewMedia: async (file: File): Promise<{ url: string; fileName: string; type: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+    const response = await fetch(`${API_BASE_URL}/api/storefront/media/upload-review-media`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      let errorMsg = 'Media upload failed';
+      try {
+        const data = await response.json();
+        if (data?.error) errorMsg = data.error;
+        else if (data?.message) errorMsg = data.message;
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(errorMsg);
+    }
+    return response.json();
   },
 };
