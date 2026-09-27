@@ -92,6 +92,11 @@ export const StorefrontGalleryTab: React.FC<StorefrontGalleryTabProps> = ({
       .forEach((p) => {
         const catObj = categories.find((c) => c.id === p.categoryId);
         const catName = p.categoryName || catObj?.name || 'Cakes';
+        const effectivePrice =
+          p.variants && p.variants.length > 0 && p.variants[0].price != null
+            ? Number(p.variants[0].price)
+            : Number(p.price || 0);
+
         if (p.imageUrl && !p.imageUrl.includes('placeholder')) {
           productList.push({
             type: 'product',
@@ -101,7 +106,7 @@ export const StorefrontGalleryTab: React.FC<StorefrontGalleryTabProps> = ({
             caption: p.description,
             imageUrl: p.imageUrl,
             categoryName: catName,
-            price: p.price,
+            price: effectivePrice,
             isEggless: p.isEggless,
             product: p,
           });
@@ -117,7 +122,7 @@ export const StorefrontGalleryTab: React.FC<StorefrontGalleryTabProps> = ({
                 caption: p.description,
                 imageUrl: img.imageUrl,
                 categoryName: catName,
-                price: p.price,
+                price: effectivePrice,
                 isEggless: p.isEggless,
                 product: p,
               });
@@ -318,7 +323,7 @@ export const StorefrontGalleryTab: React.FC<StorefrontGalleryTabProps> = ({
                   {item.type === 'product' ? (
                     <>
                       <span className="text-xs font-bold text-brand-espresso">
-                        ?{item.price}
+                        ₹{item.price}
                       </span>
                       <button
                         onClick={() => onSelectProduct(item.product)}
@@ -395,11 +400,11 @@ export const StorefrontGalleryTab: React.FC<StorefrontGalleryTabProps> = ({
                 {activeLightboxItem.type === 'product' && (
                   <div className="text-right shrink-0">
                     <div className="text-xl font-serif font-bold text-brand-espresso">
-                      ?{activeLightboxItem.price}
+                      ₹{activeLightboxItem.price}
                     </div>
                     {activeLightboxItem.isEggless && (
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        ?? Eggless
+                        🌱 Eggless
                       </span>
                     )}
                   </div>

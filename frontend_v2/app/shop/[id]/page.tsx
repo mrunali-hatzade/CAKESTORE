@@ -96,13 +96,16 @@ function StorefrontContent() {
     }
   }, [shopId]);
 
-  // Lightweight refresh — only re-fetches shop data (not products/categories)
-  // Called on tab change and window focus to keep owner dashboard changes in sync
+  // Refresh shop data & products on tab change and window focus to keep dashboard edits in sync
   const refreshShopData = useCallback(async () => {
     if (!shopId) return;
     try {
-      const freshShop = await storefrontApi.getShopById(shopId);
+      const [freshShop, freshProducts] = await Promise.all([
+        storefrontApi.getShopById(shopId),
+        storefrontApi.getStorefrontProducts(shopId),
+      ]);
       if (freshShop) setShop(freshShop);
+      if (freshProducts) setProducts(freshProducts);
     } catch {
       // silently ignore — stale data is better than broken UI
     }
