@@ -18,6 +18,10 @@ import {
   Image as ImageIcon,
   MessageSquare,
   Truck,
+  ShieldCheck,
+  MapPin,
+  MessageCircle,
+  Leaf,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { StorefrontTab } from './StorefrontTabNav';
@@ -115,22 +119,31 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
     (item) => !(item.id === 'custom-cakes' && !customCakesEnabled)
   );
 
+  const addressParts = [shop.area, shop.city, shop.state].filter(Boolean);
+  const displayAddress =
+    addressParts.length > 0 ? addressParts.join(', ') : `${shop.city || 'Pune'}, ${shop.state || 'Maharashtra'}`;
+
+  const rawPhone = shop.whatsappNumber || shop.phone || shop.businessPhone || '';
+  const cleanPhone = rawPhone.replace(/\D/g, '');
+  const fssaiNumber = shop.fssaiRegistration || (shop as any).fssaiLicenseNumber;
+  const whatsappEnabled = shop.storefrontSettings?.whatsappEnabled !== false;
+
   return (
     <div ref={menuRef} className="sticky top-0 z-30">
       <header className="bg-[#FAF7F2]/95 backdrop-blur-md border-b border-brand-border/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 min-h-[72px] flex items-center justify-between gap-4">
           {/* Bakery Brand Identity */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link
               href="/explore"
-              className="p-2 -ml-2 rounded-full text-brand-muted hover:text-brand-espresso hover:bg-brand-cream/60 transition-colors cursor-pointer"
+              className="p-2 -ml-2 rounded-full text-brand-muted hover:text-brand-espresso hover:bg-brand-cream/60 transition-colors cursor-pointer shrink-0"
               title="Back to marketplace"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
 
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-brand-blush text-brand-plum flex items-center justify-center font-serif font-bold text-lg shadow-sm border border-brand-plum/10 overflow-hidden shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-brand-blush text-brand-plum flex items-center justify-center font-serif font-bold text-lg shadow-sm border border-brand-plum/10 overflow-hidden shrink-0">
                 {!isDummyOrInvalidImageUrl(shop.logoUrl) ? (
                   <img
                     src={shop.logoUrl}
@@ -141,26 +154,52 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
                   shop.businessName.charAt(0)
                 )}
               </div>
-              <div className="hidden sm:block">
-                <h1 className="font-serif font-bold text-lg text-[#2C1A1D] leading-tight">
-                  {shop.businessName}
-                </h1>
-                <span className="text-xs font-medium text-[#C5A880]">
-                  {shop.businessCategory || (shop.businessType ? shop.businessType.replace(/_/g, ' ') : 'Artisanal Bakery')}
-                </span>
+              <div className="min-w-0">
+                <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
+                  <h1 className="font-serif font-bold text-base sm:text-lg lg:text-xl text-[#2C1A1D] leading-tight truncate">
+                    {shop.businessName}
+                  </h1>
+                  {shop.verificationStatus === 'VERIFIED' && (
+                    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      <span>Verified ✓</span>
+                    </span>
+                  )}
+                  {shop.isPureVeg && (
+                    <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-green-200 shrink-0">
+                      <Leaf className="w-3 h-3 text-green-600" />
+                      <span>100% Pure Veg</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-brand-muted mt-0.5">
+                  <span className="flex items-center gap-1 shrink-0 text-brand-espresso font-medium">
+                    <MapPin className="w-3 h-3 text-[#5C1D2E] shrink-0" />
+                    <span>{displayAddress}</span>
+                  </span>
+                  <span className="text-[#C5A880] font-medium hidden sm:inline shrink-0">
+                    • {shop.businessCategory || (shop.businessType ? shop.businessType.replace(/_/g, ' ') : 'Artisanal Bakery Studio')}
+                  </span>
+                  {fssaiNumber && (
+                    <span className="text-emerald-700 font-semibold hidden md:inline shrink-0">
+                      • FSSAI: {fssaiNumber}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Centered Pill Search Bar — desktop only */}
-          <div className="flex-1 max-w-md mx-4 hidden md:block">
+          <div className="flex-1 max-w-xs lg:max-w-sm mx-2 hidden md:block">
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-brand-muted group-focus-within:text-brand-plum transition-colors" />
               </div>
               <input
                 type="text"
-                className="block w-full pl-10 pr-9 py-2 bg-white border border-brand-border rounded-full text-sm placeholder-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all shadow-sm"
+                className="block w-full pl-10 pr-9 py-1.5 bg-white border border-brand-border rounded-full text-xs placeholder-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all shadow-sm"
                 placeholder="Search cakes, flavours, categories..."
                 value={currentQuery}
                 onChange={(e) => handleQueryChange(e.target.value)}
@@ -179,7 +218,19 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
           </div>
 
           {/* In-Store Actions */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* WhatsApp Bakery Button */}
+            {whatsappEnabled && cleanPhone && (
+              <a
+                href={`https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=Hi%20${encodeURIComponent(shop.businessName)},%20I%20have%20an%20enquiry.`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#25D366] text-white text-xs font-bold hover:bg-[#1ebd5a] transition-all shadow-sm shrink-0 cursor-pointer"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>WhatsApp Bakery</span>
+              </a>
+            )}
             {shop.storefrontSettings?.phoneEnabled !== false && (shop.phone || shop.businessPhone) && (
               <a
                 href={`tel:${shop.phone || shop.businessPhone}`}

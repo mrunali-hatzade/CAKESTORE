@@ -165,7 +165,7 @@ export default function OwnerProductsPage() {
     setEditingProduct(null);
     setName('');
     setDescription('');
-    setPrice('');
+    setPrice('450');
     setOriginalPrice('');
     setSelectedCategoryId('');
     setInlineCatOpen(false);
@@ -197,7 +197,11 @@ export default function OwnerProductsPage() {
     setDescription(p.description || '');
     setIngredients(p.ingredients || '');
     setAllergens(p.allergens || '');
-    setPrice(String(p.price));
+    const initialPrice =
+      p.variants && p.variants.length > 0 && p.variants[0].price != null
+        ? String(p.variants[0].price)
+        : String(p.price || '');
+    setPrice(initialPrice);
     setOriginalPrice(p.originalPrice != null ? String(p.originalPrice) : '');
     setSelectedCategoryId(p.categoryId ? String(p.categoryId) : '');
     setInlineCatOpen(false);
@@ -311,28 +315,54 @@ export default function OwnerProductsPage() {
     setHighlights(highlights.filter((_, idx) => idx !== index));
   };
 
+  // Price & Variant Synchronization
+  const handlePriceChange = (val: string) => {
+    setPrice(val);
+    const num = Number(val);
+    if (!isNaN(num) && num > 0 && variants.length > 0) {
+      setVariants((prev) => prev.map((v, i) => (i === 0 ? { ...v, price: num } : v)));
+    }
+  };
+
+  const handleUpdateVariantPrice = (index: number, val: number) => {
+    setVariants((prev) => {
+      const updated = prev.map((v, i) => (i === index ? { ...v, price: val } : v));
+      if (index === 0) {
+        setPrice(String(val));
+      }
+      return updated;
+    });
+  };
+
   // Variant handlers
   const handleAddPresetVariant = (presetName: string, multiplier: number) => {
-    const baseP = Number(price) || 500;
+    const baseP = Number(price) || 450;
     const calcPrice = Math.round(baseP * multiplier);
     if (!variants.some((v) => v.name.toLowerCase() === presetName.toLowerCase())) {
-      setVariants([...variants, { name: presetName, price: calcPrice, isAvailable: true }]);
+      const newVariants = [...variants, { name: presetName, price: calcPrice, isAvailable: true }];
+      setVariants(newVariants);
+      if (newVariants.length === 1 || !price) {
+        setPrice(String(calcPrice));
+      }
     }
   };
 
   const handleAddCustomVariant = () => {
     if (!newVariantName.trim() || !newVariantPrice) return;
-    setVariants([
-      ...variants,
-      {
-        name: newVariantName.trim(),
-        price: Number(newVariantPrice),
-        originalPrice: newVariantOriginalPrice ? Number(newVariantOriginalPrice) : null,
-        description: newVariantDesc.trim() || null,
-        imageUrl: newVariantImageUrl.trim() || null,
-        isAvailable: true,
-      },
-    ]);
+    const pNum = Number(newVariantPrice);
+    const newV: ProductVariant = {
+      name: newVariantName.trim(),
+      price: pNum,
+      originalPrice: newVariantOriginalPrice ? Number(newVariantOriginalPrice) : null,
+      description: newVariantDesc.trim() || null,
+      imageUrl: newVariantImageUrl.trim() || null,
+      isAvailable: true,
+    };
+    const updatedVariants = [...variants, newV];
+    setVariants(updatedVariants);
+    if (updatedVariants.length === 1 || !price) {
+      setPrice(String(pNum));
+    }
     setNewVariantName('');
     setNewVariantPrice('');
     setNewVariantOriginalPrice('');
@@ -341,7 +371,11 @@ export default function OwnerProductsPage() {
   };
 
   const handleRemoveVariant = (index: number) => {
-    setVariants(variants.filter((_, idx) => idx !== index));
+    const updated = variants.filter((_, idx) => idx !== index);
+    setVariants(updated);
+    if (index === 0 && updated.length > 0) {
+      setPrice(String(updated[0].price));
+    }
   };
 
   const handleQuickCreateCategory = async () => {
@@ -369,7 +403,7 @@ export default function OwnerProductsPage() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const baseSellingPrice = Number(price);
+    const baseSellingPrice = variants.length > 0 ? Number(variants[0].price) : Number(price);
     const comparePriceNum = originalPrice ? Number(originalPrice) : null;
 
     if (comparePriceNum !== null && comparePriceNum <= baseSellingPrice) {
@@ -736,539 +770,562 @@ export default function OwnerProductsPage() {
         </Card>
       )}
 
-      {/* Add / Edit Cake Modal */}
+      {/* Add / Edit Cake Modal - Landscape 2-Column Layout */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        maxWidth="5xl"
         title={editingProduct ? 'Edit Cake Details' : 'Add New Cake to Storefront'}
       >
-        <form onSubmit={handleSaveProduct} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
-          <Input
-            label="Cake Name"
-            required
-            placeholder="e.g. Belgian Dark Truffle"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-
-          <Input
-            label="Description / Flavor Notes"
-            placeholder="Layered rich dark chocolate sponge with 54% Belgian ganache"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-
-          {/* Ingredients */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-brand-espresso">
-                Ingredients <span className="text-xs text-brand-muted font-normal">(Optional)</span>
-              </label>
-              <span className="text-[11px] text-brand-muted">{ingredients.length}/1000</span>
-            </div>
-            <textarea
-              rows={3}
-              maxLength={1000}
-              placeholder="Enter the ingredients used in this cake (e.g. Dutch cocoa powder, Belgian couverture chocolate, fresh dairy cream, organic wheat flour)..."
-              value={ingredients}
-              onChange={(e) => setIngredients(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-brand-border text-brand-espresso text-sm placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all resize-none"
-            />
-          </div>
-
-          {/* Allergen Information */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-brand-espresso">
-                Allergen Information <span className="text-xs text-brand-muted font-normal">(Optional)</span>
-              </label>
-              <span className="text-[11px] text-brand-muted">{allergens.length}/500</span>
-            </div>
-            <textarea
-              rows={2}
-              maxLength={500}
-              placeholder="Example: Contains dairy, gluten, nuts..."
-              value={allergens}
-              onChange={(e) => setAllergens(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-brand-border text-brand-espresso text-sm placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all resize-none"
-            />
-          </div>
-
-          {/* Pricing & Compare-at Price */}
-          <div className="p-4 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-3">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
-              <Percent className="w-3.5 h-3.5 text-brand-plum" />
-              <span>Pricing & Discount</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form onSubmit={handleSaveProduct} className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* LEFT COLUMN: Basic info, pricing, category, dietary, ingredients */}
+            <div className="space-y-4">
               <Input
-                label="Selling Price (₹) *"
-                type="number"
+                label="Cake Name *"
                 required
-                min="1"
-                placeholder="850"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                helperText="Actual price charged to customer."
+                placeholder="e.g. Belgian Dark Truffle"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
 
               <Input
-                label="Original Price / Compare-At (₹)"
-                type="number"
-                min="0"
-                placeholder="e.g. 1000 (Optional)"
-                value={originalPrice}
-                onChange={(e) => setOriginalPrice(e.target.value)}
-                helperText="Shows strikethrough badge (e.g. 15% OFF)."
+                label="Description / Flavor Notes"
+                placeholder="Layered rich dark chocolate sponge with 54% Belgian ganache"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
               />
-            </div>
-          </div>
 
-          {/* Dynamic Category Selector + Quick Add */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-brand-espresso">Category</label>
-              {!inlineCatOpen && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInlineCatOpen(true);
-                    setInlineCatError(null);
-                  }}
-                  className="text-xs font-semibold text-brand-plum hover:text-brand-plum-dark flex items-center gap-1 transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" /> New Category
-                </button>
-              )}
-            </div>
-
-            {!inlineCatOpen ? (
-              <select
-                value={selectedCategoryId}
-                onChange={(e) => setSelectedCategoryId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-brand-border text-brand-espresso text-sm focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum"
-              >
-                <option value="">Uncategorized</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="p-3 rounded-xl bg-brand-cream-light/80 border border-brand-border space-y-2">
-                <div className="flex items-center justify-between text-xs font-semibold text-brand-espresso font-serif">
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-brand-plum" /> Quick Add Category
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInlineCatOpen(false);
-                      setInlineCatName('');
-                      setInlineCatError(null);
-                    }}
-                    className="text-brand-muted hover:text-brand-espresso"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+              {/* Dynamic Category Selector + Quick Add */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-brand-espresso">Category</label>
+                  {!inlineCatOpen && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInlineCatOpen(true);
+                        setInlineCatError(null);
+                      }}
+                      className="text-xs font-semibold text-brand-plum hover:text-brand-plum-dark flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> New Category
+                    </button>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g. Birthday Cakes"
-                    value={inlineCatName}
-                    onChange={(e) => setInlineCatName(e.target.value)}
-                    className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-brand-border bg-white text-brand-espresso focus:outline-none focus:ring-1 focus:ring-brand-plum"
-                    autoFocus
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    isLoading={inlineCatLoading}
-                    onClick={handleQuickCreateCategory}
-                    className="text-xs shrink-0"
-                  >
-                    Add
-                  </Button>
-                </div>
-                {inlineCatError && (
-                  <p className="text-[11px] text-red-600 font-medium">{inlineCatError}</p>
-                )}
-              </div>
-            )}
-          </div>
 
-          {/* Egg Preference Section */}
-          <div className="p-4 rounded-2xl bg-brand-cream-light/60 border border-brand-border/60 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
-                <Egg className="w-3.5 h-3.5 text-brand-plum" />
-                <span>Egg & Dietary Preference</span>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-brand-espresso">
-                <input
-                  type="checkbox"
-                  checked={allowEggChoice}
-                  onChange={(e) => setAllowEggChoice(e.target.checked)}
-                  className="rounded text-brand-plum focus:ring-brand-plum"
-                />
-                <span>Allow Customer to Choose</span>
-              </label>
-            </div>
-
-            {!allowEggChoice ? (
-              <label className="flex items-center gap-2 text-xs text-owner-heading font-medium cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={isEggless}
-                  onChange={(e) => setIsEggless(e.target.checked)}
-                  className="rounded text-brand-plum focus:ring-brand-plum"
-                />
-                <span>🌱 100% Pure Eggless Cake (Fixed)</span>
-              </label>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-owner-heading block">Default Preference</label>
+                {!inlineCatOpen ? (
                   <select
-                    value={eggPreferenceDefault}
-                    onChange={(e) => setEggPreferenceDefault(e.target.value as any)}
-                    className="w-full text-xs px-3 py-2 border rounded-xl bg-white border-brand-border focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                    value={selectedCategoryId}
+                    onChange={(e) => setSelectedCategoryId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-brand-border text-brand-espresso text-sm focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum"
                   >
-                    <option value="EGGLESS">🌱 Eggless by default</option>
-                    <option value="REGULAR">🥚 With Egg by default</option>
+                    <option value="">Uncategorized</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </option>
+                    ))}
                   </select>
-                </div>
-
-                <Input
-                  label="Eggless Price Difference (₹)"
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={egglessPriceDiff}
-                  onChange={(e) => setEgglessPriceDiff(e.target.value)}
-                  helperText="Extra charged when customer chooses eggless."
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Product Highlights Section */}
-          <div className="p-4 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
-                <Award className="w-3.5 h-3.5 text-brand-plum" />
-                <span>Product Highlights Badges</span>
-              </div>
-              <span className="text-[10px] text-owner-muted">Shown prominently on product page</span>
-            </div>
-
-            {/* List of badges */}
-            {highlights.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {highlights.map((h, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-owner-border text-owner-heading text-xs font-medium shadow-2xs"
-                  >
-                    <span>★ {h}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveHighlight(idx)}
-                      className="text-owner-muted hover:text-red-600"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Add highlight input */}
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="e.g. 100% Pure Butter, Zero Preservatives, No Gelatin"
-                value={newHighlightInput}
-                onChange={(e) => setNewHighlightInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddHighlight();
-                  }
-                }}
-                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
-              />
-              <Button type="button" variant="outline" size="sm" onClick={handleAddHighlight}>
-                Add Badge
-              </Button>
-            </div>
-          </div>
-
-          {/* Cake Main Photo Section */}
-          <div className="space-y-3 pt-1">
-            <label className="text-xs font-bold text-owner-heading block">Main Product Photo *</label>
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileUpload}
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-owner-border rounded-2xl p-6 text-center hover:border-brand-plum/50 hover:bg-brand-blush/10 transition-all cursor-pointer"
-              >
-                {isUploading ? (
-                  <div className="flex items-center justify-center gap-2 text-xs text-owner-muted">
-                    <div className="w-4 h-4 border-2 border-brand-plum border-t-transparent rounded-full animate-spin" />
-                    <span>Uploading photo...</span>
-                  </div>
                 ) : (
-                  <>
-                    <Upload className="w-6 h-6 text-owner-muted mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-owner-heading">
-                      {imageUrl ? 'Click to replace main cake photo' : 'Click to upload main cake photo'}
-                    </p>
-                    <p className="text-[11px] text-owner-muted mt-1">JPG, PNG, WebP up to 5MB</p>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {imageUrl && (
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-owner-canvas border border-owner-border">
-                <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-brand-cream border shrink-0">
-                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold text-owner-heading block">Main photo uploaded</span>
-                    <span className="text-[10px] text-owner-muted">Will be displayed on storefront catalog</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setImageUrl('')}
-                  className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
-                >
-                  Remove
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Alternative Images (Cap at 3) */}
-          <div className="p-4 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
-                <ImageIcon className="w-3.5 h-3.5 text-brand-plum" />
-                <span>Alternative Gallery Images ({altImages.length}/3)</span>
-              </div>
-              <span className="text-[10px] text-owner-muted">Up to 3 additional photos</span>
-            </div>
-
-            {/* Existing alt images preview */}
-            {altImages.length > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                {altImages.map((img, idx) => (
-                  <div key={idx} className="relative group rounded-xl overflow-hidden border border-brand-border h-24 bg-white">
-                    <img src={img} alt={`Alt ${idx + 1}`} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveAltImage(idx)}
-                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-lg opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
-                      title="Remove image"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add alternative image controls */}
-            {altImages.length < 3 && (
-              <div className="pt-1">
-                <input
-                  ref={altFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleUploadAltImage}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => altFileInputRef.current?.click()}
-                  isLoading={isUploadingAlt}
-                  className="w-full gap-1.5 text-xs py-2.5 border-dashed"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload Additional Cake Photo ({altImages.length}/3)</span>
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Flavour & Size Variants Section */}
-          <div className="p-4 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
-                <Layers className="w-3.5 h-3.5 text-brand-plum" />
-                <span>Sizes & Flavours Variants</span>
-              </div>
-              <span className="text-[10px] text-owner-muted">Individual prices & photos</span>
-            </div>
-
-            {/* Quick Add Presets */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-owner-muted font-medium">Quick Add Weight:</span>
-              {WEIGHT_PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => handleAddPresetVariant(p.label, p.defaultMultiplier)}
-                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-owner-border text-brand-espresso hover:border-brand-plum hover:bg-brand-blush/30 transition-colors cursor-pointer"
-                >
-                  + {p.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Existing Variants List */}
-            {variants.length > 0 && (
-              <div className="space-y-2 pt-1">
-                {variants.map((v, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between gap-3 p-2.5 bg-white rounded-xl border border-owner-border text-xs"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {v.imageUrl && (
-                        <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-brand-border">
-                          <img src={v.imageUrl} alt={v.name} className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <span className="font-semibold text-owner-heading block truncate">{v.name}</span>
-                        {v.description && (
-                          <span className="text-[10px] text-owner-muted truncate block">{v.description}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono text-brand-plum font-bold">₹{v.price}</span>
-                      {v.originalPrice && (
-                        <span className="line-through text-owner-muted text-[10px]">
-                          ₹{v.originalPrice}
-                        </span>
-                      )}
+                  <div className="p-3 rounded-xl bg-brand-cream-light/80 border border-brand-border space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-brand-espresso font-serif">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-brand-plum" /> Quick Add Category
+                      </span>
                       <button
                         type="button"
-                        onClick={() => handleRemoveVariant(idx)}
-                        className="text-owner-muted hover:text-red-600 p-1 transition-colors cursor-pointer"
-                        title="Remove variant"
+                        onClick={() => {
+                          setInlineCatOpen(false);
+                          setInlineCatName('');
+                          setInlineCatError(null);
+                        }}
+                        className="text-brand-muted hover:text-brand-espresso"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. Birthday Cakes"
+                        value={inlineCatName}
+                        onChange={(e) => setInlineCatName(e.target.value)}
+                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-brand-border bg-white text-brand-espresso focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        isLoading={inlineCatLoading}
+                        onClick={handleQuickCreateCategory}
+                        className="text-xs shrink-0"
+                      >
+                        Add
+                      </Button>
+                    </div>
+                    {inlineCatError && (
+                      <p className="text-[11px] text-red-600 font-medium">{inlineCatError}</p>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Custom Variant Form */}
-            <div className="space-y-2 pt-1 border-t border-brand-border/40">
-              <span className="text-[11px] font-bold text-owner-heading block">Add Custom Variant / Flavour:</span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <input
-                  type="text"
-                  placeholder="Variant Name (e.g. Dutch Truffle 1kg)"
-                  value={newVariantName}
-                  onChange={(e) => setNewVariantName(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
-                />
-                <input
-                  type="number"
-                  placeholder="Selling Price (₹)"
-                  value={newVariantPrice}
-                  onChange={(e) => setNewVariantPrice(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
-                />
-                <input
-                  type="number"
-                  placeholder="Compare Price (₹)"
-                  value={newVariantOriginalPrice}
-                  onChange={(e) => setNewVariantOriginalPrice(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  ref={variantFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleUploadVariantImage}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => variantFileInputRef.current?.click()}
-                  isLoading={isUploadingVariant}
-                  className="text-xs gap-1 shrink-0"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>{newVariantImageUrl ? 'Photo Selected ✓' : 'Upload Photo'}</span>
-                </Button>
-                {newVariantImageUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setNewVariantImageUrl('')}
-                    className="text-[10px] text-rose-600 hover:underline cursor-pointer"
-                  >
-                    Clear
-                  </button>
                 )}
-                <input
-                  type="text"
-                  placeholder="Short note (optional)..."
-                  value={newVariantDesc}
-                  onChange={(e) => setNewVariantDesc(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+              </div>
+
+              {/* Pricing & Compare-at Price */}
+              <div className="p-4 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
+                    <Percent className="w-3.5 h-3.5 text-brand-plum" />
+                    <span>Pricing & Discount</span>
+                  </div>
+                  {variants.length > 0 && (
+                    <span className="text-[10px] text-brand-plum font-semibold flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      Synced with {variants[0].name}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Selling Price (₹) *"
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="450"
+                    value={price}
+                    onChange={(e) => handlePriceChange(e.target.value)}
+                    helperText={
+                      variants.length > 0
+                        ? `Auto-synced with ${variants[0].name || 'base variant'}`
+                        : 'Base price charged to customer'
+                    }
+                  />
+
+                  <Input
+                    label="Original Price / Compare-At (₹)"
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 550 (Optional)"
+                    value={originalPrice}
+                    onChange={(e) => setOriginalPrice(e.target.value)}
+                    helperText="Shows strikethrough badge (e.g. 15% OFF)."
+                  />
+                </div>
+              </div>
+
+              {/* Egg Preference Section */}
+              <div className="p-4 rounded-2xl bg-brand-cream-light/60 border border-brand-border/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
+                    <Egg className="w-3.5 h-3.5 text-brand-plum" />
+                    <span>Egg & Dietary Preference</span>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-brand-espresso">
+                    <input
+                      type="checkbox"
+                      checked={allowEggChoice}
+                      onChange={(e) => setAllowEggChoice(e.target.checked)}
+                      className="rounded text-brand-plum focus:ring-brand-plum"
+                    />
+                    <span>Allow Customer to Choose</span>
+                  </label>
+                </div>
+
+                {!allowEggChoice ? (
+                  <label className="flex items-center gap-2 text-xs text-owner-heading font-medium cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={isEggless}
+                      onChange={(e) => setIsEggless(e.target.checked)}
+                      className="rounded text-brand-plum focus:ring-brand-plum"
+                    />
+                    <span>🌱 100% Pure Eggless Cake (Fixed)</span>
+                  </label>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-owner-heading block">Default Preference</label>
+                      <select
+                        value={eggPreferenceDefault}
+                        onChange={(e) => setEggPreferenceDefault(e.target.value as any)}
+                        className="w-full text-xs px-3 py-2 border rounded-xl bg-white border-brand-border focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                      >
+                        <option value="EGGLESS">🌱 Eggless by default</option>
+                        <option value="REGULAR">🥚 With Egg by default</option>
+                      </select>
+                    </div>
+
+                    <Input
+                      label="Eggless Price Difference (₹)"
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={egglessPriceDiff}
+                      onChange={(e) => setEgglessPriceDiff(e.target.value)}
+                      helperText="Extra charged when customer chooses eggless."
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Ingredients */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-brand-espresso">
+                    Ingredients <span className="text-[10px] text-brand-muted font-normal">(Optional)</span>
+                  </label>
+                  <span className="text-[10px] text-brand-muted">{ingredients.length}/1000</span>
+                </div>
+                <textarea
+                  rows={2}
+                  maxLength={1000}
+                  placeholder="Enter the ingredients used in this cake (e.g. Dutch cocoa powder, Belgian couverture chocolate)..."
+                  value={ingredients}
+                  onChange={(e) => setIngredients(e.target.value)}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-brand-border text-brand-espresso text-xs placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all resize-none"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddCustomVariant}
-                  className="text-xs shrink-0"
-                >
-                  Add
-                </Button>
+              </div>
+
+              {/* Allergen Information */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-brand-espresso">
+                    Allergen Information <span className="text-[10px] text-brand-muted font-normal">(Optional)</span>
+                  </label>
+                  <span className="text-[10px] text-brand-muted">{allergens.length}/500</span>
+                </div>
+                <textarea
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Example: Contains dairy, gluten, nuts..."
+                  value={allergens}
+                  onChange={(e) => setAllergens(e.target.value)}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-brand-border text-brand-espresso text-xs placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all resize-none"
+                />
+              </div>
+
+              {/* Live Availability Status */}
+              <div className="pt-2 border-t border-owner-border/70">
+                <label className="flex items-center gap-2 text-xs text-owner-heading font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={inStock}
+                    onChange={(e) => setInStock(e.target.checked)}
+                    className="rounded text-brand-plum focus:ring-brand-plum cursor-pointer"
+                  />
+                  <span>In Stock & Live on Storefront</span>
+                </label>
               </div>
             </div>
-          </div>
 
-          {/* Live Availability Status */}
-          <div className="pt-2 border-t border-owner-border/70">
-            <label className="flex items-center gap-2 text-xs text-owner-heading font-medium cursor-pointer">
-              <input
-                type="checkbox"
-                checked={inStock}
-                onChange={(e) => setInStock(e.target.checked)}
-                className="rounded text-brand-plum focus:ring-brand-plum"
-              />
-              <span>In Stock & Live on Storefront</span>
-            </label>
+            {/* RIGHT COLUMN: Photos, Variants, Highlights */}
+            <div className="space-y-4">
+              {/* Cake Main Photo Section */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-owner-heading block">Main Product Photo *</label>
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full border-2 border-dashed border-owner-border rounded-2xl p-4 text-center hover:border-brand-plum/50 hover:bg-brand-blush/10 transition-all cursor-pointer"
+                  >
+                    {isUploading ? (
+                      <div className="flex items-center justify-center gap-2 text-xs text-owner-muted">
+                        <div className="w-4 h-4 border-2 border-brand-plum border-t-transparent rounded-full animate-spin" />
+                        <span>Uploading photo...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-owner-muted mx-auto mb-1.5" />
+                        <p className="text-xs font-semibold text-owner-heading">
+                          {imageUrl ? 'Click to replace main cake photo' : 'Click to upload main cake photo'}
+                        </p>
+                        <p className="text-[10px] text-owner-muted mt-0.5">JPG, PNG, WebP up to 5MB</p>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {imageUrl && (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-owner-canvas border border-owner-border">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-brand-cream border shrink-0">
+                        <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-owner-heading block">Main photo ready</span>
+                        <span className="text-[10px] text-owner-muted">Shown on catalog & checkout</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl('')}
+                      className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Alternative Images (Cap at 3) */}
+              <div className="p-3.5 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
+                    <ImageIcon className="w-3.5 h-3.5 text-brand-plum" />
+                    <span>Alternative Photos ({altImages.length}/3)</span>
+                  </div>
+                  <span className="text-[10px] text-owner-muted">Angles & slices</span>
+                </div>
+
+                {altImages.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {altImages.map((img, idx) => (
+                      <div key={idx} className="relative group rounded-xl overflow-hidden border border-brand-border h-20 bg-white">
+                        <img src={img} alt={`Alt ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAltImage(idx)}
+                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-lg opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
+                          title="Remove image"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {altImages.length < 3 && (
+                  <div className="pt-0.5">
+                    <input
+                      ref={altFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleUploadAltImage}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => altFileInputRef.current?.click()}
+                      isLoading={isUploadingAlt}
+                      className="w-full gap-1.5 text-xs py-2 border-dashed"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Additional Photo ({altImages.length}/3)</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Flavour & Size Variants Section */}
+              <div className="p-4 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
+                    <Layers className="w-3.5 h-3.5 text-brand-plum" />
+                    <span>Sizes &amp; Flavours Variants</span>
+                  </div>
+                  <span className="text-[10px] text-owner-muted">Live price alignment</span>
+                </div>
+
+                {/* Quick Add Presets */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-owner-muted font-medium">Quick Add:</span>
+                  {WEIGHT_PRESETS.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => handleAddPresetVariant(p.label, p.defaultMultiplier)}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-owner-border text-brand-espresso hover:border-brand-plum hover:bg-brand-blush/30 transition-colors cursor-pointer"
+                    >
+                      + {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Existing Variants List with Inline Price Inputs */}
+                {variants.length > 0 && (
+                  <div className="space-y-2 pt-1 max-h-48 overflow-y-auto pr-0.5">
+                    {variants.map((v, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between gap-3 p-2 bg-white rounded-xl border border-owner-border text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {v.imageUrl && (
+                            <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-brand-border">
+                              <img src={v.imageUrl} alt={v.name} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-owner-heading truncate">{v.name}</span>
+                              {idx === 0 && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-brand-blush text-brand-plum">
+                                  Primary / Base
+                                </span>
+                              )}
+                            </div>
+                            {v.description && (
+                              <span className="text-[10px] text-owner-muted truncate block">{v.description}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1 bg-owner-canvas/80 px-2 py-1 rounded-lg border border-owner-border">
+                            <span className="text-[10px] text-owner-muted font-bold">₹</span>
+                            <input
+                              type="number"
+                              value={v.price}
+                              onChange={(e) => handleUpdateVariantPrice(idx, Number(e.target.value) || 0)}
+                              className="w-14 text-xs font-mono font-bold text-brand-plum bg-transparent border-none p-0 focus:outline-none focus:ring-0"
+                              title="Edit variant price (syncs automatically)"
+                            />
+                          </div>
+                          {v.originalPrice && (
+                            <span className="line-through text-owner-muted text-[10px]">
+                              ₹{v.originalPrice}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVariant(idx)}
+                            className="text-owner-muted hover:text-red-600 p-1 transition-colors cursor-pointer"
+                            title="Remove variant"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Custom Variant Form */}
+                <div className="space-y-2 pt-2 border-t border-brand-border/40">
+                  <span className="text-[11px] font-bold text-owner-heading block">Add Custom Variant:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Variant (e.g. 1.5 kg)"
+                      value={newVariantName}
+                      onChange={(e) => setNewVariantName(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Price (₹)"
+                      value={newVariantPrice}
+                      onChange={(e) => setNewVariantPrice(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Compare (₹)"
+                      value={newVariantOriginalPrice}
+                      onChange={(e) => setNewVariantOriginalPrice(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={variantFileInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleUploadVariantImage}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => variantFileInputRef.current?.click()}
+                      isLoading={isUploadingVariant}
+                      className="text-xs gap-1 shrink-0 h-8"
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>{newVariantImageUrl ? 'Photo ✓' : 'Photo'}</span>
+                    </Button>
+                    <input
+                      type="text"
+                      placeholder="Optional notes..."
+                      value={newVariantDesc}
+                      onChange={(e) => setNewVariantDesc(e.target.value)}
+                      className="flex-1 px-2.5 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddCustomVariant}
+                      className="text-xs shrink-0 h-8"
+                    >
+                      + Add
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Product Highlights Badges */}
+              <div className="p-3.5 rounded-2xl bg-owner-canvas/60 border border-owner-border space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-owner-heading">
+                    <Award className="w-3.5 h-3.5 text-brand-plum" />
+                    <span>Product Badges</span>
+                  </div>
+                  <span className="text-[10px] text-owner-muted">Highlights</span>
+                </div>
+
+                {highlights.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {highlights.map((h, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-owner-border text-owner-heading text-[11px] font-medium shadow-2xs"
+                      >
+                        <span>★ {h}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveHighlight(idx)}
+                          className="text-owner-muted hover:text-red-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. 100% Pure Butter, Zero Preservatives"
+                    value={newHighlightInput}
+                    onChange={(e) => setNewHighlightInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddHighlight();
+                      }
+                    }}
+                    className="flex-1 px-2.5 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={handleAddHighlight} className="h-8 text-xs">
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Modal Footer */}
@@ -1277,7 +1334,7 @@ export default function OwnerProductsPage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={isSubmitting}>
-              {editingProduct ? 'Save Changes' : 'Publish Cake'}
+              {editingProduct ? 'Save Changes' : 'Publish Cake to Catalog'}
             </Button>
           </div>
         </form>

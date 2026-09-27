@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -15,6 +15,23 @@ interface SetupChecklistProps {
 
 export function SetupChecklist({ shop, stats, deliverySlots }: SetupChecklistProps) {
   const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem('bakery_setup_dismissed') === 'true') {
+        setDismissed(true);
+      }
+    } catch {}
+  }, []);
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('bakery_setup_dismissed', 'true');
+      }
+    } catch {}
+  };
 
   const checklistItems = [
     {
@@ -53,7 +70,17 @@ export function SetupChecklist({ shop, stats, deliverySlots }: SetupChecklistPro
   const totalSteps = checklistItems.length;
   const progressPercent = Math.round((completedSteps / totalSteps) * 100);
 
-  if (completedSteps === totalSteps) {
+  useEffect(() => {
+    if (completedSteps === totalSteps && totalSteps > 0) {
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('bakery_setup_dismissed', 'true');
+        }
+      } catch {}
+    }
+  }, [completedSteps, totalSteps]);
+
+  if (dismissed || completedSteps === totalSteps) {
     return null;
   }
 
@@ -89,7 +116,7 @@ export function SetupChecklist({ shop, stats, deliverySlots }: SetupChecklistPro
       {completedSteps === totalSteps ? (
         <div className="py-8 flex flex-col items-center justify-center text-center relative">
           <button 
-            onClick={() => setDismissed(true)}
+            onClick={handleDismiss}
             className="absolute top-0 right-0 p-2 text-owner-muted hover:text-owner-heading transition-colors"
             title="Dismiss"
           >

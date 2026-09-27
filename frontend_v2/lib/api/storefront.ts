@@ -133,6 +133,26 @@ export const storefrontApi = {
     );
   },
 
+  getShopCoupons: async (
+    shopId: number | string
+  ): Promise<
+    Array<{
+      code: string;
+      discountType: string;
+      discountValue: number;
+      minOrderValue?: number;
+      maxDiscountCap?: number;
+      expiryDate?: string;
+    }>
+  > => {
+    try {
+      const data = await apiClient.get<any>(`/api/storefront/shops/${shopId}/coupons`);
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+
   getTopRatedProducts: async (shopId: number | string, limit: number = 8): Promise<Product[]> => {
     try {
       const prods = await apiClient.get<Product[]>(`/api/storefront/shops/${shopId}/products/top-rated?limit=${limit}`);

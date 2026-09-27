@@ -85,7 +85,48 @@ export const StorefrontGalleryTab: React.FC<StorefrontGalleryTabProps> = ({
 
   // Merge Catalog Products and Owner Showcase Items
   const unifiedItems: UnifiedGalleryItem[] = useMemo(() => {
-    // 1. Owner showcase photos
+    // 1. Active catalog products & additional photos
+    const productList: UnifiedGalleryItem[] = [];
+    products
+      .filter((p) => p.inStock !== false && p.availability !== false)
+      .forEach((p) => {
+        const catObj = categories.find((c) => c.id === p.categoryId);
+        const catName = p.categoryName || catObj?.name || 'Cakes';
+        if (p.imageUrl && !p.imageUrl.includes('placeholder')) {
+          productList.push({
+            type: 'product',
+            uid: `product-${p.id}-main`,
+            id: p.id,
+            title: p.name,
+            caption: p.description,
+            imageUrl: p.imageUrl,
+            categoryName: catName,
+            price: p.price,
+            isEggless: p.isEggless,
+            product: p,
+          });
+        }
+        if (p.images && p.images.length > 0) {
+          p.images.forEach((img, idx) => {
+            if (img.imageUrl && img.imageUrl !== p.imageUrl) {
+              productList.push({
+                type: 'product',
+                uid: `product-${p.id}-alt-${idx}`,
+                id: p.id,
+                title: `${p.name} (Detail ${idx + 1})`,
+                caption: p.description,
+                imageUrl: img.imageUrl,
+                categoryName: catName,
+                price: p.price,
+                isEggless: p.isEggless,
+                product: p,
+              });
+            }
+          });
+        }
+      });
+
+    // 2. Owner showcase photos
     const showcaseList: UnifiedGalleryItem[] = ownerGalleryItems
       .filter((i) => i.isActive && i.imageUrl && !i.imageUrl.includes('placeholder'))
       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
@@ -101,28 +142,8 @@ export const StorefrontGalleryTab: React.FC<StorefrontGalleryTabProps> = ({
         item,
       }));
 
-    // 2. Active catalog products
-    const productList: UnifiedGalleryItem[] = products
-      .filter((p) => p.imageUrl && !p.imageUrl.includes('placeholder'))
-      .map((p) => {
-        const catObj = categories.find((c) => c.id === p.categoryId);
-        const catName = p.categoryName || catObj?.name || 'Cakes';
-        return {
-          type: 'product',
-          uid: `product-${p.id}`,
-          id: p.id,
-          title: p.name,
-          caption: p.description,
-          imageUrl: p.imageUrl!,
-          categoryName: catName,
-          price: p.price,
-          isEggless: p.isEggless,
-          product: p,
-        };
-      });
-
-    // Showcase custom creations first, then catalog cakes
-    return [...showcaseList, ...productList];
+    // Prioritize bakery catalog cakes first, then custom bespoke portfolio
+    return [...productList, ...showcaseList];
   }, [ownerGalleryItems, products, categories]);
 
   // Extract all distinct category names

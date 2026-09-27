@@ -24,6 +24,16 @@ export const CartDrawer: React.FC = () => {
   } = useCart();
 
   const [couponCode, setCouponCode] = useState('');
+  const [availableCoupons, setAvailableCoupons] = useState<
+    Array<{
+      code: string;
+      discountType: string;
+      discountValue: number;
+      minOrderValue?: number;
+      maxDiscountCap?: number;
+      expiryDate?: string;
+    }>
+  >([]);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
@@ -41,8 +51,19 @@ export const CartDrawer: React.FC = () => {
         .catch(() => {
           if (isMounted) setDeliveryConfig(null);
         });
+
+      storefrontApi.getShopCoupons(currentShopId)
+        .then((coupons) => {
+          if (isMounted) {
+            setAvailableCoupons(coupons || []);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setAvailableCoupons([]);
+        });
     } else if (!currentShopId) {
       setDeliveryConfig(null);
+      setAvailableCoupons([]);
     }
     return () => {
       isMounted = false;
@@ -51,8 +72,9 @@ export const CartDrawer: React.FC = () => {
 
   if (!isCartOpen) return null;
 
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) {
+  const handleApplyCoupon = async (specificCode?: string) => {
+    const codeToTest = (specificCode || couponCode).trim();
+    if (!codeToTest) {
       setCouponError('Please enter a coupon code.');
       return;
     }
@@ -63,7 +85,7 @@ export const CartDrawer: React.FC = () => {
     setCouponSuccess(null);
 
     try {
-      const res = await storefrontApi.validateCoupon(currentShopId, couponCode.trim(), totalPrice);
+      const res = await storefrontApi.validateCoupon(currentShopId, codeToTest, totalPrice);
       if (res.valid && res.code) {
         setAppliedCoupon({
           code: res.code,
@@ -284,7 +306,7 @@ export const CartDrawer: React.FC = () => {
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={handleApplyCoupon}
+                        onClick={() => handleApplyCoupon()}
                         disabled={isValidatingCoupon || !couponCode.trim()}
                         className="rounded-xl px-4 text-xs font-bold text-brand-plum border-brand-plum hover:bg-brand-plum hover:text-white shrink-0"
                       >
@@ -303,6 +325,51 @@ export const CartDrawer: React.FC = () => {
                         <CheckCircle2 className="w-3 h-3 shrink-0" />
                         <span>{couponSuccess}</span>
                       </p>
+                    )}
+
+                    {/* Available Bakery Coupons */}
+                    {availableCoupons.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-espresso">
+                          <Tag className="w-3.5 h-3.5 text-brand-plum" />
+                          <span>Bakery Offers You Can Apply:</span>
+                        </div>
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                          {availableCoupons.map((c) => {
+                            const isApplicable = !c.minOrderValue || totalPrice >= c.minOrderValue;
+                            return (
+                              <div
+                                key={c.code}
+                                className="flex items-center justify-between p-2 rounded-xl bg-amber-50/80 border border-amber-200 text-xs"
+                              >
+                                <div className="min-w-0 pr-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono font-bold text-[11px] px-1.5 py-0.5 rounded bg-amber-200/80 text-amber-900 border border-dashed border-amber-400">
+                                      {c.code}
+                                    </span>
+                                    <span className="font-semibold text-brand-espresso text-[11px]">
+                                      {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% OFF` : `₹${c.discountValue} FLAT OFF`}
+                                    </span>
+                                  </div>
+                                  {c.minOrderValue && c.minOrderValue > 0 && (
+                                    <p className="text-[10px] text-brand-muted mt-0.5">
+                                      Min order: ₹{c.minOrderValue} {!isApplicable && `(Add ₹${c.minOrderValue - totalPrice} more)`}
+                                    </p>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleApplyCoupon(c.code)}
+                                  disabled={isValidatingCoupon || !isApplicable}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-brand-plum text-white hover:bg-brand-plum-dark transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
+                                >
+                                  Apply
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}

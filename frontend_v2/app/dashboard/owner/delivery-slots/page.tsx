@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Calendar, Plus, Trash2, Clock, CheckCircle2, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
+import { Calendar, Plus, Trash2, Clock, CheckCircle2, ToggleLeft, ToggleRight, Sparkles, Edit2 } from 'lucide-react';
 import { deliverySlotsApi } from '@/lib/api/deliverySlots';
 import { DeliverySlot } from '@/types/deliverySlot';
 import { useOwner } from '@/context/OwnerContext';
@@ -29,6 +29,7 @@ export default function OwnerDeliverySlotsPage() {
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSlot, setEditingSlot] = useState<DeliverySlot | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('ALL');
 
@@ -38,6 +39,26 @@ export default function OwnerDeliverySlotsPage() {
   const [endTime, setEndTime] = useState('14:00');
   const [maxOrders, setMaxOrders] = useState('10');
   const [isActive, setIsActive] = useState(true);
+
+  const openCreateModal = () => {
+    setEditingSlot(null);
+    setDayOfWeek('MONDAY');
+    setStartTime('10:00');
+    setEndTime('14:00');
+    setMaxOrders('10');
+    setIsActive(true);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (slot: DeliverySlot) => {
+    setEditingSlot(slot);
+    setDayOfWeek((slot.dayOfWeek || 'MONDAY').toUpperCase());
+    setStartTime((slot.startTime || '10:00').substring(0, 5));
+    setEndTime((slot.endTime || '14:00').substring(0, 5));
+    setMaxOrders(String(slot.maxOrders || slot.maxOrdersPerDay || 10));
+    setIsActive(slot.isActive !== false);
+    setIsModalOpen(true);
+  };
 
   const fetchSlots = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsLoading(true);
@@ -69,7 +90,7 @@ export default function OwnerDeliverySlotsPage() {
     return unregister;
   }, [registerRefreshHandler, fetchSlots]);
 
-  const handleCreateSlot = async (e: React.FormEvent) => {
+  const handleSaveSlot = async (e: React.FormEvent) => {
     e.preventDefault();
     if (startTime >= endTime) {
       alert('Start time must be before end time');
@@ -78,17 +99,25 @@ export default function OwnerDeliverySlotsPage() {
 
     setIsSubmitting(true);
     try {
-      await deliverySlotsApi.createSlot({
+      const payload = {
         dayOfWeek,
         startTime: startTime.length === 5 ? `${startTime}:00` : startTime,
         endTime: endTime.length === 5 ? `${endTime}:00` : endTime,
         maxOrders: Number(maxOrders) || 10,
         isActive,
-      });
+      };
+
+      if (editingSlot) {
+        await deliverySlotsApi.updateSlot(editingSlot.id, payload);
+      } else {
+        await deliverySlotsApi.createSlot(payload);
+      }
+
       setIsModalOpen(false);
+      setEditingSlot(null);
       fetchSlots();
     } catch (err: any) {
-      alert(err?.message || 'Failed to create delivery slot');
+      alert(err?.message || 'Failed to save delivery slot');
     } finally {
       setIsSubmitting(false);
     }
@@ -132,7 +161,7 @@ export default function OwnerDeliverySlotsPage() {
             Define daily fulfillment windows and set maximum cake order capacities to manage kitchen workload
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} size="sm">
+        <Button onClick={openCreateModal} size="sm">
           <Plus className="w-4 h-4 mr-1.5" /> Add Delivery Window
         </Button>
       </div>
@@ -173,7 +202,7 @@ export default function OwnerDeliverySlotsPage() {
           title={selectedDayFilter === 'ALL' ? 'No Delivery Slots Configured' : `No Slots for ${selectedDayFilter}`}
           description="Create scheduled delivery windows (e.g. Morning 10 AM - 2 PM, max 8 orders) so customers can select slots at checkout."
           action={
-            <Button onClick={() => setIsModalOpen(true)} size="sm">
+            <Button onClick={openCreateModal} size="sm">
               <Plus className="w-4 h-4 mr-1" /> Add Delivery Window
             </Button>
           }
@@ -225,13 +254,22 @@ export default function OwnerDeliverySlotsPage() {
                         </button>
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => handleDeleteSlot(s.id)}
-                          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          title="Delete delivery slot"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openEditModal(s)}
+                            className="p-1.5 text-owner-muted hover:text-brand-plum hover:bg-brand-blush/40 rounded-lg transition-colors cursor-pointer"
+                            title="Edit delivery window"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSlot(s.id)}
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete delivery slot"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -242,21 +280,40 @@ export default function OwnerDeliverySlotsPage() {
         </Card>
       )}
 
-      {/* Add Slot Modal */}
+      {/* Add / Edit Slot Modal - Horizontal / Landscape 2xl */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Configure Delivery Window"
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingSlot(null);
+        }}
+        maxWidth="2xl"
+        title={editingSlot ? 'Edit Delivery Window' : 'Configure Delivery Window'}
+        description="Set your fulfillment schedule and maximum cake orders per delivery window."
       >
-        <form onSubmit={handleCreateSlot} className="space-y-4 text-xs">
-          <Select
-            label="Day of the Week"
-            value={dayOfWeek}
-            onChange={(e) => setDayOfWeek(e.target.value)}
-            options={DAYS_OF_WEEK}
-          />
+        <form onSubmit={handleSaveSlot} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Day of the Week"
+              value={dayOfWeek}
+              onChange={(e) => setDayOfWeek(e.target.value)}
+              options={DAYS_OF_WEEK}
+            />
 
-          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Maximum Order Capacity"
+              type="number"
+              min="1"
+              max="100"
+              required
+              placeholder="10"
+              value={maxOrders}
+              onChange={(e) => setMaxOrders(e.target.value)}
+              helperText="Cap orders to avoid kitchen overload"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Start Time (24h)"
               type="time"
@@ -273,17 +330,6 @@ export default function OwnerDeliverySlotsPage() {
             />
           </div>
 
-          <Input
-            label="Maximum Order Capacity"
-            type="number"
-            min="1"
-            max="100"
-            required
-            placeholder="10"
-            value={maxOrders}
-            onChange={(e) => setMaxOrders(e.target.value)}
-          />
-
           <div className="flex items-center gap-2 pt-1">
             <input
               type="checkbox"
@@ -298,11 +344,18 @@ export default function OwnerDeliverySlotsPage() {
           </div>
 
           <div className="pt-4 flex justify-end gap-3 border-t border-owner-border">
-            <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)}>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => {
+                setIsModalOpen(false);
+                setEditingSlot(null);
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" isLoading={isSubmitting}>
-              Save Delivery Window
+              {editingSlot ? 'Save Changes' : 'Save Delivery Window'}
             </Button>
           </div>
         </form>

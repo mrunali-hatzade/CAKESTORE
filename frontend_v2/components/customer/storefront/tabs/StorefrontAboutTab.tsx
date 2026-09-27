@@ -45,29 +45,26 @@ export const StorefrontAboutTab: React.FC<StorefrontAboutTabProps> = ({
       ? `${addressParts.join(', ')}${shop.pincode ? ` - ${shop.pincode}` : ''}`
       : `${shop.city || ''}${shop.state ? `, ${shop.state}` : ''}`;
 
-  const uploadedImage =
-    !imgError && (shop.aboutImageUrl || shop.coverImageUrl || shop.imageUrl || shop.bannerUrl)
-      ? (shop.aboutImageUrl || shop.coverImageUrl || shop.imageUrl || shop.bannerUrl)!
-      : null;
+  const fallbackAboutImage =
+    'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80';
+  const aboutImageUrl =
+    (!imgError && (shop.aboutImageUrl || shop.coverImageUrl || shop.imageUrl || shop.bannerUrl || shop.logoUrl)) ||
+    fallbackAboutImage;
 
   const aboutStoryEnabled = shop.storefrontSettings?.aboutStoryEnabled !== false;
-  const showImage =
-    shop.storefrontSettings?.aboutImageEnabled !== false &&
-    shop.showAboutImage !== false &&
-    !!uploadedImage;
+  const showImage = shop.storefrontSettings?.aboutImageEnabled !== false && shop.showAboutImage !== false;
   const fulfillmentEnabled = shop.storefrontSettings?.fulfillmentEnabled !== false;
   const customCakesEnabled = shop.storefrontSettings?.customCakesEnabled !== false;
 
   const leadTimeDays = shop.storefrontSettings?.leadTimeDays ?? 0;
   const leadTimeMessage = shop.storefrontSettings?.leadTimeMessage;
 
-  const storyText = shop.aboutStory || shop.businessDescription || shop.description;
-  const hasStoryContent =
-    !!storyText ||
-    showImage ||
-    !!shop.yearsInBusiness ||
-    !!shop.fssaiRegistration ||
-    !!shop.isPureVeg;
+  const storyText =
+    shop.aboutStory ||
+    shop.businessDescription ||
+    shop.description ||
+    'Welcome to our digital boutique storefront. Every celebration cake is handcrafted specifically for your event using high-grade cocoa, fresh dairy cream, and pure ingredients.';
+  const hasStoryContent = true;
 
   // Build authentic highlights only from owner-provided fields
   const highlights: { icon: any; title: string; desc: string; iconBg: string; iconColor: string }[] = [];
@@ -139,12 +136,12 @@ export const StorefrontAboutTab: React.FC<StorefrontAboutTabProps> = ({
       {aboutStoryEnabled && hasStoryContent && (
         <Card className="p-6 sm:p-10 overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Visual Bakery Image (Only shown if owner uploaded an image) */}
-            {showImage && uploadedImage && (
+            {/* Visual Bakery Image */}
+            {showImage && (
               <div className="lg:col-span-5 relative group">
                 <div className="relative aspect-[4/3] sm:aspect-[1/1] w-full rounded-2xl sm:rounded-3xl overflow-hidden border border-brand-border/80 shadow-soft bg-brand-cream">
                   <img
-                    src={uploadedImage}
+                    src={aboutImageUrl}
                     alt={`${shop.businessName} bakery`}
                     onError={() => setImgError(true)}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -171,10 +168,10 @@ export const StorefrontAboutTab: React.FC<StorefrontAboutTabProps> = ({
             <div className={showImage ? 'lg:col-span-7 space-y-4' : 'lg:col-span-12 space-y-4'}>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-plum uppercase tracking-wider">
                 <Flame className="w-3.5 h-3.5" />
-                <span>Behind the Oven</span>
+                <span>Our Story</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-espresso">
-                Our Story
+                About {shop.businessName}
               </h2>
               {storyText && (
                 <p className="text-sm sm:text-base text-brand-espresso/85 leading-relaxed whitespace-pre-line">
