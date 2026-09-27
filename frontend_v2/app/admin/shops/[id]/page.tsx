@@ -371,7 +371,7 @@ export default function AdminShopDetailPage() {
             {subscriptions[0]?.planName || 'Starter Bakery'}
           </p>
           <span className="text-xs text-amber-600 mt-1 block">
-            {subscriptions[0]?.status || 'Trial Period'}
+            {subscriptions[0]?.status || 'No Active Plan'}
           </span>
         </Card>
       </div>

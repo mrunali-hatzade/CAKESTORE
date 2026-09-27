@@ -311,16 +311,36 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
-        String normalizedEmail = normalizeEmail(request.getEmail());
+        String rawIdentifier = request.getIdentifier();
+        if (rawIdentifier == null || rawIdentifier.trim().isEmpty()) {
+            throw new IllegalArgumentException("Mobile number or Email is required");
+        }
+        rawIdentifier = rawIdentifier.trim();
+
+        // Check if identifier is an Indian mobile number
+        String normalizedMobile = normalizeIndianMobile(rawIdentifier);
+        String normalizedEmail = normalizeEmail(rawIdentifier);
+
+        // Determine user lookup
+        User user = null;
+        if (normalizedMobile != null && !normalizedMobile.isEmpty()) {
+            user = userRepository.findByMobile(normalizedMobile).orElse(null);
+        }
+        if (user == null) {
+            user = userRepository.findByEmailIgnoreCase(normalizedEmail != null ? normalizedEmail : rawIdentifier).orElse(null);
+        }
+
+        if (user == null) {
+            throw new IllegalArgumentException("Invalid user credentials");
+        }
+
+        // Authenticate via AuthenticationManager using the user's primary credential format
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        normalizedEmail != null ? normalizedEmail : request.getEmail(),
+                        rawIdentifier,
                         request.getPassword()
                 )
         );
-        
-        User user = userRepository.findByEmailIgnoreCase(normalizedEmail != null ? normalizedEmail : request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid user credentials"));
                 
         // Fetch shop status for the response
         java.util.Optional<Shop> ownerShop = shopRepository.findFirstByOwnerId(user.getId());

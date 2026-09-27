@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Cake, Lock, Mail, ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Cake, Lock, Mail, Phone, ArrowRight, Eye, EyeOff, Sparkles, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -12,7 +12,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,14 +24,14 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res = await login({ email, password });
+      const res = await login({ username: identifier.trim(), email: identifier.trim(), password });
       if (res.role === 'ROLE_ADMIN' || (res.role as string) === 'ADMIN') {
         router.push('/admin');
       } else {
         router.push('/dashboard/owner');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password. Please verify your credentials.');
+      setError(err.message || 'Invalid credentials. Please verify your mobile number/email and password.');
     } finally {
       setIsLoading(false);
     }
@@ -139,16 +139,20 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-brand-espresso">
-                Email Address <span className="text-brand-crimson">*</span>
+                Email address or mobile number <span className="text-brand-crimson">*</span>
               </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                {/^\d+$/.test(identifier.trim()) ? (
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                ) : (
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                )}
                 <input
-                  type="email"
+                  type="text"
                   required
-                  placeholder="owner@bakery.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="e.g. 9876543210 or owner@bakery.com"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border bg-white text-sm text-brand-espresso placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all"
                 />
               </div>

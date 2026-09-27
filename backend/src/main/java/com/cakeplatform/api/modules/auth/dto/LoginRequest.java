@@ -13,10 +13,28 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class LoginRequest {
 
-    @NotBlank(message = "Email is required")
-    @Email(message = "Email should be valid")
     private String email;
+
+    private String username;
+
+    private String identifier;
 
     @NotBlank(message = "Password is required")
     private String password;
+
+    /**
+     * Resolves the primary identifier supplied (either 'identifier', 'username' or 'email').
+     */
+    public String getIdentifier() {
+        if (identifier != null && !identifier.trim().isEmpty()) {
+            return identifier.trim();
+        }
+        if (username != null && !username.trim().isEmpty()) {
+            return username.trim();
+        }
+        if (email != null && !email.trim().isEmpty()) {
+            return email.trim();
+        }
+        return null;
+    }
 }

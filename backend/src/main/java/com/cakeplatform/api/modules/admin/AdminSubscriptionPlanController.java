@@ -33,6 +33,7 @@ public class AdminSubscriptionPlanController {
         
         if (planUpdates.getName() != null) plan.setName(planUpdates.getName());
         if (planUpdates.getDescription() != null) plan.setDescription(planUpdates.getDescription());
+        if (planUpdates.getBillingCycle() != null) plan.setBillingCycle(planUpdates.getBillingCycle());
         if (planUpdates.getPrice() != null) plan.setPrice(planUpdates.getPrice());
         if (planUpdates.getCurrency() != null) plan.setCurrency(planUpdates.getCurrency());
         if (planUpdates.getDurationDays() != null) plan.setDurationDays(planUpdates.getDurationDays());

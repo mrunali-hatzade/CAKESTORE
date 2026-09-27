@@ -1,39 +1,100 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Check, ShieldCheck, Sparkles, HelpCircle, ArrowRight, ChevronDown } from 'lucide-react';
 import { Navbar } from '@/components/common/Navbar';
 import { Footer } from '@/components/common/Footer';
 
+interface Plan {
+  id: number;
+  name: string;
+  description?: string;
+  billingCycle: string;
+  price: number;
+  currency: string;
+  durationDays: number;
+  features?: string;
+  isActive: boolean;
+}
+
 export default function PricingPage() {
+  const [allPlans, setAllPlans] = useState<Plan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [activePlan, setActivePlan] = useState<{ id: number; name: string; price: number } | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    setIsLoading(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/storefront/plans`)
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setActivePlan(data[0]);
+        if (Array.isArray(data)) {
+          setAllPlans(data);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
-  const features = [
-    'Custom branded online bakery storefront',
-    'Unlimited cake products, sizes and flavor variants',
-    '0% transaction fees, keep 100% of your earnings',
-    'Direct UPI and card payments to your bank account',
-    'Delivery slot and advance date booking calendar',
-    'Instant WhatsApp order notifications',
-    'Custom cake reference photo uploader',
-    'Verified local baker badge and customer reviews',
-    'Priority listing on local marketplace search',
-    'Dedicated WhatsApp and phone support',
-  ];
+  const {
+    monthlyPlan,
+    yearlyPlan,
+    activePlan,
+    displayPrice,
+    savingsPercent,
+    featureList,
+    planName,
+    planDescription,
+  } = useMemo(() => {
+    const mPlan = allPlans.find(p => p.billingCycle === 'monthly');
+    const yPlan = allPlans.find(p => p.billingCycle === 'yearly');
+    const actPlan = (billing === 'monthly' ? mPlan : yPlan) || mPlan;
+    
+    let dispPrice = 0;
+    if (billing === 'monthly' && mPlan) {
+      dispPrice = mPlan.price;
+    } else if (billing === 'yearly' && yPlan) {
+      dispPrice = Math.round(yPlan.price / 12);
+    } else if (mPlan) {
+      dispPrice = mPlan.price;
+    }
+
+    let savePct = 0;
+    if (mPlan && yPlan) {
+      const denom = mPlan.price * 12;
+      if (denom > 0) {
+        savePct = Math.round(((denom - yPlan.price) / denom) * 100);
+      }
+    }
+
+    let fList: string[] = [];
+    if (actPlan?.features) {
+      try {
+        const parsed = JSON.parse(actPlan.features);
+        if (Array.isArray(parsed)) {
+          fList = parsed;
+        } else {
+          fList = [actPlan.features];
+        }
+      } catch (e) {
+        fList = actPlan.features.split(',').map(s => s.trim());
+      }
+    }
+
+    return {
+      monthlyPlan: mPlan,
+      yearlyPlan: yPlan,
+      activePlan: actPlan,
+      displayPrice: dispPrice,
+      savingsPercent: savePct,
+      featureList: fList,
+      planName: actPlan?.name || 'Bakery Plan',
+      planDescription: actPlan?.description || 'Everything you need to run a thriving online bakery.',
+    };
+  }, [allPlans, billing]);
 
   const faqs = [
     {
@@ -53,13 +114,6 @@ export default function PricingPage() {
       a: 'None at all. Our guided onboarding takes under 10 minutes. Upload your cake photos and prices, and your shop is ready to accept orders.',
     },
   ];
-
-  const monthlyPrice = activePlan ? activePlan.price : 999;
-  const yearlyPricePerMonth = Math.round((monthlyPrice * 10) / 12);
-  const yearlyTotal = monthlyPrice * 10;
-  const yearlySavings = (monthlyPrice * 12) - yearlyTotal;
-  const currentPrice = billing === 'monthly' ? monthlyPrice : yearlyPricePerMonth;
-  const planName = activePlan?.name || 'Pro Baker Plan';
 
   return (
     <div className="min-h-screen bg-brand-cream-light font-sans flex flex-col">
@@ -94,67 +148,107 @@ export default function PricingPage() {
               }`}
             >
               Yearly
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                billing === 'yearly' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
-              }`}>Save 17%</span>
+              {savingsPercent > 0 && !Number.isNaN(savingsPercent) && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  billing === 'yearly' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                }`}>Save {savingsPercent}%</span>
+              )}
             </button>
           </div>
         </div>
 
-        <div className="max-w-xl mx-auto mb-16">
-          <div className="bg-white rounded-3xl border-2 border-brand-plum shadow-lg p-8 sm:p-10">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-brand-plum">{planName}</span>
-                <h2 className="text-2xl font-bold font-serif text-brand-espresso mt-1">Complete Bakery Suite</h2>
-              </div>
-              <div className="text-right">
-                <div className="text-4xl font-extrabold font-serif text-brand-espresso">
-                  <span className="text-lg font-bold">₹</span>{currentPrice.toLocaleString('en-IN')}
-                </div>
-                <div className="text-xs text-brand-muted">/month{billing === 'yearly' ? ', billed yearly' : ''}</div>
-                {billing === 'yearly' && (
-                  <div className="text-xs text-emerald-600 font-semibold mt-0.5">
-                    ₹{yearlyTotal.toLocaleString('en-IN')}/year (save ₹{yearlySavings.toLocaleString('en-IN')})
+        <div className="max-w-6xl mx-auto mb-16">
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(3)].map((_, idx) => (
+                <div key={idx} className="bg-white rounded-3xl border-2 border-brand-plum/20 shadow-sm p-8 sm:p-10 animate-pulse flex flex-col items-center space-y-6">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-8 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-10 bg-gray-200 rounded w-1/3"></div>
+                  <div className="w-full space-y-4 mt-6">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex gap-3 items-center">
+                        <div className="w-5 h-5 rounded-full bg-gray-200 shrink-0"></div>
+                        <div className="h-4 bg-gray-200 rounded w-full"></div>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-3 mb-8">
-              {features.map((f, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 text-emerald-600" />
-                  </div>
-                  <span className="text-sm text-brand-espresso">{f}</span>
+                  <div className="h-12 bg-gray-200 rounded-2xl w-full mt-4"></div>
                 </div>
               ))}
             </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {allPlans.filter(p => p.billingCycle === billing).map((plan) => {
+                let featureList: string[] = [];
+                if (plan.features) {
+                  try {
+                    const parsed = JSON.parse(plan.features);
+                    if (Array.isArray(parsed)) featureList = parsed;
+                    else featureList = [plan.features];
+                  } catch (e) {
+                    featureList = plan.features.split(',').map(s => s.trim());
+                  }
+                }
 
-            <Link
-              href="/onboarding"
-              className="w-full inline-flex items-center justify-center px-8 py-4 rounded-2xl bg-brand-plum hover:bg-brand-plum-hover text-white text-base font-bold shadow-sm transition-all active:scale-95"
-            >
-              <span>Start Free 14-Day Trial</span>
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Link>
+                return (
+                  <div key={plan.id} className="bg-white rounded-3xl border-2 border-brand-plum shadow-lg p-8 sm:p-10 flex flex-col">
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between mb-6">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-brand-plum">{plan.name}</span>
+                          <h2 className="text-xl font-bold font-serif text-brand-espresso mt-1 line-clamp-2">{plan.description}</h2>
+                        </div>
+                      </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs text-brand-muted">
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>No credit card needed</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Cancel anytime</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>0% commission on orders</span>
-              </div>
+                      <div className="mb-6">
+                        <div className="text-4xl font-extrabold font-serif text-brand-espresso">
+                          <span className="text-lg font-bold">₹</span>{plan.price.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-xs text-brand-muted mt-1">/{billing === 'yearly' ? 'year' : 'month'}</div>
+                      </div>
+
+                      <div className="space-y-3 mb-8">
+                        {featureList.map((f, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            </div>
+                            <span className="text-sm text-brand-espresso leading-snug">{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-auto pt-6">
+                      <Link
+                        href="/onboarding"
+                        className="w-full inline-flex items-center justify-center px-6 py-4 rounded-2xl bg-brand-plum hover:bg-brand-plum-hover text-white text-base font-bold shadow-sm transition-all active:scale-95"
+                      >
+                        <span>Get Started</span>
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Link>
+                      <div className="mt-4 flex flex-col items-center justify-center gap-2 text-xs text-brand-muted">
+                        <div className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>No hidden fees</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Cancel anytime</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {allPlans.filter(p => p.billingCycle === billing).length === 0 && (
+                <div className="col-span-full text-center py-12 text-brand-muted">
+                  No {billing} plans currently available. Please select another billing cycle or check back later.
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
 
         <div className="max-w-3xl mx-auto">

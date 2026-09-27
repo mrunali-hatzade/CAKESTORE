@@ -371,4 +371,121 @@ public class RegistrationIdentityIntegrityTest {
         assertEquals("jwt_token_123", response.getToken());
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
     }
+
+    @Test
+    @DisplayName("13. Login works with registered mobile number")
+    void testLogin_MobileNumber() {
+        LoginRequest request = new LoginRequest();
+        request.setUsername("9876543210");
+        request.setPassword("password123");
+
+        User mockUser = new User();
+        mockUser.setId(51L);
+        mockUser.setEmail("mobileowner@sweetdelight.com");
+        mockUser.setMobile("9876543210");
+        mockUser.setRole(UserRole.SHOP_OWNER);
+        mockUser.setFullName("Mobile Owner");
+
+        when(userRepository.findByMobile("9876543210")).thenReturn(Optional.of(mockUser));
+        when(shopRepository.findFirstByOwnerId(51L)).thenReturn(Optional.empty());
+        when(jwtService.generateToken(any(), any())).thenReturn("jwt_token_456");
+
+        AuthResponse response = authService.login(request);
+
+        assertNotNull(response);
+        assertEquals("mobileowner@sweetdelight.com", response.getEmail());
+        assertEquals("jwt_token_456", response.getToken());
+        verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+    }
+
+    @Test
+    @DisplayName("14. Both email and mobile resolve to the same User ID")
+    void testLogin_EmailAndMobile_ResolveSameUser() {
+        User sharedUser = new User();
+        sharedUser.setId(99L);
+        sharedUser.setEmail("shared@bakery.com");
+        sharedUser.setMobile("9876543210");
+        sharedUser.setRole(UserRole.SHOP_OWNER);
+        sharedUser.setFullName("Shared Account Owner");
+
+        when(userRepository.findByEmailIgnoreCase("shared@bakery.com")).thenReturn(Optional.of(sharedUser));
+        when(userRepository.findByMobile("9876543210")).thenReturn(Optional.of(sharedUser));
+        when(shopRepository.findFirstByOwnerId(99L)).thenReturn(Optional.empty());
+        when(jwtService.generateToken(any(), any())).thenReturn("jwt_shared_token");
+
+        // 1. Login via email
+        LoginRequest emailReq = new LoginRequest();
+        emailReq.setEmail("shared@bakery.com");
+        emailReq.setPassword("password123");
+        AuthResponse emailRes = authService.login(emailReq);
+
+        // 2. Login via mobile
+        LoginRequest mobileReq = new LoginRequest();
+        mobileReq.setIdentifier("9876543210");
+        mobileReq.setPassword("password123");
+        AuthResponse mobileRes = authService.login(mobileReq);
+
+        assertNotNull(emailRes);
+        assertNotNull(mobileRes);
+        assertEquals(emailRes.getEmail(), mobileRes.getEmail());
+        assertEquals("shared@bakery.com", mobileRes.getEmail());
+    }
+
+    @Test
+    @DisplayName("15. Admin login works with email and mobile with +91 or 0 prefix")
+    void testLogin_AdminAndMobilePrefixNormalization() {
+        User adminUser = new User();
+        adminUser.setId(1L);
+        adminUser.setEmail("admin@cakestore.com");
+        adminUser.setMobile("9876543210");
+        adminUser.setRole(UserRole.ADMIN);
+        adminUser.setFullName("Platform Admin");
+
+        when(userRepository.findByMobile("9876543210")).thenReturn(Optional.of(adminUser));
+        when(userRepository.findByEmailIgnoreCase("admin@cakestore.com")).thenReturn(Optional.of(adminUser));
+        when(shopRepository.findFirstByOwnerId(1L)).thenReturn(Optional.empty());
+        when(jwtService.generateToken(any(), any())).thenReturn("jwt_admin_token");
+
+        // 1. Email format
+        LoginRequest emailReq = new LoginRequest();
+        emailReq.setIdentifier("admin@cakestore.com");
+        emailReq.setPassword("admin123");
+        AuthResponse emailRes = authService.login(emailReq);
+
+        assertNotNull(emailRes);
+        assertEquals("ADMIN", emailRes.getRole());
+        assertEquals("admin@cakestore.com", emailRes.getEmail());
+
+        // 2. +91 format
+        LoginRequest prefixReq = new LoginRequest();
+        prefixReq.setIdentifier("+91 9876543210");
+        prefixReq.setPassword("admin123");
+        AuthResponse prefixRes = authService.login(prefixReq);
+
+        assertNotNull(prefixRes);
+        assertEquals("ADMIN", prefixRes.getRole());
+        assertEquals("admin@cakestore.com", prefixRes.getEmail());
+
+        // 3. 0 prefix format
+        LoginRequest zeroReq = new LoginRequest();
+        zeroReq.setIdentifier("09876543210");
+        zeroReq.setPassword("admin123");
+        AuthResponse zeroRes = authService.login(zeroReq);
+
+        assertNotNull(zeroRes);
+        assertEquals("ADMIN", zeroRes.getRole());
+        assertEquals("admin@cakestore.com", zeroRes.getEmail());
+    }
+
+    @Test
+    @DisplayName("16. Unknown identifier throws invalid user credentials")
+    void testLogin_UnknownIdentifier_ThrowsException() {
+        LoginRequest request = new LoginRequest();
+        request.setIdentifier("nonexistent@bakery.com");
+        request.setPassword("password123");
+
+        when(userRepository.findByEmailIgnoreCase("nonexistent@bakery.com")).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> authService.login(request));
+    }
 }

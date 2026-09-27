@@ -259,7 +259,7 @@ export interface OwnerSubscription {
   planName: string;
   price: number;
   billingCycle: 'monthly' | 'yearly';
-  status: 'ACTIVE' | 'TRIAL' | 'PAST_DUE' | 'CANCELLED';
+  status: 'PENDING' | 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
   renewalDate: string;
   ordersProcessedThisMonth: number;
   ordersLimit: number;

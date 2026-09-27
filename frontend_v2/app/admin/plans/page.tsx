@@ -41,6 +41,7 @@ export default function AdminPlansPage() {
   const [form, setForm] = useState({
     name: '',
     description: '',
+    billingCycle: 'monthly',
     price: 999,
     currency: 'INR',
     durationDays: 30,
@@ -72,6 +73,7 @@ export default function AdminPlansPage() {
     setForm({
       name: '',
       description: '',
+      billingCycle: 'monthly',
       price: 999,
       currency: 'INR',
       durationDays: 30,
@@ -86,6 +88,7 @@ export default function AdminPlansPage() {
     setForm({
       name: plan.name,
       description: plan.description || '',
+      billingCycle: plan.billingCycle || 'monthly',
       price: plan.price,
       currency: plan.currency || 'INR',
       durationDays: plan.durationDays || 30,
@@ -190,119 +193,151 @@ export default function AdminPlansPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl">
-          {plans.map((plan) => {
-            let featureList: string[] = [];
-            if (plan.features) {
-              try {
-                const parsed = JSON.parse(plan.features);
-                if (Array.isArray(parsed)) {
-                  featureList = parsed.map((item) => String(item).trim()).filter(Boolean);
-                }
-              } catch {
-                featureList = plan.features
-                  .replace(/[\[\]"']/g, '')
-                  .split(',')
-                  .map((f) => f.trim())
-                  .filter(Boolean);
-              }
-            }
+        <div className="space-y-12 max-w-6xl">
+          {['monthly', 'yearly'].map((cycle) => {
+            // Group plans. Fallback to monthly if billingCycle is undefined for legacy plans.
+            const cyclePlans = plans.filter((p) => p.billingCycle === cycle || (!p.billingCycle && cycle === 'monthly'));
+            
+            if (cyclePlans.length === 0 && cycle === 'yearly') return null;
 
             return (
-              <Card
-                key={plan.id}
-                className={`p-7 rounded-2xl flex flex-col justify-between border-slate-200/90 shadow-soft hover:shadow-card transition-all ${
-                  !plan.isActive ? 'opacity-70 bg-slate-50/70' : 'bg-white'
-                }`}
-              >
-                <div>
-                  {/* Top Bar */}
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-serif font-bold text-xl text-slate-900">
-                      {plan.name}
-                    </h3>
-                    <Badge variant={plan.isActive ? 'success' : 'default'} size="sm">
-                      {plan.isActive ? 'Active' : 'Disabled'}
-                    </Badge>
-                  </div>
+              <div key={cycle} className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-serif font-bold text-slate-900 capitalize">{cycle} Plans</h3>
+                  <div className="h-px bg-slate-200 flex-1 ml-4" />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {cyclePlans.map((plan) => {
+                    let featureList: string[] = [];
+                    if (plan.features) {
+                      try {
+                        const parsed = JSON.parse(plan.features);
+                        if (Array.isArray(parsed)) {
+                          featureList = parsed.map((item) => String(item).trim()).filter(Boolean);
+                        }
+                      } catch {
+                        featureList = plan.features
+                          .replace(/[\[\]"']/g, '')
+                          .split(',')
+                          .map((f) => f.trim())
+                          .filter(Boolean);
+                      }
+                    }
 
-                  <p className="text-sm text-slate-500 mt-2.5 min-h-[2.5rem] line-clamp-2 leading-relaxed">
-                    {plan.description || 'Standard bakery subscription tier.'}
-                  </p>
+                    return (
+                      <Card
+                        key={plan.id}
+                        className={`p-7 rounded-2xl flex flex-col justify-between border-slate-200/90 shadow-soft hover:shadow-card transition-all ${
+                          !plan.isActive ? 'opacity-70 bg-slate-50/70' : 'bg-white'
+                        }`}
+                      >
+                        <div>
+                          {/* Top Bar */}
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-serif font-bold text-xl text-slate-900">
+                              {plan.name}
+                            </h3>
+                            <div className="flex items-center gap-1.5">
+                              {plan.billingCycle && (
+                                <Badge variant="default" size="sm">
+                                  {plan.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}
+                                </Badge>
+                              )}
+                              <Badge variant={plan.isActive ? 'success' : 'default'} size="sm">
+                                {plan.isActive ? 'Active' : 'Disabled'}
+                              </Badge>
+                            </div>
+                          </div>
 
-                  {/* Price */}
-                  <div className="mt-5 pb-5 border-b border-slate-100">
-                    <p className="text-3xl sm:text-4xl font-extrabold font-serif text-slate-900">
-                      ₹{plan.price.toLocaleString('en-IN')}
-                      <span className="text-xs font-normal text-slate-500 font-sans ml-1">
-                        / {plan.durationDays} days
-                      </span>
-                    </p>
-                    <span className="text-xs text-indigo-600 font-semibold mt-1 inline-block">
-                      Currency: {plan.currency || 'INR'}
-                    </span>
-                  </div>
+                          <p className="text-sm text-slate-500 mt-2.5 min-h-[2.5rem] line-clamp-2 leading-relaxed">
+                            {plan.description || 'Standard bakery subscription tier.'}
+                          </p>
 
-                  {/* Features */}
-                  <div className="mt-5 space-y-3 text-sm text-slate-700">
-                    {featureList.length > 0 ? (
-                      featureList.map((feature, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5">
-                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                          <span className="leading-snug">{feature}</span>
+                          {/* Price */}
+                          <div className="mt-5 pb-5 border-b border-slate-100">
+                            <p className="text-3xl sm:text-4xl font-extrabold font-serif text-slate-900">
+                              ₹{plan.price.toLocaleString('en-IN')}
+                              <span className="text-xs font-normal text-slate-500 font-sans ml-1">
+                                / {plan.durationDays} days
+                              </span>
+                            </p>
+                            <span className="text-xs text-indigo-600 font-semibold mt-1 inline-block">
+                              Currency: {plan.currency || 'INR'}
+                            </span>
+                          </div>
+
+                          {/* Features */}
+                          <div className="mt-5 space-y-3 text-sm text-slate-700">
+                            {featureList.length > 0 ? (
+                              featureList.slice(0, 4).map((feature, idx) => (
+                                <div key={idx} className="flex items-start gap-2.5">
+                                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                  <span className="leading-snug">{feature}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">No specific feature tags listed.</p>
+                            )}
+                            {featureList.length > 4 && (
+                              <div className="text-xs text-slate-400 font-medium pt-1">
+                                + {featureList.length - 4} more features
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-slate-400 italic">No specific feature tags listed.</p>
-                    )}
-                  </div>
-                </div>
 
-                {/* Card Footer Actions */}
-                <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-between gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEditModal(plan)}
-                    className="gap-2 text-xs flex-1 py-2"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Edit Tier</span>
-                  </Button>
+                        {/* Card Footer Actions */}
+                        <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-between gap-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditModal(plan)}
+                            className="gap-2 text-xs flex-1 py-2"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span>Edit Tier</span>
+                          </Button>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleToggleStatus(plan)}
-                    className={`gap-1.5 text-xs py-2 ${
-                      plan.isActive
-                        ? 'text-rose-600 hover:bg-rose-50'
-                        : 'text-emerald-600 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <Power className="w-3.5 h-3.5" />
-                    <span>{plan.isActive ? 'Disable' : 'Enable'}</span>
-                  </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleStatus(plan)}
+                            className={`gap-1.5 text-xs py-2 ${
+                              plan.isActive
+                                ? 'text-rose-600 hover:bg-rose-50'
+                                : 'text-emerald-600 hover:bg-emerald-50'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            <span>{plan.isActive ? 'Disable' : 'Enable'}</span>
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                  
+                  {/* Quick Add Plan Slot - Only show in Monthly to avoid duplicating */}
+                  {cycle === 'monthly' && (
+                    <div
+                      onClick={openCreateModal}
+                      className="rounded-2xl border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/30 p-7 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-h-[300px] group"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-white group-hover:bg-indigo-600 group-hover:text-white text-slate-400 flex items-center justify-center shadow-xs border border-slate-200 transition-colors mb-4">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-serif font-bold text-base text-slate-800 group-hover:text-indigo-600 transition-colors">
+                        Add Another Tier
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-xs mt-1.5 leading-relaxed">
+                        Create Starter, Growth, or Custom Enterprise plans
+                      </p>
+                    </div>
+                  )}
                 </div>
-              </Card>
+              </div>
             );
           })}
-
-          {/* Quick Add Plan Slot */}
-          <div
-            onClick={openCreateModal}
-            className="rounded-2xl border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/30 p-7 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-h-[300px] group"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-white group-hover:bg-indigo-600 group-hover:text-white text-slate-400 flex items-center justify-center shadow-xs border border-slate-200 transition-colors mb-4">
-              <Plus className="w-6 h-6" />
-            </div>
-            <h4 className="font-serif font-bold text-base text-slate-800 group-hover:text-indigo-600 transition-colors">
-              Add Another Tier
-            </h4>
-            <p className="text-xs text-slate-400 max-w-xs mt-1.5 leading-relaxed">
-              Create Starter, Growth, or Custom Enterprise plans with tailored feature limits
-            </p>
-          </div>
         </div>
       )}
 
@@ -329,6 +364,26 @@ export default function AdminPlansPage() {
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Billing Cycle</label>
+            <select
+              value={form.billingCycle}
+              onChange={(e) => {
+                const cycle = e.target.value;
+                setForm({
+                  ...form,
+                  billingCycle: cycle,
+                  durationDays: cycle === 'yearly' ? 365 : 30,
+                });
+              }}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
+            >
+              <option value="monthly">Monthly (30 days)</option>
+              <option value="yearly">Yearly (365 days)</option>
+            </select>
+            <p className="text-[11px] text-slate-400 mt-1">Controls how this plan appears on the pricing page toggle.</p>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <Input

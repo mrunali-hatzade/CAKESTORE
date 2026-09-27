@@ -444,7 +444,7 @@ export default function OnboardingPage() {
 
                 <div>
                   <Input
-                    label="Email Address (Login ID)"
+                    label="Email Address"
                     type="email"
                     required
                     placeholder="anita@bakes.com"
@@ -454,6 +454,7 @@ export default function OnboardingPage() {
                       if (emailError) setEmailError(null);
                     }}
                     error={emailError || undefined}
+                    helperText="Required for order notifications, store updates, and login"
                   />
                   {emailError && emailError.includes('already registered') && (
                     <p className="text-xs text-brand-plum font-semibold mt-1">

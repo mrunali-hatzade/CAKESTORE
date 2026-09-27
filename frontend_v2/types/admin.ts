@@ -85,6 +85,7 @@ export interface AdminPlan {
   id: number;
   name: string;
   description?: string;
+  billingCycle?: string;
   price: number;
   currency: string;
   durationDays: number;

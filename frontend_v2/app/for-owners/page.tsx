@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import Link from "next/link";
@@ -127,8 +127,8 @@ export default function ForOwnersPage() {
             Join 500+ Home Bakers Already on CakeStore
           </h2>
           <p className="text-sm text-white/70 max-w-xl mx-auto mb-8">
-            Free 14-day trial. No credit card required. Our team helps you
-            upload your first products and go live before you pay a rupee.
+            Simple, transparent pricing. Our team helps you set up your
+            storefront and go live in under 10 minutes.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link

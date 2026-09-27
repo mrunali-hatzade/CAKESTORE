@@ -3,7 +3,14 @@ import { LoginRequest, LoginResponse, RegisterFormData } from '@/types/auth';
 
 export const authApi = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-    return apiClient.post<LoginResponse>('/api/auth/login', credentials);
+    const rawId = credentials.identifier || credentials.username || credentials.email;
+    const payload = {
+      identifier: rawId,
+      username: rawId,
+      email: rawId,
+      password: credentials.password,
+    };
+    return apiClient.post<LoginResponse>('/api/auth/login', payload);
   },
 
   register: async (formData: RegisterFormData): Promise<any> => {
