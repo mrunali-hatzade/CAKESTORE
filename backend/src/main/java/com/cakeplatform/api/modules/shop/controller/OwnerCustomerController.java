@@ -50,14 +50,26 @@ public class OwnerCustomerController {
         return ResponseEntity.ok(profiles);
     }
 
-    @GetMapping("/{email}")
-    public ResponseEntity<CustomerProfileResponse> getCustomerProfile(@PathVariable String email, @AuthenticationPrincipal CustomUserDetails userDetails) {
+    @GetMapping("/{identifier}")
+    public ResponseEntity<CustomerProfileResponse> getCustomerProfile(@PathVariable String identifier, @AuthenticationPrincipal CustomUserDetails userDetails) {
         Shop shop = shopAccessValidator.getValidShopForOwner(userDetails.getId());
-        return ResponseEntity.ok(buildProfile(shop.getId(), email));
+        return ResponseEntity.ok(buildProfile(shop.getId(), identifier));
     }
 
-    private CustomerProfileResponse buildProfile(Long shopId, String email) {
-        List<Order> orders = orderRepository.findByShopIdAndCustomerEmailOrderByCreatedAtDesc(shopId, email);
+    private CustomerProfileResponse buildProfile(Long shopId, String identifier) {
+        List<Order> orders = new ArrayList<>();
+        // 1. If identifier doesn't look like an email, prioritize lookup by customer name
+        if (identifier != null && !identifier.contains("@")) {
+            orders = orderRepository.findByShopIdAndCustomerNameOrderByCreatedAtDesc(shopId, identifier);
+        }
+        // 2. If not found or looks like an email, lookup by email
+        if (orders.isEmpty() && identifier != null) {
+            orders = orderRepository.findByShopIdAndCustomerEmailOrderByCreatedAtDesc(shopId, identifier);
+        }
+        // 3. Fallback to name search in case email had no matches
+        if (orders.isEmpty() && identifier != null) {
+            orders = orderRepository.findByShopIdAndCustomerNameOrderByCreatedAtDesc(shopId, identifier);
+        }
         
         if (orders.isEmpty()) {
             throw new RuntimeException("Customer not found for this shop");
@@ -66,7 +78,7 @@ public class OwnerCustomerController {
         Order mostRecent = orders.get(0);
         
         BigDecimal totalSpent = orders.stream()
-                .filter(o -> "PAID".equals(o.getPaymentStatus()) || "COMPLETED".equals(o.getPaymentStatus()))
+                .filter(o -> "PAID".equalsIgnoreCase(o.getPaymentStatus()) || "COMPLETED".equalsIgnoreCase(o.getPaymentStatus()))
                 .map(Order::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 

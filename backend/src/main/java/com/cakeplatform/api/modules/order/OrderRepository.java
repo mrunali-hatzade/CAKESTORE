@@ -50,12 +50,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByShopIdAndCustomerEmailOrderByCreatedAtDesc(Long shopId, String customerEmail);
 
+    List<Order> findByShopIdAndCustomerNameOrderByCreatedAtDesc(Long shopId, String customerName);
+
     @Query("SELECT DISTINCT o.customerEmail FROM Order o WHERE o.shop.id = :shopId AND o.customerEmail IS NOT NULL")
     List<String> findUniqueCustomerEmailsByShopId(@Param("shopId") Long shopId);
 
     @Query(value = "SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
-           "  MAX(o.customerName), " +
-           "  o.customerEmail, " +
+           "  COALESCE(NULLIF(TRIM(o.customerName), ''), o.customerEmail, 'Guest Customer'), " +
+           "  MAX(o.customerEmail), " +
            "  MAX(o.customerPhone), " +
            "  MAX(o.deliveryAddress), " +
            "  COUNT(o.id), " +
@@ -64,9 +66,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            ") " +
            "FROM Order o " +
            "WHERE o.shop.id = :shopId " +
-           "GROUP BY o.customerEmail " +
+           "GROUP BY COALESCE(NULLIF(TRIM(o.customerName), ''), o.customerEmail, 'Guest Customer') " +
            "ORDER BY MAX(o.createdAt) DESC",
-           countQuery = "SELECT COUNT(DISTINCT o.customerEmail) FROM Order o WHERE o.shop.id = :shopId")
+           countQuery = "SELECT COUNT(DISTINCT COALESCE(NULLIF(TRIM(o.customerName), ''), o.customerEmail, 'Guest Customer')) FROM Order o WHERE o.shop.id = :shopId")
     org.springframework.data.domain.Page<com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse> findCustomerProfilesByShopId(
            @Param("shopId") Long shopId, 
            Pageable pageable);

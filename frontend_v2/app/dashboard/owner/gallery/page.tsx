@@ -17,11 +17,14 @@ import {
   EyeOff,
   Check,
   AlertCircle,
+  ShoppingBag,
 } from 'lucide-react';
 import { galleryApi } from '@/lib/api/gallery';
+import { productsApi } from '@/lib/api/products';
 import { mediaApi } from '@/lib/api/media';
 import { useOwner } from '@/context/OwnerContext';
 import { GalleryItem, CreateGalleryItemRequest } from '@/types/gallery';
+import { Product } from '@/types/product';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -69,9 +72,37 @@ const STANDARD_CATEGORIES = [
   'Pastry',
 ];
 
+type UnifiedOwnerGalleryItem =
+  | {
+      origin: 'showcase';
+      id: number;
+      title: string;
+      caption?: string;
+      imageUrl: string;
+      categoryName: string;
+      displayOrder: number;
+      isActive: boolean;
+      rawItem: GalleryItem;
+    }
+  | {
+      origin: 'product';
+      id: number;
+      title: string;
+      caption?: string;
+      imageUrl: string;
+      categoryName: string;
+      displayOrder: number;
+      isActive: boolean;
+      price: number;
+      isEggless?: boolean;
+      product: Product;
+    };
+
 export default function OwnerGalleryPage() {
   const { shop, registerRefreshHandler } = useOwner();
   const [items, setItems] = useState<GalleryItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [galleryViewMode, setGalleryViewMode] = useState<'ALL' | 'SHOWCASE' | 'PRODUCTS'>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
@@ -100,8 +131,12 @@ export default function OwnerGalleryPage() {
 
   const fetchGalleryItems = useCallback(async () => {
     try {
-      const data = await galleryApi.getOwnerGalleryItems();
-      setItems(data || []);
+      const [galleryData, productsData] = await Promise.all([
+        galleryApi.getOwnerGalleryItems(),
+        productsApi.getOwnerProducts().catch(() => []),
+      ]);
+      setItems(galleryData || []);
+      setProducts(productsData || []);
     } catch (err: any) {
       console.error('Failed to load gallery items:', err);
       setItems([]);
@@ -252,18 +287,87 @@ export default function OwnerGalleryPage() {
     }
   };
 
+  // Merge Showcase items (shop_gallery_items) with Menu Products (products)
+  const unifiedItems: UnifiedOwnerGalleryItem[] = useMemo(() => {
+    const list: UnifiedOwnerGalleryItem[] = [];
+
+    // 1. Showcase Portfolio photos
+    items.forEach((item) => {
+      list.push({
+        origin: 'showcase',
+        id: item.id,
+        title: item.title,
+        caption: item.caption,
+        imageUrl: item.imageUrl,
+        categoryName: item.categoryName || 'Bespoke',
+        displayOrder: item.displayOrder ?? 0,
+        isActive: item.isActive,
+        rawItem: item,
+      });
+    });
+
+    // 2. Active Menu Products photos
+    products
+      .filter((p) => p.imageUrl && !p.imageUrl.includes('placeholder'))
+      .forEach((p, idx) => {
+        const effectivePrice =
+          p.variants && p.variants.length > 0 && p.variants[0].price != null
+            ? Number(p.variants[0].price)
+            : Number(p.price || 0);
+
+        list.push({
+          origin: 'product',
+          id: p.id,
+          title: p.name,
+          caption: p.description,
+          imageUrl: p.imageUrl!,
+          categoryName: p.categoryName || 'Menu Cake',
+          displayOrder: idx,
+          isActive: p.inStock !== false && p.availability !== false,
+          price: effectivePrice,
+          isEggless: p.isEggless,
+          product: p,
+        });
+
+        if (p.images && p.images.length > 0) {
+          p.images.forEach((img, imgIdx) => {
+            if (img.imageUrl && img.imageUrl !== p.imageUrl) {
+              list.push({
+                origin: 'product',
+                id: p.id,
+                title: `${p.name} (Detail ${imgIdx + 1})`,
+                caption: p.description,
+                imageUrl: img.imageUrl!,
+                categoryName: p.categoryName || 'Menu Cake',
+                displayOrder: idx + imgIdx + 1,
+                isActive: p.inStock !== false && p.availability !== false,
+                price: effectivePrice,
+                isEggless: p.isEggless,
+                product: p,
+              });
+            }
+          });
+        }
+      });
+
+    return list;
+  }, [items, products]);
+
   // Extract all categories available in the gallery
   const allCategories = useMemo(() => {
     const set = new Set<string>();
     STANDARD_CATEGORIES.forEach((c) => set.add(c));
-    items.forEach((i) => {
+    unifiedItems.forEach((i) => {
       if (i.categoryName) set.add(i.categoryName);
     });
     return Array.from(set);
-  }, [items]);
+  }, [unifiedItems]);
 
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    return unifiedItems.filter((item) => {
+      if (galleryViewMode === 'SHOWCASE' && item.origin !== 'showcase') return false;
+      if (galleryViewMode === 'PRODUCTS' && item.origin !== 'product') return false;
+
       const matchesSearch =
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.caption && item.caption.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -275,9 +379,11 @@ export default function OwnerGalleryPage() {
 
       return matchesSearch && matchesCat;
     });
-  }, [items, searchQuery, selectedCategoryFilter]);
+  }, [unifiedItems, galleryViewMode, searchQuery, selectedCategoryFilter]);
 
-  const activeCount = items.filter((i) => i.isActive).length;
+  const totalShowcaseCount = items.length;
+  const totalProductsCount = unifiedItems.filter((i) => i.origin === 'product').length;
+  const activeCount = filteredItems.filter((i) => i.isActive).length;
 
   if (isLoading) {
     return <LoadingState message="Loading your bakery gallery showcase..." />;
@@ -323,6 +429,30 @@ export default function OwnerGalleryPage() {
         </div>
       </div>
 
+      {/* Storefront Sync Explainer Banner */}
+      <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-amber-950">
+              Why do items from Products and Showcase appear on Storefront Gallery?
+            </h4>
+            <p className="text-[11px] text-amber-800 leading-relaxed mt-0.5">
+              Your public storefront automatically merges your <strong>Bespoke Showcase creations</strong> ({totalShowcaseCount} photos uploaded here) and your <strong>Live Menu Cake products</strong> ({totalProductsCount} cakes managed in Products). Customers can browse your entire artistry and order directly!
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/dashboard/owner/products"
+          className="text-xs font-bold text-brand-plum hover:underline shrink-0 flex items-center gap-1"
+        >
+          <span>Manage Products</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+
       {/* Filter and Stats Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Search */}
@@ -344,13 +474,43 @@ export default function OwnerGalleryPage() {
           )}
         </div>
 
-        {/* Counter Pill */}
-        <div className="flex items-center gap-2 text-xs text-owner-muted font-medium">
-          <span className="px-2.5 py-1 rounded-full bg-owner-canvas border border-owner-border">
-            Total Photos: <strong className="text-owner-heading">{items.length}</strong>
-          </span>
-          <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800">
-            Live on Store: <strong>{activeCount}</strong>
+        {/* Source Switcher & Stats */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 p-1 bg-owner-canvas rounded-xl border border-owner-border text-xs">
+            <button
+              onClick={() => setGalleryViewMode('ALL')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                galleryViewMode === 'ALL'
+                  ? 'bg-brand-plum text-white shadow-xs'
+                  : 'text-owner-muted hover:text-owner-heading'
+              }`}
+            >
+              All Photos ({unifiedItems.length})
+            </button>
+            <button
+              onClick={() => setGalleryViewMode('SHOWCASE')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                galleryViewMode === 'SHOWCASE'
+                  ? 'bg-brand-plum text-white shadow-xs'
+                  : 'text-owner-muted hover:text-owner-heading'
+              }`}
+            >
+              Showcase Only ({totalShowcaseCount})
+            </button>
+            <button
+              onClick={() => setGalleryViewMode('PRODUCTS')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                galleryViewMode === 'PRODUCTS'
+                  ? 'bg-brand-plum text-white shadow-xs'
+                  : 'text-owner-muted hover:text-owner-heading'
+              }`}
+            >
+              Menu Cakes ({totalProductsCount})
+            </button>
+          </div>
+
+          <span className="px-2.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+            Live: <strong>{activeCount}</strong>
           </span>
         </div>
       </div>
@@ -365,10 +525,10 @@ export default function OwnerGalleryPage() {
               : 'bg-white text-owner-heading border border-owner-border hover:bg-brand-cream/60'
           }`}
         >
-          All Categories ({items.length})
+          All Categories ({unifiedItems.length})
         </button>
         {allCategories.map((cat) => {
-          const count = items.filter(
+          const count = unifiedItems.filter(
             (i) => i.categoryName && i.categoryName.toLowerCase() === cat.toLowerCase()
           ).length;
           return (
@@ -389,7 +549,7 @@ export default function OwnerGalleryPage() {
 
       {/* Gallery Items Grid */}
       {filteredItems.length === 0 ? (
-        items.length === 0 ? (
+        unifiedItems.length === 0 ? (
           <EmptyState
             icon={<Images className="w-7 h-7" />}
             title="Your Gallery Showcase is Empty"
@@ -404,7 +564,7 @@ export default function OwnerGalleryPage() {
         ) : (
           <div className="p-12 text-center bg-white rounded-2xl border border-owner-border">
             <p className="text-sm text-owner-muted">
-              No showcase photos match &ldquo;{searchQuery || selectedCategoryFilter}&rdquo;.
+              No gallery photos match &ldquo;{searchQuery || selectedCategoryFilter}&rdquo;.
             </p>
             <Button
               variant="outline"
@@ -412,6 +572,7 @@ export default function OwnerGalleryPage() {
               onClick={() => {
                 setSearchQuery('');
                 setSelectedCategoryFilter('ALL');
+                setGalleryViewMode('ALL');
               }}
               className="mt-3 text-xs"
             >
@@ -423,7 +584,7 @@ export default function OwnerGalleryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
           {filteredItems.map((item) => (
             <Card
-              key={item.id}
+              key={`${item.origin}-${item.id}`}
               className="group overflow-hidden flex flex-col justify-between border-owner-border hover:shadow-elevated transition-all duration-300"
             >
               {/* Image & Badges */}
@@ -434,35 +595,61 @@ export default function OwnerGalleryPage() {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 {/* Category Badge */}
-                <div className="absolute top-2.5 left-2.5">
+                <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
                   <Badge variant="plum" className="bg-white/95 text-brand-plum backdrop-blur-xs shadow-xs text-[10px] font-bold">
                     {item.categoryName || 'Bespoke'}
                   </Badge>
+                  {item.origin === 'product' && (
+                    <span className="inline-flex items-center gap-1 bg-brand-plum/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
+                      <ShoppingBag className="w-2.5 h-2.5" />
+                      <span>Live Menu Cake</span>
+                    </span>
+                  )}
                 </div>
 
                 {/* Visibility Status Badge */}
                 <div className="absolute top-2.5 right-2.5">
-                  <button
-                    onClick={() => handleToggleActive(item)}
-                    title={item.isActive ? 'Visible in public gallery (click to hide)' : 'Hidden from public gallery (click to show)'}
-                    className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs transition-colors backdrop-blur-xs cursor-pointer ${
-                      item.isActive
-                        ? 'bg-emerald-500/90 text-white hover:bg-emerald-600'
-                        : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-900'
-                    }`}
-                  >
-                    {item.isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                    <span>{item.isActive ? 'Active' : 'Hidden'}</span>
-                  </button>
+                  {item.origin === 'showcase' ? (
+                    <button
+                      onClick={() => handleToggleActive(item.rawItem)}
+                      title={item.isActive ? 'Visible in public gallery (click to hide)' : 'Hidden from public gallery (click to show)'}
+                      className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs transition-colors backdrop-blur-xs cursor-pointer ${
+                        item.isActive
+                          ? 'bg-emerald-500/90 text-white hover:bg-emerald-600'
+                          : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-900'
+                      }`}
+                    >
+                      {item.isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      <span>{item.isActive ? 'Active' : 'Hidden'}</span>
+                    </button>
+                  ) : (
+                    <span
+                      className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs backdrop-blur-xs ${
+                        item.isActive
+                          ? 'bg-emerald-500/90 text-white'
+                          : 'bg-zinc-800/80 text-zinc-300'
+                      }`}
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>{item.isActive ? 'In Catalog' : 'Out of Stock'}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Card Body */}
               <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                 <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-owner-heading line-clamp-1 group-hover:text-brand-plum transition-colors">
-                    {item.title}
-                  </h3>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-owner-heading line-clamp-1 group-hover:text-brand-plum transition-colors">
+                      {item.title}
+                    </h3>
+                    {item.origin === 'product' && (
+                      <span className="text-xs font-bold text-brand-espresso shrink-0">
+                        ₹{item.price}
+                      </span>
+                    )}
+                  </div>
                   {item.caption ? (
                     <p className="text-xs text-owner-muted line-clamp-2 leading-relaxed">
                       {item.caption}
@@ -475,29 +662,39 @@ export default function OwnerGalleryPage() {
                 {/* Footer Controls */}
                 <div className="pt-3 border-t border-owner-border/70 flex items-center justify-between">
                   <span className="text-[11px] text-owner-muted font-medium">
-                    Order #{item.displayOrder ?? 0}
+                    {item.origin === 'showcase' ? `Order #${item.displayOrder ?? 0}` : 'Catalog Item'}
                   </span>
 
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditModal(item)}
-                      className="p-1.5 h-auto text-owner-muted hover:text-brand-plum rounded-lg"
-                      title="Edit photo details"
+                  {item.origin === 'showcase' ? (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditModal(item.rawItem)}
+                        className="p-1.5 h-auto text-owner-muted hover:text-brand-plum rounded-lg"
+                        title="Edit photo details"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteConfirmId(item.id)}
+                        className="p-1.5 h-auto text-owner-muted hover:text-rose-600 rounded-lg"
+                        title="Delete photo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Link
+                      href="/dashboard/owner/products"
+                      className="text-[11px] font-bold text-brand-plum hover:underline inline-flex items-center gap-1"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDeleteConfirmId(item.id)}
-                      className="p-1.5 h-auto text-owner-muted hover:text-rose-600 rounded-lg"
-                      title="Delete photo"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
+                      <span>Edit in Products</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  )}
                 </div>
               </div>
             </Card>

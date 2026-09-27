@@ -82,7 +82,7 @@ export default function OwnerCustomersPage() {
     setSelectedCustomer(c);
     setLoadingDetail(true);
     try {
-      const full = await ownerApi.getCustomerProfile(c.email);
+      const full = await ownerApi.getCustomerProfile(c.name || c.email);
       setCustomerDetail(full);
     } catch {
       setCustomerDetail(c);
