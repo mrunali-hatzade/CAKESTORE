@@ -7,6 +7,7 @@ import {
   Calendar, MessageSquareQuote, Settings, Globe,
   AlertCircle, Truck, CheckCircle2, Award, AlertTriangle,
   Sparkles, ExternalLink, Store, Banknote, CreditCard,
+  ChevronDown,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { ordersApi } from '@/lib/api/orders';
@@ -31,6 +32,7 @@ export default function OwnerOverviewPage() {
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
   const [deliverySlots, setDeliverySlots] = useState<DeliverySlot[]>([]);
   const [customCakeRequests, setCustomCakeRequests] = useState<CustomCakeRequest[]>([]);
+  const [updatingPaymentId, setUpdatingPaymentId] = useState<number | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [_refreshing, setRefreshing] = useState(false);
@@ -88,6 +90,36 @@ export default function OwnerOverviewPage() {
     return unregister;
   }, [registerRefreshHandler, fetchDashboardData]);
 
+  const handlePaymentStatusChange = async (orderId: number, targetStatus: 'PAID' | 'PENDING') => {
+    setUpdatingPaymentId(orderId);
+    try {
+      const updated = await ordersApi.updatePaymentStatus(
+        orderId,
+        targetStatus,
+        targetStatus === 'PAID' ? 'CASH_COLLECTED' : 'PENDING'
+      );
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                ...updated,
+                paymentStatus: targetStatus,
+                paidAt: targetStatus === 'PAID' ? (updated.paidAt || new Date().toISOString()) : undefined,
+              }
+            : o
+        )
+      );
+      // Synchronize backend stats & analytics in background
+      ownerApi.getDashboardStats().then((s) => setStats(s)).catch(() => {});
+      ownerApi.getAnalytics().then((a) => setAnalytics(a)).catch(() => {});
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update payment status');
+    } finally {
+      setUpdatingPaymentId(null);
+    }
+  };
+
   if (isLoading) return <LoadingState message="Loading bakery operational command center..." />;
 
   // Real KPI Metrics
@@ -98,7 +130,22 @@ export default function OwnerOverviewPage() {
     return s === 'PENDING' || s === 'CONFIRMED' || s === 'NEW';
   }).length;
   const totalOrders = stats?.totalOrders ?? orders.length;
-  const totalRevenue = stats?.totalRevenue ?? 0;
+
+  // Realized Revenue: Authoritative from stats API, dynamically synchronized with loaded orders
+  const realizedOrdersRevenue = orders
+    .filter((o) => {
+      const pStatus = (o.paymentStatus || '').toUpperCase();
+      const oStatus = (o.orderStatus || o.status || '').toUpperCase();
+      return (
+        oStatus !== 'CANCELLED' &&
+        (pStatus === 'PAID' || pStatus === 'COMPLETED' || oStatus === 'COMPLETED' || oStatus === 'DELIVERED') &&
+        pStatus !== 'REFUNDED' &&
+        pStatus !== 'FAILED'
+      );
+    })
+    .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+  const totalRevenue = Math.max(Number(stats?.totalRevenue || 0), realizedOrdersRevenue);
 
   // Real Phase 6A 7-Day Sales Velocity
   const rawSales = analytics?.salesByDay || {};
@@ -441,18 +488,26 @@ export default function OwnerOverviewPage() {
                         </td>
                         <td className="py-3 px-3">
                           {((ord.paymentMethod || '').toUpperCase() === 'COD' || (ord.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? (
-                            <div className="flex flex-col gap-1">
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900">
-                                <Banknote className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                                <span>COD</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-amber-900 bg-amber-100/90 px-1.5 py-0.5 rounded border border-amber-300 shrink-0">
+                                COD
                               </span>
-                              <span className={`inline-block w-fit text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                                (ord.paymentStatus || '').toUpperCase() === 'PAID'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
-                              }`}>
-                                {(ord.paymentStatus || '').toUpperCase() === 'PAID' ? 'Paid' : 'Pending'}
-                              </span>
+                              <div className="relative">
+                                <select
+                                  disabled={updatingPaymentId === ord.id}
+                                  value={(ord.paymentStatus || '').toUpperCase() === 'PAID' ? 'PAID' : 'PENDING'}
+                                  onChange={(e) => handlePaymentStatusChange(ord.id, e.target.value as 'PAID' | 'PENDING')}
+                                  className={`appearance-none pl-2 pr-5 py-0.5 text-[11px] font-bold rounded-lg border cursor-pointer focus:outline-none transition-colors disabled:opacity-50 ${
+                                    (ord.paymentStatus || '').toUpperCase() === 'PAID'
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                      : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                  }`}
+                                >
+                                  <option value="PENDING">Pending</option>
+                                  <option value="PAID">Paid</option>
+                                </select>
+                                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-owner-muted pointer-events-none" />
+                              </div>
                             </div>
                           ) : (
                             <div className="flex flex-col gap-1">

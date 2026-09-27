@@ -23,25 +23,25 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
            "WHERE o.shop.id = :shopId " +
-           "  AND o.orderStatus != 'CANCELLED' " +
-           "  AND (o.paymentStatus IN ('PAID', 'COMPLETED') OR o.orderStatus IN ('COMPLETED', 'DELIVERED')) " +
-           "  AND o.paymentStatus NOT IN ('REFUNDED', 'FAILED')")
+           "  AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "  AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "  AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED')")
     BigDecimal sumRevenueByShopId(@Param("shopId") Long shopId);
 
     @Query("SELECT o FROM Order o " +
            "WHERE o.shop.id = :shopId " +
            "  AND o.createdAt >= :startDate " +
-           "  AND o.orderStatus != 'CANCELLED' " +
-           "  AND (o.paymentStatus IN ('PAID', 'COMPLETED') OR o.orderStatus IN ('COMPLETED', 'DELIVERED')) " +
-           "  AND o.paymentStatus NOT IN ('REFUNDED', 'FAILED')")
+           "  AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "  AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "  AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED')")
     List<Order> findRecentRealizedOrders(@Param("shopId") Long shopId, @Param("startDate") LocalDateTime startDate);
 
     @Query("SELECT oi.productNameSnapshot, SUM(oi.quantity) " +
            "FROM OrderItem oi " +
            "WHERE oi.order.shop.id = :shopId " +
-           "  AND oi.order.orderStatus != 'CANCELLED' " +
-           "  AND (oi.order.paymentStatus IN ('PAID', 'COMPLETED') OR oi.order.orderStatus IN ('COMPLETED', 'DELIVERED')) " +
-           "  AND oi.order.paymentStatus NOT IN ('REFUNDED', 'FAILED') " +
+           "  AND UPPER(COALESCE(oi.order.orderStatus, '')) != 'CANCELLED' " +
+           "  AND (UPPER(COALESCE(oi.order.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(oi.order.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "  AND UPPER(COALESCE(oi.order.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED') " +
            "GROUP BY oi.productNameSnapshot " +
            "ORDER BY SUM(oi.quantity) DESC")
     List<Object[]> findTopSellingProductsByShopId(@Param("shopId") Long shopId, Pageable pageable);
@@ -59,7 +59,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "  MAX(o.customerPhone), " +
            "  MAX(o.deliveryAddress), " +
            "  COUNT(o.id), " +
-           "  SUM(CASE WHEN o.paymentStatus IN ('PAID', 'COMPLETED') THEN o.totalAmount ELSE 0 END), " +
+           "  SUM(CASE WHEN UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED') THEN o.totalAmount ELSE 0 END), " +
            "  MAX(o.createdAt) " +
            ") " +
            "FROM Order o " +
@@ -71,9 +71,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
            "WHERE o.createdAt >= :startDate " +
-           "  AND o.orderStatus != 'CANCELLED' " +
-           "  AND (o.paymentStatus IN ('PAID', 'COMPLETED') OR o.orderStatus IN ('COMPLETED', 'DELIVERED')) " +
-           "  AND o.paymentStatus NOT IN ('REFUNDED', 'FAILED')")
+           "  AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "  AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "  AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED')")
     BigDecimal sumMonthlyRealizedRevenue(@Param("startDate") LocalDateTime startDate);
 
     @Query("SELECT COALESCE(SUM(o.discountAmount), 0) FROM Order o WHERE o.shop.id = :shopId AND o.orderStatus != 'CANCELLED'")

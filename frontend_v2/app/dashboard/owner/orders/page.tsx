@@ -39,7 +39,7 @@ export default function OwnerOrdersPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [updatingPaymentId, setUpdatingPaymentId] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const { registerRefreshHandler } = useOwner();
+  const { registerRefreshHandler, refreshDashboard } = useOwner();
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   
   // Pagination state
@@ -114,6 +114,7 @@ export default function OwnerOrdersPage() {
             : null
         );
       }
+      refreshDashboard().catch(() => {});
     } catch (err: any) {
       alert(err?.message || 'Failed to update payment status');
     } finally {

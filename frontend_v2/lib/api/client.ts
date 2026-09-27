@@ -75,6 +75,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
   try {
     const response = await fetch(url, {
+      cache: 'no-store',
       ...rest,
       headers: reqHeaders,
       signal: rest.signal || AbortSignal.timeout(30000),
