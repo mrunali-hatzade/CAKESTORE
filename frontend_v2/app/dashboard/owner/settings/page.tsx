@@ -65,9 +65,6 @@ export default function OwnerSettingsPage() {
   const [area, setArea] = useState('');
   const [pincode, setPincode] = useState('');
   const [locationErrors, setLocationErrors] = useState<Record<string, string>>({});
-  const [isPureVeg, setIsPureVeg] = useState(false);
-  const [openingTime, setOpeningTime] = useState('09:00 AM');
-  const [closingTime, setClosingTime] = useState('10:00 PM');
   const [fssaiRegistration, setFssaiRegistration] = useState('');
 
   // Payout fields
@@ -107,9 +104,6 @@ export default function OwnerSettingsPage() {
         setCity(shopData.city || '');
         setArea(shopData.area || '');
         setPincode(shopData.pincode || '');
-        setIsPureVeg(!!shopData.isPureVeg);
-        setOpeningTime(shopData.openingTime || '09:00 AM');
-        setClosingTime(shopData.closingTime || '10:00 PM');
         setFssaiRegistration(shopData.fssaiRegistration || '');
       }
 
@@ -158,9 +152,6 @@ export default function OwnerSettingsPage() {
         district: district || undefined,
         area: area || undefined,
         pincode,
-        isPureVeg,
-        openingTime,
-        closingTime,
         fssaiRegistration,
       });
       setProfile(updated);
@@ -397,36 +388,55 @@ export default function OwnerSettingsPage() {
           </Card>
 
           <Card className="p-6 space-y-4">
-            <h2 className="font-serif font-bold text-base text-owner-heading">Kitchen Operations</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="Kitchen Opening Time"
-                value={openingTime}
-                onChange={(e) => setOpeningTime(e.target.value)}
-              />
-              <Input
-                label="Kitchen Closing Time"
-                value={closingTime}
-                onChange={(e) => setClosingTime(e.target.value)}
-              />
+            <div>
+              <h2 className="font-serif font-bold text-base text-owner-heading">Operating Hours & Dietary Preferences</h2>
+              <p className="text-xs text-owner-muted mt-0.5">
+                Kitchen schedule and menu dietary configurations are managed in dedicated studio modules.
+              </p>
             </div>
 
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/70">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-800">
-                  <Leaf className="w-4 h-4" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div className="p-4 rounded-2xl bg-brand-cream-light/60 border border-brand-border/60 flex flex-col justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-brand-blush text-brand-plum flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs text-owner-heading">7-Day Operating & Baking Schedule</h3>
+                    <p className="text-[11px] text-owner-muted mt-0.5">
+                      Configure open/closed status and custom business hours for each day of the week.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-xs text-emerald-900">100% Pure Veg (Eggless Only)</p>
-                  <p className="text-[11px] text-emerald-700">Display dedicated green pure veg badge across marketplace</p>
-                </div>
+                <Link
+                  href="/dashboard/owner/website"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-plum hover:text-brand-espresso transition-colors"
+                >
+                  <span>Manage Weekly Schedule</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
               </div>
-              <input
-                type="checkbox"
-                checked={isPureVeg}
-                onChange={(e) => setIsPureVeg(e.target.checked)}
-                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-              />
+
+              <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/60 flex flex-col justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                    <Leaf className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs text-emerald-950">Dietary & Eggless Preferences</h3>
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      Set 100% Pure Veg (eggless) or customizable egg choices individually per cake product.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="/dashboard/owner/products"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 hover:text-emerald-950 transition-colors"
+                >
+                  <span>Manage Product Catalog</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
           </Card>
 

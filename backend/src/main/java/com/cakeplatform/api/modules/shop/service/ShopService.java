@@ -74,6 +74,8 @@ public class ShopService {
         if (request.getBusinessName() != null) shop.setBusinessName(request.getBusinessName());
         if (request.getDescription() != null) shop.setDescription(request.getDescription());
         if (request.getPhone() != null) shop.setPhone(request.getPhone());
+        if (request.getEmail() != null) shop.setEmail(request.getEmail());
+        if (request.getFssaiRegistration() != null) shop.setFssaiRegistration(request.getFssaiRegistration());
         if (request.getAddress() != null) shop.setAddress(request.getAddress());
         if (request.getCity() != null) shop.setCity(request.getCity());
         if (request.getState() != null) shop.setState(request.getState());

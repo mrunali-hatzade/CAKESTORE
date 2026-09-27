@@ -39,6 +39,9 @@ public class UpdateShopRequest {
 
     private String coverImageUrl;
 
+    private String email;
+    private String fssaiRegistration;
+
     private String aboutStory;
     private String aboutImageUrl;
     private Boolean showAboutImage;

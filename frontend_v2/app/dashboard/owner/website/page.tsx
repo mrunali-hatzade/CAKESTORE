@@ -41,6 +41,7 @@ export default function OwnerWebsitePage() {
 
   // 1. Branding & Shop Settings
   const [logoUrl, setLogoUrl] = useState('');
+  const [coverImageUrl, setCoverImageUrl] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [aboutStory, setAboutStory] = useState('');
   const [aboutImageUrl, setAboutImageUrl] = useState('');
@@ -108,6 +109,7 @@ export default function OwnerWebsitePage() {
 
       if (shopData) {
         setLogoUrl(shopData.logoUrl || '');
+        setCoverImageUrl(shopData.coverImageUrl || '');
         setBusinessName(shopData.businessName || '');
         setAboutStory(shopData.aboutStory || shopData.description || '');
         setAboutImageUrl(shopData.aboutImageUrl || '');
@@ -185,6 +187,7 @@ export default function OwnerWebsitePage() {
       await ownerApi.updateShopSettings({
         businessName,
         logoUrl,
+        coverImageUrl,
         aboutStory,
         aboutImageUrl,
         showAboutImage,
@@ -286,6 +289,8 @@ export default function OwnerWebsitePage() {
       <BrandingSection
         logoUrl={logoUrl}
         onLogoChange={setLogoUrl}
+        coverImageUrl={coverImageUrl}
+        onCoverImageChange={setCoverImageUrl}
         businessName={businessName}
       />
 

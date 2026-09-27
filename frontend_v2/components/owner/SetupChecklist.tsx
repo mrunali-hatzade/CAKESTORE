@@ -20,13 +20,13 @@ export function SetupChecklist({ shop, stats, deliverySlots }: SetupChecklistPro
     {
       title: 'Complete Business Profile',
       description: 'Add your business description, address, and FSSAI registration.',
-      completed: Boolean(shop?.description && shop?.addressLine1 && shop?.fssaiRegistration),
+      completed: Boolean(shop?.description && (shop?.addressLine1 || shop?.address) && shop?.fssaiRegistration),
       href: '/dashboard/owner/settings',
     },
     {
       title: 'Add Bakery Branding',
       description: 'Upload your bakery logo and storefront cover image.',
-      completed: Boolean(shop?.logoUrl && shop?.coverImageUrl),
+      completed: Boolean(shop?.logoUrl || shop?.coverImageUrl),
       href: '/dashboard/owner/website',
     },
     {
