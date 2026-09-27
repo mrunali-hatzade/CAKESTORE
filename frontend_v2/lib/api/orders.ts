@@ -49,6 +49,13 @@ export const ordersApi = {
     return apiClient.patch<Order>(`/api/owner/orders/${orderId}/status`, { status });
   },
 
+  updatePaymentStatus: async (orderId: number, paymentStatus = 'PAID', paymentNote?: string): Promise<Order> => {
+    return apiClient.patch<Order>(`/api/owner/orders/${orderId}/payment-status`, {
+      paymentStatus,
+      paymentNote: paymentNote || 'CASH_COLLECTED',
+    });
+  },
+
   getOrderDetails: async (id: number): Promise<Order> => {
     return apiClient.get<Order>(`/api/owner/orders/${id}`);
   },

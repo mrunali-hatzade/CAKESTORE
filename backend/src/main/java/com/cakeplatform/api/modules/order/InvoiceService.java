@@ -77,6 +77,12 @@ public class InvoiceService {
         total.setAlignment(Element.ALIGN_RIGHT);
         document.add(total);
 
+        String payMethod = "COD".equalsIgnoreCase(order.getPaymentMethod()) ? "Cash on Delivery (COD)" : "Online / Prepaid";
+        String payStatus = "PAID".equalsIgnoreCase(order.getPaymentStatus()) ? "PAID" : "PAYMENT DUE (Collect on Delivery)";
+        Paragraph paymentInfo = new Paragraph("Payment Mode: " + payMethod + " | Status: " + payStatus, boldFont);
+        paymentInfo.setAlignment(Element.ALIGN_RIGHT);
+        document.add(paymentInfo);
+
         document.close();
 
         return outputStream.toByteArray();

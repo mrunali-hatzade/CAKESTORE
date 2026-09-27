@@ -53,6 +53,18 @@ public class OwnerOrderController {
         return ResponseEntity.ok(updated);
     }
 
+    @PatchMapping("/{id}/payment-status")
+    public ResponseEntity<Order> updatePaymentStatus(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody(required = false) Map<String, String> payload) {
+        
+        String newStatus = payload != null && payload.get("paymentStatus") != null ? payload.get("paymentStatus") : "PAID";
+        String paymentNote = payload != null ? payload.get("paymentNote") : null;
+        Order updated = orderService.updatePaymentStatus(userDetails.getId(), id, newStatus, paymentNote);
+        return ResponseEntity.ok(updated);
+    }
+
     @GetMapping("/{id}/invoice")
     public ResponseEntity<byte[]> downloadInvoice(
             @PathVariable Long id,

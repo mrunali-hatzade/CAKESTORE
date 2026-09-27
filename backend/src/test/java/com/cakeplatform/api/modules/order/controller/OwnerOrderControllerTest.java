@@ -98,4 +98,23 @@ public class OwnerOrderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderStatus").value("CONFIRMED"));
     }
+
+    @Test
+    void testUpdatePaymentStatus() throws Exception {
+        Order updated = new Order();
+        updated.setId(10L);
+        updated.setPaymentStatus("PAID");
+        updated.setPaymentMethod("COD");
+
+        when(orderService.updatePaymentStatus(eq(1L), eq(10L), eq("PAID"), any()))
+                .thenReturn(updated);
+
+        mockMvc.perform(patch("/api/owner/orders/10/payment-status")
+                .with(user(testUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paymentStatus\": \"PAID\", \"paymentNote\": \"CASH_COLLECTED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentStatus").value("PAID"))
+                .andExpect(jsonPath("$.paymentMethod").value("COD"));
+    }
 }

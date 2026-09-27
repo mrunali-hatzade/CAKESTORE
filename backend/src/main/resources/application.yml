@@ -64,3 +64,9 @@ razorpay:
   key-id: ${RAZORPAY_KEY_ID:rzp_test_TdPzvNBScn0bGP}
   key-secret: ${RAZORPAY_KEY_SECRET:Jmo03m2bhD23IoG1Xe0m2ffu}
   webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:f0de5f0c082e3cf16acfafb2251f427b81518df5fb12eb66ce95a3970ef05188}
+
+mail:
+  admin-notification-email: ${APP_ADMIN_DEFAULT_EMAIL:admin@cakeplatform.com}
+  from-address: ${MAIL_FROM_ADDRESS:onboarding@resend.dev}
+  resend:
+    api-key: ${RESEND_API_KEY:}

@@ -105,4 +105,60 @@ public class OrderService {
             // Failsafe to ensure notification exceptions NEVER roll back the transaction
         }
     }
+
+    @Transactional
+    public Order updatePaymentStatus(Long userId, Long orderId, String newPaymentStatusRaw, String paymentNote) {
+        String newStatus = newPaymentStatusRaw != null ? newPaymentStatusRaw.trim().toUpperCase() : "PAID";
+        Shop shop = getShopByOwnerId(userId);
+        Order order = orderRepository.findByIdAndShopId(orderId, shop.getId())
+                .orElseThrow(() -> new RuntimeException("Order not found or unauthorized"));
+
+        if ("PAID".equalsIgnoreCase(order.getPaymentStatus()) && "PAID".equalsIgnoreCase(newStatus)) {
+            return order;
+        }
+
+        order.setPaymentStatus(newStatus);
+        if ("PAID".equalsIgnoreCase(newStatus)) {
+            order.setPaidAt(java.time.LocalDateTime.now());
+            if (order.getTransactionId() == null || order.getTransactionId().isBlank()) {
+                order.setTransactionId(paymentNote != null && !paymentNote.isBlank() ? paymentNote : "CASH_COLLECTED");
+            }
+        }
+
+        Order updated = orderRepository.save(order);
+
+        activityLogger.logActivity(userId, shop.getId(), "ORDER_PAYMENT_STATUS_CHANGED", "ORDER", updated.getId(),
+                "Payment Status: " + newStatus + (paymentNote != null ? " (" + paymentNote + ")" : ""));
+
+        notifyCustomerPaymentReceived(shop, updated);
+
+        return updated;
+    }
+
+    private void notifyCustomerPaymentReceived(Shop shop, Order order) {
+        try {
+            if (!"PAID".equalsIgnoreCase(order.getPaymentStatus())) return;
+            String shopName = shop.getBusinessName() != null ? shop.getBusinessName() : "CakeStore Bakery";
+            String subject = String.format("Payment Received: Order #%s at %s", order.getOrderNumber(), shopName);
+            String body = String.format("Hello %s,\n\nWe have successfully received payment of ₹%s for your order #%s at %s (Payment Mode: %s).\n\nThank you for ordering with us!",
+                    order.getCustomerName() != null ? order.getCustomerName() : "Customer",
+                    order.getTotalAmount(),
+                    order.getOrderNumber(),
+                    shopName,
+                    "COD".equalsIgnoreCase(order.getPaymentMethod()) ? "Cash on Delivery" : "Online / Prepaid"
+            );
+
+            if (order.getCustomerEmail() != null && !order.getCustomerEmail().isBlank()) {
+                emailService.sendEmail(order.getCustomerEmail(), subject, body);
+            }
+
+            if (order.getCustomerPhone() != null && !order.getCustomerPhone().isBlank()) {
+                String smsBody = String.format("Payment received: ₹%s for order #%s at %s. Thank you!",
+                        order.getTotalAmount(), order.getOrderNumber(), shopName);
+                smsService.sendSms(order.getCustomerPhone(), smsBody);
+            }
+        } catch (Exception e) {
+            // Non-blocking notification failsafe
+        }
+    }
 }

@@ -20,7 +20,7 @@ public class EmailService {
     @Value("${mail.admin-notification-email:${app.admin.default-email:admin@cakeplatform.com}}")
     private String adminNotificationEmail;
 
-    @Value("${MAIL_FROM_ADDRESS:notifications@cakestore.in}")
+    @Value("${mail.from-address:${MAIL_FROM_ADDRESS:onboarding@resend.dev}}")
     private String mailFrom;
 
     @Value("${mail.resend.api-key:${RESEND_API_KEY:}}")

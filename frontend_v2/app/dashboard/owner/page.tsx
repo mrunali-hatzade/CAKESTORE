@@ -6,7 +6,7 @@ import {
   Cake, ShoppingBag, TrendingUp, Clock, Plus, ArrowRight,
   Calendar, MessageSquareQuote, Settings, Globe,
   AlertCircle, Truck, CheckCircle2, Award, AlertTriangle,
-  Sparkles, ExternalLink, Store,
+  Sparkles, ExternalLink, Store, Banknote, CreditCard,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { ordersApi } from '@/lib/api/orders';
@@ -125,7 +125,14 @@ export default function OwnerOverviewPage() {
   const unscheduledTodayDeliveries = todayDeliveries.filter(o => !o.deliverySlotId).length;
   const pendingCustomEnquiries = customCakeRequests.filter(r => r.status === 'PENDING').length;
   const inactiveCatalogCakes = Math.max(0, totalProducts - activeProducts);
-  const totalActionItems = pendingConfirmationOrders + unscheduledTodayDeliveries + pendingCustomEnquiries + inactiveCatalogCakes;
+  const pendingCodOrders = orders.filter(o => {
+    const method = (o.paymentMethod || '').toUpperCase();
+    const status = (o.paymentStatus || '').toUpperCase();
+    const orderStatus = (o.orderStatus || o.status || '').toUpperCase();
+    return method === 'COD' && status !== 'PAID' && orderStatus !== 'CANCELLED';
+  });
+  const pendingCodAmount = pendingCodOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+  const totalActionItems = pendingConfirmationOrders + unscheduledTodayDeliveries + pendingCustomEnquiries + inactiveCatalogCakes + pendingCodOrders.length;
 
   // Status Badge Helper
   const renderStatusBadge = (statusStr?: string) => {
@@ -216,6 +223,36 @@ export default function OwnerOverviewPage() {
       {/* Operational Dashboard: Only rendered when NOT pending and NOT expired */}
       {!isPending && !isExpired && (
         <>
+          {/* Pending COD Cash Collection Alert Banner */}
+          {pendingCodOrders.length > 0 && (
+            <div className="p-4 sm:p-5 rounded-3xl bg-amber-50/90 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300">
+                  <Banknote className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-serif font-bold text-sm text-amber-950">
+                      Cash on Delivery (COD) Pending Collection
+                    </h4>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                      {pendingCodOrders.length} {pendingCodOrders.length === 1 ? 'order' : 'orders'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-900/80 mt-0.5">
+                    <span className="font-bold text-amber-950">₹{pendingCodAmount.toLocaleString('en-IN')}</span> total cash due from customers. Collect at delivery or pickup and mark as Paid to settle accounts.
+                  </p>
+                </div>
+              </div>
+              <Link href="/dashboard/owner/orders?payment=COD_PENDING" className="shrink-0">
+                <Button size="sm" className="bg-amber-800 hover:bg-amber-900 text-white font-bold gap-1.5 shadow-soft cursor-pointer">
+                  <span>Manage COD Orders</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Button>
+              </Link>
+            </div>
+          )}
+
           {/* 2. Primary KPI Row — Realized Revenue, Orders, Catalog, Pending */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <Card className="p-5">
@@ -403,13 +440,28 @@ export default function OwnerOverviewPage() {
                           ₹{Number(ord.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-3">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${
-                            (ord.paymentStatus || '').toUpperCase() === 'PAID'
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-amber-50 text-amber-700'
-                          }`}>
-                            {ord.paymentStatus || 'PENDING'}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-owner-heading">
+                              {(ord.paymentMethod || '').toUpperCase() === 'COD' ? (
+                                <>
+                                  <Banknote className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>COD</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span>Online</span>
+                                </>
+                              )}
+                            </span>
+                            <span className={`inline-block w-fit text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                              (ord.paymentStatus || '').toUpperCase() === 'PAID'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}>
+                              {(ord.paymentStatus || '').toUpperCase() === 'PAID' ? 'Paid' : 'Collect Cash'}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-3 px-3 text-right whitespace-nowrap">
                           {renderStatusBadge(ord.orderStatus || ord.status)}
@@ -652,6 +704,28 @@ export default function OwnerOverviewPage() {
                     </div>
                     <span className="text-[11px] font-bold text-amber-800 group-hover:translate-x-0.5 transition-transform">
                       Review &rarr;
+                    </span>
+                  </Link>
+                )}
+
+                {pendingCodOrders.length > 0 && (
+                  <Link
+                    href="/dashboard/owner/orders?payment=COD_PENDING"
+                    className="p-3 rounded-2xl border border-amber-300 bg-amber-50/80 hover:bg-amber-100/60 transition-colors flex items-center justify-between text-xs group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Banknote className="w-4 h-4 text-amber-700 shrink-0" />
+                      <div className="truncate">
+                        <span className="font-semibold text-owner-heading block truncate">
+                          {pendingCodOrders.length} COD {pendingCodOrders.length === 1 ? 'order' : 'orders'} pending cash collection
+                        </span>
+                        <span className="text-[10px] text-amber-800 font-medium">
+                          ₹{pendingCodAmount.toLocaleString('en-IN')} cash to collect
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-amber-800 group-hover:translate-x-0.5 transition-transform shrink-0 ml-2">
+                      Collect &rarr;
                     </span>
                   </Link>
                 )}
