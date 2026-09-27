@@ -53,7 +53,7 @@ export function SetupChecklist({ shop, stats, deliverySlots }: SetupChecklistPro
   const totalSteps = checklistItems.length;
   const progressPercent = Math.round((completedSteps / totalSteps) * 100);
 
-  if (dismissed && completedSteps === totalSteps) {
+  if (completedSteps === totalSteps) {
     return null;
   }
 

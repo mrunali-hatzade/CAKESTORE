@@ -10,7 +10,7 @@ export interface ModalProps {
   title?: string;
   description?: string;
   children: ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl';
   className?: string;
 }
 
@@ -46,6 +46,10 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
   };
 
   return (
@@ -59,14 +63,14 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Modal Dialog */}
       <div
         className={cn(
-          'relative w-full bg-white rounded-3xl shadow-elevated border border-brand-border/60 z-10 overflow-hidden transform transition-all',
+          'relative w-full bg-white rounded-3xl shadow-elevated border border-brand-border/60 z-10 overflow-hidden transform transition-all max-h-[92vh] flex flex-col',
           maxWidths[maxWidth],
           className
         )}
       >
         {/* Header */}
         {(title || description) && (
-          <div className="px-6 pt-6 pb-4 border-b border-brand-border/60 flex items-start justify-between gap-4">
+          <div className="px-6 pt-6 pb-4 border-b border-brand-border/60 flex items-start justify-between gap-4 shrink-0">
             <div>
               {title && <h3 className="text-lg font-semibold text-brand-espresso font-serif">{title}</h3>}
               {description && <p className="text-xs text-brand-muted mt-1">{description}</p>}
@@ -81,7 +85,7 @@ export const Modal: React.FC<ModalProps> = ({
         )}
 
         {/* Content */}
-        <div className="p-6">{children}</div>
+        <div className="p-6 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );

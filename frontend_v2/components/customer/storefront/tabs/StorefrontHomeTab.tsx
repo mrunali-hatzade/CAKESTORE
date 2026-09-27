@@ -18,6 +18,10 @@ import {
   Play,
   ShoppingBag,
   ThumbsUp,
+  ChefHat,
+  Flame,
+  Award,
+  ShieldCheck,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { Product, Category } from '@/types/product';
@@ -253,6 +257,23 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   const displayProducts = topRatedProducts.length > 0 ? topRatedProducts : products.slice(0, 4);
   const isProcessing = isUploading || isSubmittingFeedback;
 
+  const addressParts = [
+    shop.addressLine1 || shop.address,
+    shop.area,
+    shop.city,
+    shop.district,
+    shop.state,
+  ].filter(Boolean);
+
+  const fullAddress =
+    addressParts.length > 0
+      ? `${addressParts.join(', ')}${shop.pincode ? ` - ${shop.pincode}` : ''}`
+      : `${shop.city || ''}${shop.state ? `, ${shop.state}` : ''}`;
+
+  const aboutImageUrl =
+    shop.aboutImageUrl || shop.coverImageUrl || shop.imageUrl || shop.bannerUrl || shop.logoUrl ||
+    'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80';
+
   return (
     <div className="space-y-12 sm:space-y-16 pb-12">
       {/* 1. Top Rated / Featured Signature Creations */}
@@ -344,37 +365,68 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
             <div className="lg:col-span-4 relative group">
               <div className="relative aspect-[4/3] sm:aspect-square w-full rounded-2xl overflow-hidden border border-brand-border/80 shadow-sm bg-brand-cream">
                 <img
-                  src={shop.aboutImageUrl || shop.coverImageUrl || shop.imageUrl || shop.bannerUrl || 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80'}
+                  src={aboutImageUrl}
                   alt={`${shop.businessName} kitchen`}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-                <div className="absolute bottom-2.5 left-3 text-white">
-                  <p className="text-xs font-bold font-serif leading-tight">{shop.businessName}</p>
-                  <p className="text-[10px] text-white/80">{shop.city}, {shop.state}</p>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                
+                <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/50 shadow-sm flex items-center gap-1.5 text-[11px] font-bold text-brand-plum">
+                  <ChefHat className="w-3.5 h-3.5 text-brand-plum" />
+                  <span>Artisan Kitchen</span>
+                </div>
+
+                <div className="absolute bottom-2.5 left-3 right-3 text-white">
+                  <p className="text-xs font-bold font-serif leading-tight line-clamp-1">{shop.businessName}</p>
+                  <p className="text-[10px] text-white/80 flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3" />
+                    <span>{shop.area ? `${shop.area}, ` : ''}{shop.city || shop.state}</span>
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className="lg:col-span-5 space-y-3">
-              <div className="inline-flex items-center gap-2 text-xs font-bold text-brand-plum uppercase tracking-wider">
-                <span>About {shop.businessName}</span>
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-plum uppercase tracking-wider">
+                <Flame className="w-3.5 h-3.5" />
+                <span>Our Story</span>
               </div>
               <h3 className="text-2xl sm:text-3xl font-serif font-bold text-brand-espresso">
-                Baking Moments into Memories
+                About {shop.businessName}
               </h3>
-              <p className="text-xs sm:text-sm text-brand-muted leading-relaxed line-clamp-3">
+              <p className="text-xs sm:text-sm text-brand-muted leading-relaxed line-clamp-4 whitespace-pre-line">
                 {shop.aboutStory ||
                   shop.businessDescription ||
                   shop.description ||
                   'Welcome to our digital boutique storefront. Every celebration cake is handcrafted specifically for your event using high-grade cocoa, fresh dairy cream, and pure ingredients.'}
               </p>
+
+              {(shop.isPureVeg || (shop.yearsInBusiness && shop.yearsInBusiness > 0) || shop.fssaiRegistration) && (
+                <div className="pt-2 flex flex-wrap gap-2 text-xs">
+                  {shop.isPureVeg && (
+                    <span className="px-3 py-1 rounded-full bg-green-50 text-green-800 font-semibold border border-green-200 flex items-center gap-1">
+                      🌱 100% Pure Veg (Eggless)
+                    </span>
+                  )}
+                  {shop.yearsInBusiness && shop.yearsInBusiness > 0 && (
+                    <span className="px-3 py-1 rounded-full bg-brand-blush text-brand-plum font-semibold border border-brand-blush-border flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5" /> {shop.yearsInBusiness}+ Years Experience
+                    </span>
+                  )}
+                  {shop.fssaiRegistration && (
+                    <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> FSSAI: {shop.fssaiRegistration}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="pt-2">
                 <button
                   onClick={() => onNavigateTab('about')}
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-plum hover:text-brand-plum-hover transition-colors group cursor-pointer"
                 >
-                  <span>Read Our Full Story &amp; Kitchen Standards</span>
+                  <span>Read Full Story &amp; Kitchen Standards</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
@@ -387,8 +439,8 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
               <div className="space-y-2 text-xs text-brand-muted">
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 text-brand-plum shrink-0 mt-0.5" />
-                  <span className="font-medium text-brand-espresso line-clamp-2">
-                    {shop.area ? `${shop.area}, ` : ''}{shop.city}, {shop.state}
+                  <span className="font-medium text-brand-espresso line-clamp-3">
+                    {fullAddress}
                   </span>
                 </div>
                 {(shop.phone || shop.businessPhone) && (

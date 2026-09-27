@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown, ExternalLink, Upload } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -204,17 +204,14 @@ export const HeroBannersSection: React.FC<HeroBannersSectionProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-owner-heading block">Banner Image URL or Upload *</label>
-            <div className="flex gap-2 items-center">
-              <input
-                type="text"
-                className="flex-1 text-xs px-3 py-2 border rounded-xl bg-white border-brand-border focus:outline-none focus:ring-1 focus:ring-brand-plum"
-                placeholder="https://example.com/banner.jpg"
-                value={newImageUrl}
-                onChange={(e) => setNewImageUrl(e.target.value)}
-              />
-              <label className="cursor-pointer px-3 py-2 text-xs font-bold bg-brand-plum text-white rounded-xl hover:bg-brand-plum/90 transition-all flex items-center gap-1.5 shrink-0">
-                <span>{isUploading ? 'Uploading...' : 'Upload File'}</span>
+            <label className="text-xs font-bold text-owner-heading block">Banner Image *</label>
+            <div>
+              <label className="cursor-pointer border-2 border-dashed border-brand-border rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 hover:border-brand-plum/50 hover:bg-brand-blush/10 transition-all text-center">
+                <Upload className="w-5 h-5 text-brand-plum" />
+                <span className="text-xs font-semibold text-owner-heading">
+                  {isUploading ? 'Uploading banner photo...' : (newImageUrl ? 'Click to replace banner photo' : 'Click to upload banner photo')}
+                </span>
+                <span className="text-[10px] text-owner-muted">PNG, JPG, WebP recommended (landscape 16:9 or 21:9)</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -227,6 +224,13 @@ export const HeroBannersSection: React.FC<HeroBannersSectionProps> = ({
             {newImageUrl && (
               <div className="mt-2 relative w-full h-32 rounded-xl overflow-hidden border border-brand-border/60 bg-gray-50">
                 <img src={newImageUrl} alt="Banner Preview" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setNewImageUrl('')}
+                  className="absolute top-2 right-2 px-2 py-1 text-[11px] font-bold bg-white/90 text-rose-600 rounded-lg shadow-sm hover:bg-white cursor-pointer"
+                >
+                  Remove
+                </button>
               </div>
             )}
           </div>

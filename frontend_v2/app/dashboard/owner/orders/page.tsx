@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   ShoppingBag, Search, Printer, ChevronDown, Download, Eye,
   Phone, Mail, MapPin, MessageCircle, Banknote, CreditCard,
-  CheckCircle2, AlertCircle, Check, Clock
+  CheckCircle2, AlertCircle, Check, Clock, Cake
 } from 'lucide-react';
 import { ordersApi } from '@/lib/api/orders';
 import { useOwner } from '@/context/OwnerContext';
@@ -284,57 +284,6 @@ export default function OwnerOrdersPage() {
             ))}
           </div>
         </div>
-
-        {/* Payment Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
-          <span className="text-[11px] font-bold text-owner-muted uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-            <Banknote className="w-3.5 h-3.5 text-brand-plum" />
-            <span>Payment:</span>
-          </span>
-          <button
-            onClick={() => setFilterPayment('ALL')}
-            className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-              filterPayment === 'ALL'
-                ? 'bg-brand-plum text-white border-brand-plum shadow-soft'
-                : 'bg-white text-owner-muted border-owner-border hover:text-owner-heading'
-            }`}
-          >
-            All Payments ({orders.length})
-          </button>
-          <button
-            onClick={() => setFilterPayment('COD_PENDING')}
-            className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterPayment === 'COD_PENDING'
-                ? 'bg-amber-600 text-white border-amber-600 shadow-soft'
-                : 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
-            }`}
-          >
-            <Banknote className="w-3.5 h-3.5" />
-            <span>COD Pending ({codPendingCount})</span>
-          </button>
-          <button
-            onClick={() => setFilterPayment('PAID')}
-            className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterPayment === 'PAID'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-soft'
-                : 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Paid ({paidCount})</span>
-          </button>
-          <button
-            onClick={() => setFilterPayment('ONLINE')}
-            className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterPayment === 'ONLINE'
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-soft'
-                : 'bg-indigo-50 text-indigo-900 border-indigo-200 hover:bg-indigo-100'
-            }`}
-          >
-            <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Online / Razorpay</span>
-          </button>
-        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -350,8 +299,9 @@ export default function OwnerOrdersPage() {
               <thead>
                 <tr className="border-b border-owner-border bg-owner-canvas/40 text-owner-muted">
                   <th className="py-3.5 px-4">Order #</th>
+                  <th className="py-3.5 px-4">Order Placed</th>
                   <th className="py-3.5 px-4">Customer</th>
-                  <th className="py-3.5 px-4">Delivery Date</th>
+                  <th className="py-3.5 px-4">Delivery Schedule</th>
                   <th className="py-3.5 px-4">Amount & Payment</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -366,13 +316,35 @@ export default function OwnerOrdersPage() {
 
                   return (
                     <tr key={ord.id} className="hover:bg-owner-canvas/30 transition-colors">
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <button
                           onClick={() => setSelectedOrder(ord)}
                           className="font-bold text-brand-plum hover:underline flex items-center gap-1 cursor-pointer"
                         >
                           #{ord.orderNumber}
                         </button>
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <p className="font-semibold text-owner-heading">
+                          {ord.createdAt
+                            ? new Date(ord.createdAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : '-'}
+                        </p>
+                        <p className="text-[10px] text-owner-muted flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3 text-owner-muted" />
+                          <span>
+                            {ord.createdAt
+                              ? new Date(ord.createdAt).toLocaleTimeString('en-IN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : ''}
+                          </span>
+                        </p>
                       </td>
                       <td className="py-3.5 px-4">
                         <p className="font-semibold text-owner-heading">{ord.customerName || 'Guest'}</p>
@@ -391,10 +363,10 @@ export default function OwnerOrdersPage() {
                           )}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4">
-                        <p className="font-medium text-owner-heading">{ord.deliveryDate || '-'}</p>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <p className="font-medium text-owner-heading">{ord.deliveryDate || 'Standard'}</p>
                         <p className="text-[10px] text-owner-muted">
-                          {ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          {ord.deliveryAddress ? 'Doorstep Delivery' : 'Bakery Pickup'}
                         </p>
                       </td>
                       <td className="py-3.5 px-4">
@@ -525,227 +497,336 @@ export default function OwnerOrdersPage() {
         <Modal
           isOpen={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
+          maxWidth="5xl"
           title={`Order #${selectedOrder.orderNumber}`}
+          description={`Placed on ${
+            selectedOrder.createdAt
+              ? new Date(selectedOrder.createdAt).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : 'N/A'
+          }`}
         >
-          <div className="space-y-5 text-xs">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <span className="text-[10px] text-owner-muted font-medium">Status</span>
-                <div className="mt-1">
-                  <StatusBadge status={(selectedOrder.orderStatus || selectedOrder.status) as OrderStatus} />
-                </div>
-              </div>
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <span className="text-[10px] text-owner-muted font-medium">Payment</span>
-                <div className="mt-1 flex items-center gap-1.5">
-                  <span className="font-bold text-owner-heading uppercase text-xs">
-                    {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? 'COD' : 'RAZORPAY'}
-                  </span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold uppercase ${
-                    (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {selectedOrder.paymentStatus || 'PENDING'}
-                  </span>
-                </div>
-              </div>
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <span className="text-[10px] text-owner-muted font-medium">Delivery Date</span>
-                <p className="mt-1 font-bold text-owner-heading">
-                  {selectedOrder.deliveryDate || 'Standard'}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <span className="text-[10px] text-owner-muted font-medium">Total Amount</span>
-                <p className="mt-1 font-bold text-brand-plum text-sm">
-                  ₹{Number(selectedOrder.totalAmount).toLocaleString('en-IN')}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white border border-owner-border space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="font-serif font-bold text-sm text-owner-heading">Customer Information</h4>
-                {selectedOrder.customerPhone && (
-                  <a
-                    href={`https://wa.me/91${selectedOrder.customerPhone.replace(/\D/g, '').slice(-10)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold hover:bg-emerald-100 transition-colors"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    WhatsApp Customer
-                  </a>
-                )}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-owner-muted">
-                <p className="flex items-center gap-2">
-                  <span className="font-medium text-owner-heading">{selectedOrder.customerName || 'Guest'}</span>
-                </p>
-                <p className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-owner-muted" />
-                  <span>{selectedOrder.customerPhone || 'No phone provided'}</span>
-                </p>
-                <p className="flex items-center gap-2 sm:col-span-2">
-                  <Mail className="w-3.5 h-3.5 text-owner-muted" />
-                  <span>{selectedOrder.customerEmail || 'No email provided'}</span>
-                </p>
-                <p className="flex items-start gap-2 sm:col-span-2">
-                  <MapPin className="w-3.5 h-3.5 text-owner-muted shrink-0 mt-0.5" />
-                  <span>{selectedOrder.deliveryAddress || 'Self Pickup from Bakery'}</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Payment Settlement Card */}
-            <div className={`p-4 rounded-2xl border ${
-              ((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') && (selectedOrder.paymentStatus || '').toUpperCase() !== 'PAID'
-                ? 'bg-amber-50/70 border-amber-200'
-                : 'bg-white border-owner-border'
-            }`}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    ((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-emerald-100 text-emerald-800'
-                  }`}>
-                    {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? (
-                      <Banknote className="w-5 h-5 text-amber-700" />
-                    ) : (
-                      <CreditCard className="w-5 h-5 text-emerald-700" />
-                    )}
+          <div className="space-y-6 text-xs">
+            {/* 2-Column Landscape Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* LEFT COLUMN: Customer & Order Fulfillment & Payment (col-span-5) */}
+              <div className="lg:col-span-5 space-y-4">
+                
+                {/* Meta summary card */}
+                <div className="grid grid-cols-2 gap-2.5 p-3.5 rounded-2xl bg-owner-canvas/70 border border-owner-border">
+                  <div>
+                    <span className="text-[10px] text-owner-muted font-bold uppercase tracking-wider block">Order Placed</span>
+                    <p className="text-xs font-semibold text-owner-heading mt-0.5">
+                      {selectedOrder.createdAt
+                        ? new Date(selectedOrder.createdAt).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '-'}
+                    </p>
+                    <p className="text-[10px] text-owner-muted">
+                      {selectedOrder.createdAt
+                        ? new Date(selectedOrder.createdAt).toLocaleTimeString('en-IN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : ''}
+                    </p>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-serif font-bold text-sm text-owner-heading">
-                        {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
-                          ? 'Cash on Delivery (COD)'
-                          : 'Paid by Razorpay'}
-                      </span>
-                      {(selectedOrder.paymentStatus || '').toUpperCase() === 'PAID' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          <CheckCircle2 className="w-3 h-3" /> Paid
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                          <AlertCircle className="w-3 h-3" /> Pending (₹{Number(selectedOrder.totalAmount).toLocaleString('en-IN')})
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-owner-muted mt-0.5">
-                      {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
-                        ? (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
-                          ? 'Cash received and marked as Paid.'
-                          : 'Cash payment pending upon delivery or pickup.'
-                        : `Transaction Ref: ${selectedOrder.transactionId || 'Verified'}`
-                      }
+                    <span className="text-[10px] text-owner-muted font-bold uppercase tracking-wider block">Delivery Due</span>
+                    <p className="text-xs font-bold text-brand-plum mt-0.5">
+                      {selectedOrder.deliveryDate || 'Standard'}
+                    </p>
+                    <p className="text-[10px] text-owner-muted">
+                      {selectedOrder.deliveryAddress ? 'Doorstep Delivery' : 'Bakery Pickup'}
                     </p>
                   </div>
                 </div>
 
-                {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-owner-heading">Payment Status:</span>
-                    <div className="relative">
-                      <select
-                        disabled={updatingPaymentId === selectedOrder.id}
-                        value={(selectedOrder.paymentStatus || '').toUpperCase() === 'PAID' ? 'PAID' : 'PENDING'}
-                        onChange={(e) => handlePaymentStatusChange(selectedOrder.id, e.target.value as 'PAID' | 'PENDING')}
-                        className={`appearance-none pl-3 pr-7 py-1.5 text-xs font-bold rounded-xl border cursor-pointer focus:outline-none transition-colors ${
-                          (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            : 'bg-amber-50 text-amber-900 border-amber-300'
-                        }`}
+                {/* Customer Details Card */}
+                <div className="p-4 rounded-2xl bg-white border border-owner-border space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-owner-border/60">
+                    <h4 className="font-serif font-bold text-xs text-owner-heading uppercase tracking-wider">
+                      Customer Information
+                    </h4>
+                    {selectedOrder.customerPhone && (
+                      <a
+                        href={`https://wa.me/91${selectedOrder.customerPhone.replace(/\D/g, '').slice(-10)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold hover:bg-emerald-100 transition-colors"
                       >
-                        <option value="PENDING">Pending</option>
-                        <option value="PAID">Paid</option>
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-owner-muted pointer-events-none" />
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </a>
+                    )}
+                  </div>
+                  <div className="space-y-2 text-owner-muted">
+                    <p className="font-bold text-sm text-owner-heading">
+                      {selectedOrder.customerName || 'Guest Customer'}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-brand-plum shrink-0" />
+                      <span className="font-medium text-owner-heading">{selectedOrder.customerPhone || 'No phone provided'}</span>
+                    </p>
+                    {selectedOrder.customerEmail && (
+                      <p className="flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5 text-brand-plum shrink-0" />
+                        <span>{selectedOrder.customerEmail}</span>
+                      </p>
+                    )}
+                    <p className="flex items-start gap-2 pt-1 border-t border-owner-border/40">
+                      <MapPin className="w-3.5 h-3.5 text-brand-plum shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">{selectedOrder.deliveryAddress || 'Self Pickup directly at Bakery'}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Payment & Settlement Card */}
+                <div className={`p-4 rounded-2xl border ${
+                  ((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') && (selectedOrder.paymentStatus || '').toUpperCase() !== 'PAID'
+                    ? 'bg-amber-50/70 border-amber-200'
+                    : 'bg-white border-owner-border shadow-xs'
+                }`}>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-owner-muted">
+                        Payment & Settlement
+                      </span>
+                      <span className="text-base font-bold text-brand-plum">
+                        ₹{Number(selectedOrder.totalAmount).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-2">
+                        {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? (
+                          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-800">
+                            <Banknote className="w-4 h-4" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-800">
+                            <CreditCard className="w-4 h-4" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-bold text-xs text-owner-heading">
+                            {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
+                              ? 'Cash on Delivery (COD)'
+                              : 'Online Payment (Razorpay)'}
+                          </p>
+                          <p className="text-[10px] text-owner-muted">
+                            {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
+                              ? (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
+                                ? 'Cash payment collected & marked paid'
+                                : 'Pending cash collection on delivery'
+                              : `Ref: ${selectedOrder.transactionId || 'Verified'}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Dropdown for COD or Paid Badge for Online */}
+                      {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? (
+                        <div className="relative">
+                          <select
+                            disabled={updatingPaymentId === selectedOrder.id}
+                            value={(selectedOrder.paymentStatus || '').toUpperCase() === 'PAID' ? 'PAID' : 'PENDING'}
+                            onChange={(e) => handlePaymentStatusChange(selectedOrder.id, e.target.value as 'PAID' | 'PENDING')}
+                            className={`appearance-none pl-2.5 pr-6 py-1 text-xs font-bold rounded-xl border cursor-pointer focus:outline-none transition-colors ${
+                              (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                            }`}
+                          >
+                            <option value="PENDING">Pending</option>
+                            <option value="PAID">Paid</option>
+                          </select>
+                          <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-owner-muted pointer-events-none" />
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Paid
+                        </span>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            <div className="space-y-2">
-              <h4 className="font-serif font-bold text-sm text-owner-heading">Celebration Cakes & Items</h4>
-              <div className="border border-owner-border rounded-2xl overflow-hidden bg-white">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-owner-border bg-owner-canvas/40 text-owner-muted">
-                      <th className="py-2.5 px-3">Item Details</th>
-                      <th className="py-2.5 px-3">Qty</th>
-                      <th className="py-2.5 px-3">Unit Price</th>
-                      <th className="py-2.5 px-3 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-owner-border">
-                    {(selectedOrder.items && selectedOrder.items.length > 0) ? (
-                      selectedOrder.items.map((it, idx) => (
-                        <tr key={idx}>
-                          <td className="py-3 px-3">
-                            <p className="font-bold text-owner-heading">{it.productName || it.productNameSnapshot || 'Artisan Cake'}</p>
-                            {(it.cakeMessage || it.customMessage) && (
-                              <p className="text-[11px] text-brand-plum italic mt-0.5">
-                                Message: &ldquo;{it.cakeMessage || it.customMessage}&rdquo;
-                              </p>
-                            )}
-                            {it.dietaryPreference && (
-                              <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
-                                {it.dietaryPreference}
-                              </span>
-                            )}
-                            {it.photoReferenceUrl && (
-                              <div className="mt-2 flex items-center gap-2">
-                                <img src={it.photoReferenceUrl} alt="Design reference" className="w-12 h-12 object-cover rounded-lg border border-owner-border" />
-                                <span className="text-[10px] text-owner-muted">Customer reference photo</span>
+                {/* Status Transitions */}
+                <div className="p-4 rounded-2xl bg-owner-canvas border border-owner-border space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-owner-heading">Order Stage:</span>
+                    <StatusBadge status={(selectedOrder.orderStatus || selectedOrder.status) as OrderStatus} />
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {ALL_STATUSES.map((s) => {
+                      const currentStatus = (selectedOrder.orderStatus || selectedOrder.status || '').toUpperCase();
+                      const isCurrent = currentStatus === s;
+                      return (
+                        <button
+                          key={s}
+                          disabled={updatingId === selectedOrder.id}
+                          onClick={() => handleStatusChange(selectedOrder.id, s)}
+                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'bg-brand-plum text-white shadow-soft ring-2 ring-brand-plum/30'
+                              : 'bg-white text-owner-heading border border-owner-border hover:border-brand-plum/50'
+                          }`}
+                        >
+                          {STATUS_LABELS[s] || s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* RIGHT COLUMN: Ordered Cakes & Reference Images (col-span-7) */}
+              <div className="lg:col-span-7 space-y-4">
+                <div className="flex items-center justify-between pb-1 border-b border-owner-border">
+                  <h4 className="font-serif font-bold text-sm text-owner-heading">
+                    Celebration Cakes & Items Ordered
+                  </h4>
+                  <span className="text-[11px] text-owner-muted font-semibold">
+                    {selectedOrder.items?.length || 0} {selectedOrder.items?.length === 1 ? 'item' : 'items'}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {(selectedOrder.items && selectedOrder.items.length > 0) ? (
+                    selectedOrder.items.map((it, idx) => (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-2xl bg-white border border-owner-border space-y-3 shadow-xs"
+                      >
+                        <div className="flex items-start gap-3.5">
+                          {/* Cake Photo */}
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-brand-cream border border-brand-border shrink-0">
+                            {it.productImageUrl ? (
+                              <img
+                                src={it.productImageUrl}
+                                alt={it.productName || 'Ordered Cake'}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center text-brand-muted p-1">
+                                <Cake className="w-6 h-6 text-brand-plum/40 mb-0.5" />
+                                <span className="text-[9px] text-center font-medium">Cake</span>
                               </div>
                             )}
-                          </td>
-                          <td className="py-3 px-3 font-semibold">{it.quantity}</td>
-                          <td className="py-3 px-3">₹{it.unitPrice}</td>
-                          <td className="py-3 px-3 text-right font-bold">₹{it.quantity * it.unitPrice}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} className="py-4 px-3 text-center text-owner-muted">
-                          Celebration cake order (Total: ₹{selectedOrder.totalAmount})
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          </div>
+
+                          {/* Cake Info & Pricing */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h5 className="font-bold text-sm text-owner-heading leading-tight">
+                                  {it.productName || it.productNameSnapshot || 'Artisan Cake'}
+                                </h5>
+                                {it.variantName && (
+                                  <p className="text-[11px] font-semibold text-brand-plum mt-0.5">
+                                    Variant: {it.variantName}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="font-bold text-sm text-owner-heading">
+                                  ₹{it.quantity * it.unitPrice}
+                                </p>
+                                <p className="text-[10px] text-owner-muted">
+                                  {it.quantity} × ₹{it.unitPrice}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Dietary badge & Custom Inscription */}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              {it.dietaryPreference && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                  {it.dietaryPreference}
+                                </span>
+                              )}
+                              {it.addonsSummary && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-cream text-brand-espresso border border-brand-border">
+                                  {it.addonsSummary}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Inscription Message Banner */}
+                        {(it.cakeMessage || it.customMessage) && (
+                          <div className="p-2.5 rounded-xl bg-brand-blush/30 border border-brand-blush-border text-brand-plum flex items-start gap-2">
+                            <span className="text-xs font-bold shrink-0">🎂 Inscription:</span>
+                            <span className="text-xs font-serif font-semibold italic text-brand-espresso">
+                              &ldquo;{it.cakeMessage || it.customMessage}&rdquo;
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Customer Desired Design Reference Photo */}
+                        {it.photoReferenceUrl ? (
+                          <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-owner-heading flex items-center gap-1">
+                                <span>📸 Customer Design Reference Photo</span>
+                              </span>
+                              <a
+                                href={it.photoReferenceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] font-bold text-brand-plum hover:underline"
+                              >
+                                View Full Size ↗
+                              </a>
+                            </div>
+                            <p className="text-[10px] text-owner-muted">
+                              Customer attached this image showing how they want the cake decorated:
+                            </p>
+                            <div className="relative aspect-video max-h-48 sm:max-h-56 w-full rounded-xl overflow-hidden border border-brand-border bg-black/5">
+                              <a
+                                href={it.photoReferenceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Click to view full resolution"
+                              >
+                                <img
+                                  src={it.photoReferenceUrl}
+                                  alt="Customer Desired Cake Reference"
+                                  className="w-full h-full object-contain hover:scale-105 transition-transform duration-300 cursor-zoom-in"
+                                />
+                              </a>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 rounded-xl bg-owner-canvas/40 border border-owner-border/60 text-[11px] text-owner-muted">
+                            Standard catalog design (no customer reference photo attached)
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-owner-muted border rounded-2xl bg-white">
+                      Celebration cake order (Total: ₹{selectedOrder.totalAmount})
+                    </div>
+                  )}
+                </div>
               </div>
+
             </div>
 
-            <div className="p-4 rounded-2xl bg-owner-canvas border border-owner-border space-y-2">
-              <span className="text-[11px] font-bold text-owner-heading block">Update Order Status:</span>
-              <div className="flex flex-wrap gap-2">
-                {ALL_STATUSES.map((s) => {
-                  const currentStatus = (selectedOrder.orderStatus || selectedOrder.status || '').toUpperCase();
-                  const isCurrent = currentStatus === s;
-                  return (
-                    <button
-                      key={s}
-                      disabled={updatingId === selectedOrder.id}
-                      onClick={() => handleStatusChange(selectedOrder.id, s)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        isCurrent
-                          ? 'bg-brand-plum text-white shadow-soft'
-                          : 'bg-white text-owner-heading border border-owner-border hover:border-brand-plum/50'
-                      }`}
-                    >
-                      {STATUS_LABELS[s] || s}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-owner-border flex flex-wrap items-center justify-between gap-3">
+            {/* Bottom Actions Bar */}
+            <div className="pt-4 border-t border-owner-border flex flex-wrap items-center justify-between gap-3 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
@@ -753,7 +834,7 @@ export default function OwnerOrdersPage() {
                 className="gap-1.5"
               >
                 <Printer className="w-4 h-4" />
-                Print Kitchen Ticket (KOT)
+                <span>Print Kitchen Ticket (KOT)</span>
               </Button>
 
               <div className="flex items-center gap-2">
@@ -764,7 +845,7 @@ export default function OwnerOrdersPage() {
                   className="gap-1.5"
                 >
                   <Download className="w-4 h-4" />
-                  Download PDF Invoice
+                  <span>Download PDF Invoice</span>
                 </Button>
                 <Button
                   variant="ghost"

@@ -55,7 +55,6 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
     }
   }, [initialReferenceImage]);
 
-  const [imageTab, setImageTab] = useState<'upload' | 'url'>('upload');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -469,59 +468,33 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
               <label className="text-xs font-semibold text-brand-espresso block">
                 Reference Photo (Optional but Recommended)
               </label>
-              <div className="flex gap-2 p-1 bg-brand-cream-light rounded-xl border border-brand-border/60 max-w-xs">
+
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
                 <button
                   type="button"
-                  onClick={() => setImageTab('upload')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    imageTab === 'upload' ? 'bg-white text-brand-espresso shadow-xs' : 'text-brand-muted'
-                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-brand-border hover:border-brand-plum/40 rounded-2xl p-6 text-center transition-all bg-brand-cream-light/30 cursor-pointer"
                 >
-                  <Upload className="w-3.5 h-3.5 inline mr-1" /> Upload File
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImageTab('url')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    imageTab === 'url' ? 'bg-white text-brand-espresso shadow-xs' : 'text-brand-muted'
-                  }`}
-                >
-                  <LinkIcon className="w-3.5 h-3.5 inline mr-1" /> Paste URL
+                  {isUploading ? (
+                    <div className="text-xs text-brand-muted">Uploading reference photo...</div>
+                  ) : (
+                    <>
+                      <Camera className="w-6 h-6 text-brand-plum mx-auto mb-1.5" />
+                      <p className="text-xs font-bold text-brand-espresso">
+                        {referenceImageUrl ? 'Click to replace inspiration photo' : 'Click to upload inspiration photo'}
+                      </p>
+                      <p className="text-[11px] text-brand-muted mt-0.5">JPG, PNG, WebP up to 5MB</p>
+                    </>
+                  )}
                 </button>
               </div>
-
-              {imageTab === 'upload' ? (
-                <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full border-2 border-dashed border-brand-border hover:border-brand-plum/40 rounded-2xl p-6 text-center transition-all bg-brand-cream-light/30"
-                  >
-                    {isUploading ? (
-                      <div className="text-xs text-brand-muted">Uploading reference photo...</div>
-                    ) : (
-                      <>
-                        <Camera className="w-6 h-6 text-brand-plum mx-auto mb-1.5" />
-                        <p className="text-xs font-bold text-brand-espresso">Click to upload inspiration photo</p>
-                        <p className="text-[11px] text-brand-muted mt-0.5">JPG, PNG, WebP up to 5MB</p>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <Input
-                  placeholder="https://images.unsplash.com/... or Pinterest URL"
-                  value={referenceImageUrl}
-                  onChange={(e) => setReferenceImageUrl(e.target.value)}
-                />
-              )}
 
               {referenceImageUrl && (
                 <div className="flex items-center gap-3 p-3 rounded-2xl bg-brand-cream-light border border-brand-border/60">

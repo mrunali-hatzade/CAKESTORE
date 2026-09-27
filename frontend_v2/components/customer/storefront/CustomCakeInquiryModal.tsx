@@ -431,17 +431,11 @@ export const CustomCakeInquiryModal: React.FC<CustomCakeInquiryModalProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-2 rounded-xl border border-brand-border hover:bg-brand-cream text-brand-espresso font-semibold inline-flex items-center gap-1.5 transition-all text-xs"
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-dashed border-brand-border hover:border-brand-plum/40 hover:bg-brand-cream/30 text-brand-espresso font-semibold flex items-center justify-center gap-2 transition-all text-xs cursor-pointer"
                 >
-                  <Camera className="w-3.5 h-3.5 text-brand-plum" />
-                  <span>{isUploading ? 'Uploading...' : 'Upload Photo'}</span>
+                  <Camera className="w-4 h-4 text-brand-plum" />
+                  <span>{isUploading ? 'Uploading reference photo...' : (referenceImageUrl ? 'Click to replace reference photo' : 'Upload Design Reference Photo (JPG, PNG up to 5MB)')}</span>
                 </button>
-                <Input
-                  placeholder="Or paste image URL"
-                  value={referenceImageUrl}
-                  onChange={(e) => setReferenceImageUrl(e.target.value)}
-                  className="flex-1"
-                />
               </div>
 
               {referenceImageUrl && (

@@ -36,6 +36,7 @@ export interface OrderItem {
   customMessage?: string;
   photoReferenceUrl?: string;
   addonsSummary?: string;
+  productImageUrl?: string;
 }
 
 export interface Order {

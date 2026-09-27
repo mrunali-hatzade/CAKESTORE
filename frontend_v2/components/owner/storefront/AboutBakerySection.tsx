@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Upload, Trash2, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -107,12 +107,15 @@ export const AboutBakerySection: React.FC<AboutBakerySectionProps> = ({
             )}
           </div>
 
-          <div className="flex-1 space-y-2 text-center sm:text-left">
-            <Input
-              placeholder="Paste photo URL or upload file..."
-              value={aboutImageUrl}
-              onChange={(e) => onAboutImageUrlChange(e.target.value)}
-            />
+          <div className="flex-1 space-y-3 text-center sm:text-left">
+            <div>
+              <p className="text-xs font-semibold text-owner-heading">
+                {aboutImageUrl ? 'Bakery story photo set' : 'Upload your kitchen or team photo'}
+              </p>
+              <p className="text-[11px] text-owner-muted mt-0.5">
+                Appears on your storefront About Us section and story card (landscape 4:3 or 16:9 recommended).
+              </p>
+            </div>
             <div className="flex items-center justify-center sm:justify-start gap-2">
               <input
                 ref={fileInputRef}
@@ -127,10 +130,10 @@ export const AboutBakerySection: React.FC<AboutBakerySectionProps> = ({
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 isLoading={isUploading}
-                className="gap-1.5 text-xs"
+                className="gap-1.5 text-xs cursor-pointer"
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>Upload File</span>
+                <span>{aboutImageUrl ? 'Replace Photo' : 'Upload Photo'}</span>
               </Button>
               {aboutImageUrl && (
                 <Button
@@ -138,7 +141,7 @@ export const AboutBakerySection: React.FC<AboutBakerySectionProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={handleRemoveImage}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
                 </Button>

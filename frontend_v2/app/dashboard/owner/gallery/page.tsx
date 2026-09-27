@@ -94,7 +94,7 @@ export default function OwnerGalleryPage() {
   const [imageUrl, setImageUrl] = useState(PRESET_GALLERY_PHOTOS[0].url);
 
   // Image tab & upload
-  const [imageTab, setImageTab] = useState<'presets' | 'upload' | 'url'>('presets');
+  const [imageTab, setImageTab] = useState<'presets' | 'upload'>('upload');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,7 +152,7 @@ export default function OwnerGalleryPage() {
     setDisplayOrder(String(item.displayOrder ?? 0));
     setIsActive(item.isActive);
     setImageUrl(item.imageUrl);
-    setImageTab('url');
+    setImageTab('upload');
     setErrorMessage(null);
     setIsModalOpen(true);
   };
@@ -527,15 +527,6 @@ export default function OwnerGalleryPage() {
             <div className="flex rounded-xl bg-owner-canvas p-1 border border-owner-border text-xs font-semibold">
               <button
                 type="button"
-                onClick={() => setImageTab('presets')}
-                className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  imageTab === 'presets' ? 'bg-white shadow-xs text-brand-plum font-bold' : 'text-owner-muted'
-                }`}
-              >
-                Presets
-              </button>
-              <button
-                type="button"
                 onClick={() => setImageTab('upload')}
                 className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
                   imageTab === 'upload' ? 'bg-white shadow-xs text-brand-plum font-bold' : 'text-owner-muted'
@@ -545,14 +536,39 @@ export default function OwnerGalleryPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setImageTab('url')}
+                onClick={() => setImageTab('presets')}
                 className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  imageTab === 'url' ? 'bg-white shadow-xs text-brand-plum font-bold' : 'text-owner-muted'
+                  imageTab === 'presets' ? 'bg-white shadow-xs text-brand-plum font-bold' : 'text-owner-muted'
                 }`}
               >
-                Paste URL
+                Presets
               </button>
             </div>
+
+            {/* Upload Option */}
+            {imageTab === 'upload' && (
+              <div className="pt-1">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-owner-border hover:border-brand-plum rounded-2xl p-6 text-center cursor-pointer bg-owner-canvas hover:bg-brand-cream/30 transition-all"
+                >
+                  <Upload className="w-8 h-8 text-brand-plum mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-owner-heading">
+                    {isUploading ? 'Uploading to bakery media server...' : 'Click to select photo from device'}
+                  </p>
+                  <p className="text-[10px] text-owner-muted mt-1">
+                    Supports JPG, PNG, WEBP up to 5MB
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Presets Option */}
             {imageTab === 'presets' && (
@@ -588,43 +604,6 @@ export default function OwnerGalleryPage() {
                     </button>
                   );
                 })}
-              </div>
-            )}
-
-            {/* Upload Option */}
-            {imageTab === 'upload' && (
-              <div className="pt-1">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                />
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-owner-border hover:border-brand-plum rounded-2xl p-6 text-center cursor-pointer bg-owner-canvas hover:bg-brand-cream/30 transition-all"
-                >
-                  <Upload className="w-8 h-8 text-brand-plum mx-auto mb-2" />
-                  <p className="text-xs font-semibold text-owner-heading">
-                    {isUploading ? 'Uploading to bakery media server...' : 'Click to select photo from device'}
-                  </p>
-                  <p className="text-[10px] text-owner-muted mt-1">
-                    Supports JPG, PNG, WEBP up to 5MB
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* URL Option */}
-            {imageTab === 'url' && (
-              <div className="pt-1 space-y-2">
-                <Input
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="text-xs"
-                />
               </div>
             )}
 

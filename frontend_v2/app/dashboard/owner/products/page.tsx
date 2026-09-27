@@ -84,6 +84,8 @@ export default function OwnerProductsPage() {
   const [altImageUrlInput, setAltImageUrlInput] = useState('');
   const [isUploadingAlt, setIsUploadingAlt] = useState(false);
   const altFileInputRef = useRef<HTMLInputElement>(null);
+  const variantFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingVariant, setIsUploadingVariant] = useState(false);
 
   // Product Form fields
   const [name, setName] = useState('');
@@ -264,6 +266,21 @@ export default function OwnerProductsPage() {
     } finally {
       setIsUploadingAlt(false);
       if (altFileInputRef.current) altFileInputRef.current.value = '';
+    }
+  };
+
+  const handleUploadVariantImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingVariant(true);
+    try {
+      const result = await mediaApi.uploadImage(file, 'products');
+      setNewVariantImageUrl(result.url);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to upload variant photo');
+    } finally {
+      setIsUploadingVariant(false);
+      if (variantFileInputRef.current) variantFileInputRef.current.value = '';
     }
   };
 
@@ -992,88 +1009,54 @@ export default function OwnerProductsPage() {
           {/* Cake Main Photo Section */}
           <div className="space-y-3 pt-1">
             <label className="text-xs font-bold text-owner-heading block">Main Product Photo *</label>
-            <div className="flex gap-1 p-1 bg-owner-canvas rounded-xl border border-owner-border">
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
               <button
                 type="button"
-                onClick={() => setImageTab('url')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  imageTab === 'url' ? 'bg-white text-owner-heading shadow-sm' : 'text-owner-muted'
-                }`}
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-owner-border rounded-2xl p-6 text-center hover:border-brand-plum/50 hover:bg-brand-blush/10 transition-all cursor-pointer"
               >
-                <LinkIcon className="w-3.5 h-3.5" /> Paste URL
-              </button>
-              <button
-                type="button"
-                onClick={() => setImageTab('upload')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  imageTab === 'upload' ? 'bg-white text-owner-heading shadow-sm' : 'text-owner-muted'
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5" /> Upload File
+                {isUploading ? (
+                  <div className="flex items-center justify-center gap-2 text-xs text-owner-muted">
+                    <div className="w-4 h-4 border-2 border-brand-plum border-t-transparent rounded-full animate-spin" />
+                    <span>Uploading photo...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-6 h-6 text-owner-muted mx-auto mb-2" />
+                    <p className="text-xs font-semibold text-owner-heading">
+                      {imageUrl ? 'Click to replace main cake photo' : 'Click to upload main cake photo'}
+                    </p>
+                    <p className="text-[11px] text-owner-muted mt-1">JPG, PNG, WebP up to 5MB</p>
+                  </>
+                )}
               </button>
             </div>
 
-            {imageTab === 'url' ? (
-              <div className="space-y-2">
-                <Input
-                  placeholder="https://images.unsplash.com/..."
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="text-[11px] text-owner-muted font-medium">Presets:</span>
-                  {PRESET_IMAGES.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setImageUrl(preset.url)}
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
-                        imageUrl === preset.url
-                          ? 'bg-brand-plum text-white border-brand-plum'
-                          : 'bg-owner-canvas text-owner-heading border-owner-border hover:bg-brand-blush/50'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
+            {imageUrl && (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-owner-canvas border border-owner-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-brand-cream border shrink-0">
+                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold text-owner-heading block">Main photo uploaded</span>
+                    <span className="text-[10px] text-owner-muted">Will be displayed on storefront catalog</span>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-owner-border rounded-2xl p-6 text-center hover:border-brand-plum/50 hover:bg-brand-blush/10 transition-all cursor-pointer"
+                  onClick={() => setImageUrl('')}
+                  className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
                 >
-                  {isUploading ? (
-                    <div className="flex items-center justify-center gap-2 text-xs text-owner-muted">
-                      <div className="w-4 h-4 border-2 border-brand-plum border-t-transparent rounded-full animate-spin" />
-                      Uploading photo...
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-6 h-6 text-owner-muted mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-owner-heading">Click to upload main cake photo</p>
-                      <p className="text-[11px] text-owner-muted mt-1">JPG, PNG, WebP up to 5MB</p>
-                    </>
-                  )}
+                  Remove
                 </button>
-              </div>
-            )}
-
-            {imageUrl && (
-              <div className="flex items-center gap-3 p-2 rounded-xl bg-owner-canvas border border-owner-border">
-                <div className="w-14 h-14 rounded-lg overflow-hidden bg-brand-cream border shrink-0">
-                  <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                </div>
-                <span className="text-xs text-owner-muted">Main photo selected</span>
               </div>
             )}
           </div>
@@ -1097,7 +1080,7 @@ export default function OwnerProductsPage() {
                     <button
                       type="button"
                       onClick={() => handleRemoveAltImage(idx)}
-                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-lg opacity-80 hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-lg opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
                       title="Remove image"
                     >
                       <X className="w-3 h-3" />
@@ -1109,35 +1092,25 @@ export default function OwnerProductsPage() {
 
             {/* Add alternative image controls */}
             {altImages.length < 3 && (
-              <div className="space-y-2 pt-1">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Paste image URL..."
-                    value={altImageUrlInput}
-                    onChange={(e) => setAltImageUrlInput(e.target.value)}
-                    className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddAltImageUrl}>
-                    Add URL
-                  </Button>
-                  <input
-                    ref={altFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleUploadAltImage}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => altFileInputRef.current?.click()}
-                    isLoading={isUploadingAlt}
-                  >
-                    <Upload className="w-3.5 h-3.5 mr-1" /> Upload
-                  </Button>
-                </div>
+              <div className="pt-1">
+                <input
+                  ref={altFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleUploadAltImage}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => altFileInputRef.current?.click()}
+                  isLoading={isUploadingAlt}
+                  className="w-full gap-1.5 text-xs py-2.5 border-dashed"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload Additional Cake Photo ({altImages.length}/3)</span>
+                </Button>
               </div>
             )}
           </div>
@@ -1239,18 +1212,38 @@ export default function OwnerProductsPage() {
 
               <div className="flex items-center gap-2">
                 <input
-                  type="text"
-                  placeholder="Optional variant image URL..."
-                  value={newVariantImageUrl}
-                  onChange={(e) => setNewVariantImageUrl(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                  ref={variantFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleUploadVariantImage}
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => variantFileInputRef.current?.click()}
+                  isLoading={isUploadingVariant}
+                  className="text-xs gap-1 shrink-0"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{newVariantImageUrl ? 'Photo Selected ✓' : 'Upload Photo'}</span>
+                </Button>
+                {newVariantImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setNewVariantImageUrl('')}
+                    className="text-[10px] text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
                 <input
                   type="text"
-                  placeholder="Short note..."
+                  placeholder="Short note (optional)..."
                   value={newVariantDesc}
                   onChange={(e) => setNewVariantDesc(e.target.value)}
-                  className="w-1/3 px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
+                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-owner-border bg-white text-owner-heading focus:outline-none focus:ring-1 focus:ring-brand-plum"
                 />
                 <Button
                   type="button"
