@@ -223,7 +223,7 @@ export default function OwnerOverviewPage() {
       {/* Operational Dashboard: Only rendered when NOT pending and NOT expired */}
       {!isPending && !isExpired && (
         <>
-          {/* Pending COD Cash Collection Alert Banner */}
+          {/* Pending COD Alert Banner */}
           {pendingCodOrders.length > 0 && (
             <div className="p-4 sm:p-5 rounded-3xl bg-amber-50/90 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
               <div className="flex items-center gap-3.5">
@@ -233,14 +233,14 @@ export default function OwnerOverviewPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="font-serif font-bold text-sm text-amber-950">
-                      Cash on Delivery (COD) Pending Collection
+                      Cash on Delivery (COD) Pending Orders
                     </h4>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
                       {pendingCodOrders.length} {pendingCodOrders.length === 1 ? 'order' : 'orders'}
                     </span>
                   </div>
                   <p className="text-xs text-amber-900/80 mt-0.5">
-                    <span className="font-bold text-amber-950">₹{pendingCodAmount.toLocaleString('en-IN')}</span> total cash due from customers. Collect at delivery or pickup and mark as Paid to settle accounts.
+                    <span className="font-bold text-amber-950">₹{pendingCodAmount.toLocaleString('en-IN')}</span> total pending for COD orders. Mark as Paid from orders when payment is received.
                   </p>
                 </div>
               </div>
@@ -440,28 +440,35 @@ export default function OwnerOverviewPage() {
                           ₹{Number(ord.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-3">
-                          <div className="flex flex-col gap-1">
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-owner-heading">
-                              {(ord.paymentMethod || '').toUpperCase() === 'COD' ? (
-                                <>
-                                  <Banknote className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                  <span>COD</span>
-                                </>
+                          {((ord.paymentMethod || '').toUpperCase() === 'COD' || (ord.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900">
+                                <Banknote className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                                <span>COD</span>
+                              </span>
+                              <span className={`inline-block w-fit text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                (ord.paymentStatus || '').toUpperCase() === 'PAID'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}>
+                                {(ord.paymentStatus || '').toUpperCase() === 'PAID' ? 'Paid' : 'Pending'}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              {(ord.paymentStatus || '').toUpperCase() === 'PAID' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span>Paid by Razorpay</span>
+                                </span>
                               ) : (
-                                <>
-                                  <CreditCard className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <span>Online</span>
-                                </>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800">
+                                  <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>Razorpay (Pending)</span>
+                                </span>
                               )}
-                            </span>
-                            <span className={`inline-block w-fit text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                              (ord.paymentStatus || '').toUpperCase() === 'PAID'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}>
-                              {(ord.paymentStatus || '').toUpperCase() === 'PAID' ? 'Paid' : 'Collect Cash'}
-                            </span>
-                          </div>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-right whitespace-nowrap">
                           {renderStatusBadge(ord.orderStatus || ord.status)}
@@ -717,15 +724,15 @@ export default function OwnerOverviewPage() {
                       <Banknote className="w-4 h-4 text-amber-700 shrink-0" />
                       <div className="truncate">
                         <span className="font-semibold text-owner-heading block truncate">
-                          {pendingCodOrders.length} COD {pendingCodOrders.length === 1 ? 'order' : 'orders'} pending cash collection
+                          {pendingCodOrders.length} COD {pendingCodOrders.length === 1 ? 'order' : 'orders'} pending payment
                         </span>
                         <span className="text-[10px] text-amber-800 font-medium">
-                          ₹{pendingCodAmount.toLocaleString('en-IN')} cash to collect
+                          ₹{pendingCodAmount.toLocaleString('en-IN')} pending
                         </span>
                       </div>
                     </div>
                     <span className="text-[11px] font-bold text-amber-800 group-hover:translate-x-0.5 transition-transform shrink-0 ml-2">
-                      Collect &rarr;
+                      Manage &rarr;
                     </span>
                   </Link>
                 )}

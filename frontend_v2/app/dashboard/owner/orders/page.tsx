@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   ShoppingBag, Search, Printer, ChevronDown, Download, Eye,
   Phone, Mail, MapPin, MessageCircle, Banknote, CreditCard,
-  CheckCircle2, AlertCircle, Check
+  CheckCircle2, AlertCircle, Check, Clock
 } from 'lucide-react';
 import { ordersApi } from '@/lib/api/orders';
 import { useOwner } from '@/context/OwnerContext';
@@ -82,16 +82,37 @@ export default function OwnerOrdersPage() {
     return unregister;
   }, [registerRefreshHandler, fetchOrders]);
 
-  const handleMarkPaid = async (orderId: number) => {
-    if (!window.confirm('Confirm that cash payment has been received for this order?')) return;
+  const handlePaymentStatusChange = async (orderId: number, targetStatus: 'PAID' | 'PENDING') => {
     setUpdatingPaymentId(orderId);
     try {
-      const updated = await ordersApi.updatePaymentStatus(orderId, 'PAID', 'CASH_COLLECTED');
+      const updated = await ordersApi.updatePaymentStatus(
+        orderId,
+        targetStatus,
+        targetStatus === 'PAID' ? 'CASH_COLLECTED' : 'PENDING'
+      );
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, ...updated, paymentStatus: 'PAID', paidAt: updated.paidAt || new Date().toISOString() } : o))
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                ...updated,
+                paymentStatus: targetStatus,
+                paidAt: targetStatus === 'PAID' ? (updated.paidAt || new Date().toISOString()) : undefined,
+              }
+            : o
+        )
       );
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder((prev) => (prev ? { ...prev, ...updated, paymentStatus: 'PAID', paidAt: updated.paidAt || new Date().toISOString() } : null));
+        setSelectedOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...updated,
+                paymentStatus: targetStatus,
+                paidAt: targetStatus === 'PAID' ? (updated.paidAt || new Date().toISOString()) : undefined,
+              }
+            : null
+        );
       }
     } catch (err: any) {
       alert(err?.message || 'Failed to update payment status');
@@ -131,8 +152,8 @@ export default function OwnerOrdersPage() {
     if (!win) return;
     const isCod = (ord.paymentMethod || '').toUpperCase() === 'COD' || (ord.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
     const isPaid = (ord.paymentStatus || '').toUpperCase() === 'PAID';
-    const payModeStr = isCod ? 'CASH ON DELIVERY (COD)' : 'ONLINE PREPAID';
-    const payStatusStr = isPaid ? 'PAID' : (isCod ? 'COLLECT CASH Rs.' + ord.totalAmount : 'PAYMENT PENDING');
+    const payModeStr = isCod ? 'CASH ON DELIVERY (COD)' : 'PAID BY RAZORPAY';
+    const payStatusStr = isPaid ? 'PAID' : (isCod ? 'PENDING (Rs.' + ord.totalAmount + ')' : 'PENDING');
 
     win.document.write(`
       <html><head><title>KOT - ${ord.orderNumber}</title>
@@ -157,8 +178,8 @@ export default function OwnerOrdersPage() {
         <div class="row"><span><b>Order Total:</b></span><span>Rs.${ord.totalAmount}</span></div>
         <div class="row"><span><b>Payment Mode:</b></span><span>${payModeStr}</span></div>
         <div class="row"><span><b>Payment Status:</b></span><span style="font-weight:bold; color: ${isPaid ? '#155724' : '#856404'};">${payStatusStr}</span></div>
-        ${!isPaid && isCod ? `<div class="alert-box">💵 ATTENTION: COLLECT CASH Rs.${ord.totalAmount}</div>` : ''}
-        ${isPaid ? `<div class="paid-box">✓ PAYMENT ALREADY COLLECTED (PAID)</div>` : ''}
+        ${!isPaid && isCod ? `<div class="alert-box">💵 COD PAYMENT PENDING: Rs.${ord.totalAmount}</div>` : ''}
+        ${isPaid ? `<div class="paid-box">✓ PAYMENT SETTLED (PAID)</div>` : ''}
         <hr/>
         <p><b>Delivery Address:</b><br/>${ord.deliveryAddress || 'Pick up at store'}</p>
         <hr/>
@@ -289,7 +310,7 @@ export default function OwnerOrdersPage() {
             }`}
           >
             <Banknote className="w-3.5 h-3.5" />
-            <span>COD Pending Cash ({codPendingCount})</span>
+            <span>COD Pending ({codPendingCount})</span>
           </button>
           <button
             onClick={() => setFilterPayment('PAID')}
@@ -311,7 +332,7 @@ export default function OwnerOrdersPage() {
             }`}
           >
             <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Online / Prepaid</span>
+            <span>Online / Razorpay</span>
           </button>
         </div>
       </div>
@@ -378,48 +399,50 @@ export default function OwnerOrdersPage() {
                       </td>
                       <td className="py-3.5 px-4">
                         <p className="font-bold text-owner-heading text-sm">₹{Number(ord.totalAmount).toLocaleString('en-IN')}</p>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          {isCod ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-300">
-                              <Banknote className="w-3 h-3 text-amber-700" />
-                              <span>COD</span>
+                        
+                        {isCod ? (
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <span className="text-[10px] font-bold text-amber-900 bg-amber-100/90 px-1.5 py-0.5 rounded border border-amber-300 shrink-0">
+                              COD
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                              <CreditCard className="w-3 h-3 text-indigo-600" />
-                              <span>Online</span>
-                            </span>
-                          )}
-
-                          {isPaid ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              <span>Paid</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded border border-amber-300">
-                              <AlertCircle className="w-3 h-3 text-amber-700" />
-                              <span>Collect Cash</span>
-                            </span>
-                          )}
-                        </div>
+                            <div className="relative">
+                              <select
+                                disabled={updatingPaymentId === ord.id}
+                                value={isPaid ? 'PAID' : 'PENDING'}
+                                onChange={(e) => handlePaymentStatusChange(ord.id, e.target.value as 'PAID' | 'PENDING')}
+                                className={`appearance-none pl-2 pr-5 py-0.5 text-[11px] font-bold rounded-lg border cursor-pointer focus:outline-none transition-colors disabled:opacity-50 ${
+                                  isPaid
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                    : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                }`}
+                              >
+                                <option value="PENDING">Pending</option>
+                                <option value="PAID">Paid</option>
+                              </select>
+                              <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-owner-muted pointer-events-none" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-1">
+                            {isPaid ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Paid by Razorpay</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                <span>Razorpay (Pending)</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         <StatusBadge status={currentStatus as OrderStatus} />
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {!isPaid && isCod && (
-                            <button
-                              onClick={() => handleMarkPaid(ord.id)}
-                              disabled={updatingPaymentId === ord.id}
-                              className="px-2.5 py-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs disabled:opacity-50"
-                              title="Confirm Cash Payment Received"
-                            >
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Mark Paid</span>
-                            </button>
-                          )}
                           <div className="relative">
                             <select
                               disabled={updatingId === ord.id}
@@ -516,7 +539,7 @@ export default function OwnerOrdersPage() {
                 <span className="text-[10px] text-owner-muted font-medium">Payment</span>
                 <div className="mt-1 flex items-center gap-1.5">
                   <span className="font-bold text-owner-heading uppercase text-xs">
-                    {selectedOrder.paymentMethod || 'COD'}
+                    {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? 'COD' : 'RAZORPAY'}
                   </span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold uppercase ${
                     (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
@@ -575,20 +598,20 @@ export default function OwnerOrdersPage() {
               </div>
             </div>
 
-            {/* Payment & Cash Settlement Card */}
+            {/* Payment Settlement Card */}
             <div className={`p-4 rounded-2xl border ${
-              (selectedOrder.paymentMethod || '').toUpperCase() === 'COD' && (selectedOrder.paymentStatus || '').toUpperCase() !== 'PAID'
+              ((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') && (selectedOrder.paymentStatus || '').toUpperCase() !== 'PAID'
                 ? 'bg-amber-50/70 border-amber-200'
                 : 'bg-white border-owner-border'
             }`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
-                    (selectedOrder.paymentMethod || '').toUpperCase() === 'COD'
+                    ((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
                       ? 'bg-amber-100 text-amber-800'
                       : 'bg-emerald-100 text-emerald-800'
                   }`}>
-                    {(selectedOrder.paymentMethod || '').toUpperCase() === 'COD' ? (
+                    {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') ? (
                       <Banknote className="w-5 h-5 text-amber-700" />
                     ) : (
                       <CreditCard className="w-5 h-5 text-emerald-700" />
@@ -597,7 +620,9 @@ export default function OwnerOrdersPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-serif font-bold text-sm text-owner-heading">
-                        {(selectedOrder.paymentMethod || '').toUpperCase() === 'COD' ? 'Cash on Delivery (COD)' : 'Online Payment (Prepaid)'}
+                        {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
+                          ? 'Cash on Delivery (COD)'
+                          : 'Paid by Razorpay'}
                       </span>
                       {(selectedOrder.paymentStatus || '').toUpperCase() === 'PAID' ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -605,34 +630,41 @@ export default function OwnerOrdersPage() {
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                          <AlertCircle className="w-3 h-3" /> Payment Due (₹{Number(selectedOrder.totalAmount).toLocaleString('en-IN')})
+                          <AlertCircle className="w-3 h-3" /> Pending (₹{Number(selectedOrder.totalAmount).toLocaleString('en-IN')})
                         </span>
                       )}
                     </div>
                     <p className="text-[11px] text-owner-muted mt-0.5">
-                      {(selectedOrder.paymentMethod || '').toUpperCase() === 'COD'
+                      {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY')
                         ? (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
-                          ? `Cash collected and marked as PAID.`
-                          : `Please collect ₹${Number(selectedOrder.totalAmount).toLocaleString('en-IN')} cash upon delivery or pickup.`
-                        : `Prepaid online. Transaction Ref: ${selectedOrder.transactionId || 'Verified'}`
+                          ? 'Cash received and marked as Paid.'
+                          : 'Cash payment pending upon delivery or pickup.'
+                        : `Transaction Ref: ${selectedOrder.transactionId || 'Verified'}`
                       }
                     </p>
                   </div>
                 </div>
 
-                {(selectedOrder.paymentStatus || '').toUpperCase() !== 'PAID' && (
-                  <Button
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 shadow-soft cursor-pointer shrink-0"
-                    disabled={updatingPaymentId === selectedOrder.id}
-                    onClick={async () => {
-                      await handleMarkPaid(selectedOrder.id);
-                      setSelectedOrder((prev) => prev ? { ...prev, paymentStatus: 'PAID' } : null);
-                    }}
-                  >
-                    <Check className="w-4 h-4" />
-                    {updatingPaymentId === selectedOrder.id ? 'Updating...' : 'Mark as Paid (Cash Collected)'}
-                  </Button>
+                {((selectedOrder.paymentMethod || '').toUpperCase() === 'COD' || (selectedOrder.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-owner-heading">Payment Status:</span>
+                    <div className="relative">
+                      <select
+                        disabled={updatingPaymentId === selectedOrder.id}
+                        value={(selectedOrder.paymentStatus || '').toUpperCase() === 'PAID' ? 'PAID' : 'PENDING'}
+                        onChange={(e) => handlePaymentStatusChange(selectedOrder.id, e.target.value as 'PAID' | 'PENDING')}
+                        className={`appearance-none pl-3 pr-7 py-1.5 text-xs font-bold rounded-xl border cursor-pointer focus:outline-none transition-colors ${
+                          (selectedOrder.paymentStatus || '').toUpperCase() === 'PAID'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : 'bg-amber-50 text-amber-900 border-amber-300'
+                        }`}
+                      >
+                        <option value="PENDING">Pending</option>
+                        <option value="PAID">Paid</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-owner-muted pointer-events-none" />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

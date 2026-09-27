@@ -52,7 +52,7 @@ export const ordersApi = {
   updatePaymentStatus: async (orderId: number, paymentStatus = 'PAID', paymentNote?: string): Promise<Order> => {
     return apiClient.patch<Order>(`/api/owner/orders/${orderId}/payment-status`, {
       paymentStatus,
-      paymentNote: paymentNote || 'CASH_COLLECTED',
+      paymentNote: paymentNote || (paymentStatus === 'PAID' ? 'CASH_COLLECTED' : undefined),
     });
   },
 

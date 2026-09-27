@@ -113,7 +113,7 @@ public class OrderService {
         Order order = orderRepository.findByIdAndShopId(orderId, shop.getId())
                 .orElseThrow(() -> new RuntimeException("Order not found or unauthorized"));
 
-        if ("PAID".equalsIgnoreCase(order.getPaymentStatus()) && "PAID".equalsIgnoreCase(newStatus)) {
+        if (order.getPaymentStatus() != null && order.getPaymentStatus().equalsIgnoreCase(newStatus)) {
             return order;
         }
 
@@ -122,6 +122,11 @@ public class OrderService {
             order.setPaidAt(java.time.LocalDateTime.now());
             if (order.getTransactionId() == null || order.getTransactionId().isBlank()) {
                 order.setTransactionId(paymentNote != null && !paymentNote.isBlank() ? paymentNote : "CASH_COLLECTED");
+            }
+        } else if ("PENDING".equalsIgnoreCase(newStatus)) {
+            order.setPaidAt(null);
+            if ("CASH_COLLECTED".equalsIgnoreCase(order.getTransactionId())) {
+                order.setTransactionId(null);
             }
         }
 
