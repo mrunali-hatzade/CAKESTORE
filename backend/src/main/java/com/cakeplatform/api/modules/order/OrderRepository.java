@@ -53,7 +53,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT DISTINCT o.customerEmail FROM Order o WHERE o.shop.id = :shopId AND o.customerEmail IS NOT NULL")
     List<String> findUniqueCustomerEmailsByShopId(@Param("shopId") Long shopId);
 
-    @Query("SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
+    @Query(value = "SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
            "  MAX(o.customerName), " +
            "  o.customerEmail, " +
            "  MAX(o.customerPhone), " +
@@ -64,7 +64,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            ") " +
            "FROM Order o " +
            "WHERE o.shop.id = :shopId " +
-           "GROUP BY o.customerEmail")
+           "GROUP BY o.customerEmail " +
+           "ORDER BY MAX(o.createdAt) DESC",
+           countQuery = "SELECT COUNT(DISTINCT o.customerEmail) FROM Order o WHERE o.shop.id = :shopId")
     org.springframework.data.domain.Page<com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse> findCustomerProfilesByShopId(
            @Param("shopId") Long shopId, 
            Pageable pageable);

@@ -40,10 +40,9 @@ public class OwnerCustomerController {
 
         Shop shop = shopAccessValidator.getValidShopForOwner(userDetails.getId());
 
-        // Use the optimized JPQL grouped query, sorting by the latest order date
+        // Use the optimized JPQL grouped query, ordering by MAX(createdAt) directly in the query
         org.springframework.data.domain.Pageable pageable = 
-            org.springframework.data.domain.PageRequest.of(page, size, 
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "lastOrderDate"));
+            org.springframework.data.domain.PageRequest.of(page, size);
 
         org.springframework.data.domain.Page<CustomerProfileResponse> profiles = 
             orderRepository.findCustomerProfilesByShopId(shop.getId(), pageable);
