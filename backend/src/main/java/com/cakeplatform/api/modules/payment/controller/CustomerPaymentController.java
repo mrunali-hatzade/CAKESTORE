@@ -19,7 +19,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/storefront/orders")
-@RequiredArgsConstructor
 @Slf4j
 public class CustomerPaymentController {
 
@@ -28,6 +27,32 @@ public class CustomerPaymentController {
     private final RazorpayService razorpayService;
     private final NotificationService notificationService;
     private final com.cakeplatform.api.modules.notification.AdminNotificationService adminNotificationService;
+    private final com.cakeplatform.api.modules.shop.CouponRepository couponRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CustomerPaymentController(
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository,
+            RazorpayService razorpayService,
+            NotificationService notificationService,
+            com.cakeplatform.api.modules.notification.AdminNotificationService adminNotificationService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) com.cakeplatform.api.modules.shop.CouponRepository couponRepository) {
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
+        this.razorpayService = razorpayService;
+        this.notificationService = notificationService;
+        this.adminNotificationService = adminNotificationService;
+        this.couponRepository = couponRepository;
+    }
+
+    public CustomerPaymentController(
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository,
+            RazorpayService razorpayService,
+            NotificationService notificationService,
+            com.cakeplatform.api.modules.notification.AdminNotificationService adminNotificationService) {
+        this(orderRepository, paymentRepository, razorpayService, notificationService, adminNotificationService, null);
+    }
 
     /**
      * C1: Create / initialize a real Razorpay payment order for a customer order.
@@ -165,7 +190,9 @@ public class CustomerPaymentController {
         order.setPaymentMethod("RAZORPAY");
         order.setTransactionId(razorpayPaymentId);
         order.setPaidAt(LocalDateTime.now());
-        if ("NEW".equalsIgnoreCase(order.getOrderStatus()) || "PENDING".equalsIgnoreCase(order.getOrderStatus())) {
+        if ("NEW".equalsIgnoreCase(order.getOrderStatus()) 
+                || "PENDING".equalsIgnoreCase(order.getOrderStatus()) 
+                || "PAYMENT_PENDING".equalsIgnoreCase(order.getOrderStatus())) {
             order.setOrderStatus("CONFIRMED");
         }
         orderRepository.save(order);
@@ -218,6 +245,68 @@ public class CustomerPaymentController {
                 "message", "Payment verified and order confirmed",
                 "orderNumber", order.getOrderNumber(),
                 "paymentId", payment.getId() != null ? payment.getId() : 0L
+        ));
+    }
+
+    /**
+     * Cancel an uncompleted customer payment checkout and mark order as cancelled.
+     * Prevents abandoned or customer-cancelled checkouts from showing up as pending orders.
+     */
+    @PostMapping("/{orderNumber}/cancel-payment")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Map<String, Object>> cancelCustomerPayment(
+            @PathVariable String orderNumber,
+            @RequestBody(required = false) Map<String, String> payload) {
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderNumber));
+
+        if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+            throw new IllegalStateException("Cannot cancel payment for an already paid order");
+        }
+
+        // Idempotency: if already cancelled, return success immediately
+        if ("CANCELLED".equalsIgnoreCase(order.getOrderStatus()) && "FAILED".equalsIgnoreCase(order.getPaymentStatus())) {
+            return ResponseEntity.ok(Map.of(
+                    "status", "CANCELLED",
+                    "message", "Payment already cancelled",
+                    "orderNumber", order.getOrderNumber()
+            ));
+        }
+
+        String reason = (payload != null && payload.get("reason") != null && !payload.get("reason").isBlank())
+                ? payload.get("reason")
+                : "Payment cancelled by customer during checkout";
+
+        order.setOrderStatus("CANCELLED");
+        order.setPaymentStatus("FAILED");
+        orderRepository.save(order);
+
+        // Update payment record if present
+        if (order.getTransactionId() != null) {
+            Payment payment = paymentRepository.findByProviderOrderId(order.getTransactionId()).orElse(null);
+            if (payment != null && !"COMPLETED".equalsIgnoreCase(payment.getStatus())) {
+                payment.setStatus("FAILED");
+                payment.setFailureReason(reason);
+                paymentRepository.save(payment);
+            }
+        }
+
+        // Restore coupon usage if a coupon was used
+        if (order.getCouponCode() != null && !order.getCouponCode().isBlank() && order.getShop() != null && couponRepository != null) {
+            try {
+                couponRepository.findByShopIdAndCodeIgnoreCase(order.getShop().getId(), order.getCouponCode())
+                        .ifPresent(c -> couponRepository.decrementUsedCount(c.getId()));
+            } catch (Exception e) {
+                log.warn("Failed to decrement coupon usage on payment cancellation for order {}: {}", orderNumber, e.getMessage());
+            }
+        }
+
+        log.info("Payment cancelled for customer order {}: {}", orderNumber, reason);
+
+        return ResponseEntity.ok(Map.of(
+                "status", "CANCELLED",
+                "message", "Payment process was cancelled. Order has not been placed.",
+                "orderNumber", order.getOrderNumber()
         ));
     }
 }

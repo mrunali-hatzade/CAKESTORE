@@ -20,7 +20,7 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, isAuthenticated, isLoading } = useAuth();
-  const { shop, refreshDashboard, isRefreshing, refreshStatus, refreshError } = useOwner();
+  const { shop, refreshDashboard, isRefreshing, refreshStatus, refreshError, pendingOrdersCount, pendingEnquiriesCount, pendingReviewsCount } = useOwner();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
@@ -43,14 +43,14 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
     { label: 'Overview', href: '/dashboard/owner', icon: LayoutDashboard },
     { label: 'Products', href: '/dashboard/owner/products', icon: Cake },
     { label: 'Cake Gallery', href: '/dashboard/owner/gallery', icon: Images },
-    { label: 'Orders', href: '/dashboard/owner/orders', icon: ShoppingBag },
+    { label: 'Orders', href: '/dashboard/owner/orders', icon: ShoppingBag, count: pendingOrdersCount },
     { label: 'Delivery Slots', href: '/dashboard/owner/delivery-slots', icon: Calendar },
     { label: 'Storefront Website', href: '/dashboard/owner/website', icon: Globe },
     { label: 'Analytics', href: '/dashboard/owner/analytics', icon: BarChart3 },
     { label: 'Coupons', href: '/dashboard/owner/coupons', icon: Tag },
     { label: 'Customers', href: '/dashboard/owner/customers', icon: Users },
-    { label: 'Custom Enquiries', href: '/dashboard/owner/enquiries', icon: MessageSquareQuote },
-    { label: 'Reviews', href: '/dashboard/owner/reviews', icon: Star },
+    { label: 'Custom Enquiries', href: '/dashboard/owner/enquiries', icon: MessageSquareQuote, count: pendingEnquiriesCount },
+    { label: 'Reviews', href: '/dashboard/owner/reviews', icon: Star, count: pendingReviewsCount },
     { label: 'Store Settings', href: '/dashboard/owner/settings', icon: Settings },
     { label: 'Subscription', href: '/dashboard/owner/subscription', icon: CreditCard },
   ];
@@ -75,19 +75,33 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
+        const hasBadge = Boolean(item.count && item.count > 0);
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setMobileMenuOpen(false)}
-            className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
               isActive
                 ? 'bg-owner-sidebar-active text-white shadow-sm'
                 : 'text-owner-sidebar-text hover:text-white hover:bg-white/5'
             }`}
           >
-            <Icon className="w-4 h-4" />
-            {item.label}
+            <div className="flex items-center gap-3 min-w-0">
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="truncate">{item.label}</span>
+            </div>
+            {hasBadge && (
+              <span
+                className={`ml-2 px-2 py-0.5 text-xs font-bold rounded-full transition-colors ${
+                  isActive
+                    ? 'bg-white text-brand-burgundy shadow-sm'
+                    : 'bg-brand-burgundy text-white shadow-sm'
+                }`}
+              >
+                {item.count! > 99 ? '99+' : item.count}
+              </span>
+            )}
           </Link>
         );
       })}

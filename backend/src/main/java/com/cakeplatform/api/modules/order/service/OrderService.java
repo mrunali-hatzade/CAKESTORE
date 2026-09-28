@@ -28,12 +28,12 @@ public class OrderService {
 
     public org.springframework.data.domain.Page<Order> getPaginatedOrdersByUserId(Long userId, org.springframework.data.domain.Pageable pageable) {
         Shop shop = getShopByOwnerId(userId);
-        return orderRepository.findByShopIdOrderByCreatedAtDesc(shop.getId(), pageable);
+        return orderRepository.findVisibleOrdersByShopId(shop.getId(), pageable);
     }
 
     public List<Order> getOrdersByUserId(Long userId) {
         Shop shop = getShopByOwnerId(userId);
-        return orderRepository.findByShopIdOrderByCreatedAtDesc(shop.getId());
+        return orderRepository.findVisibleOrdersByShopId(shop.getId());
     }
 
     public Order getOrderDetails(Long userId, Long orderId) {

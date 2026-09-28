@@ -159,6 +159,9 @@ export default function OwnerOverviewPage() {
   // Operational Today's Deliveries Filter
   const todayDateStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
   const todayDeliveries = orders.filter((o) => {
+    const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
+    const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
+    if (!isCod && !isPaid) return false;
     const orderDeliveryDate = o.deliveryDate ? o.deliveryDate.split('T')[0] : '';
     const s = String(o.orderStatus || o.status || '').toUpperCase();
     return orderDeliveryDate === todayDateStr && s !== 'CANCELLED';
@@ -167,7 +170,9 @@ export default function OwnerOverviewPage() {
   // Actionable Attention Counters
   const pendingConfirmationOrders = orders.filter(o => {
     const s = String(o.orderStatus || o.status || '').toUpperCase();
-    return s === 'NEW' || s === 'PENDING';
+    const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
+    const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
+    return (s === 'NEW' || s === 'PENDING') && (isCod || isPaid);
   }).length;
   const unscheduledTodayDeliveries = todayDeliveries.filter(o => !o.deliverySlotId).length;
   const pendingCustomEnquiries = customCakeRequests.filter(r => r.status === 'PENDING').length;
@@ -470,7 +475,14 @@ export default function OwnerOverviewPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-owner-border">
-                    {orders.slice(0, 5).map((ord) => (
+                    {orders
+                      .filter((o) => {
+                        const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
+                        const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
+                        return isCod || isPaid;
+                      })
+                      .slice(0, 5)
+                      .map((ord) => (
                       <tr key={ord.id} className="hover:bg-owner-canvas/50 transition-colors">
                         <td className="py-3 px-3 font-bold text-owner-heading">
                           <Link href="/dashboard/owner/orders" className="hover:text-brand-plum underline">

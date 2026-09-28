@@ -22,6 +22,10 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
     @Query("UPDATE Coupon c SET c.usedCount = c.usedCount + 1 WHERE c.id = :couponId AND (c.usageLimit IS NULL OR c.usedCount < c.usageLimit)")
     int incrementUsedCountIfWithinLimit(@Param("couponId") Long couponId);
 
+    @Modifying
+    @Query("UPDATE Coupon c SET c.usedCount = CASE WHEN c.usedCount > 0 THEN c.usedCount - 1 ELSE 0 END WHERE c.id = :couponId")
+    int decrementUsedCount(@Param("couponId") Long couponId);
+
     void deleteByShopId(Long shopId);
 }
 

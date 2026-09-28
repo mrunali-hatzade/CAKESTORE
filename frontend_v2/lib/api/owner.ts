@@ -152,6 +152,10 @@ export const ownerApi = {
     }
   },
 
+  uploadVerificationDocument: async (data: { documentType: string; fileUrl: string }): Promise<any> => {
+    return apiClient.post('/api/verification/documents', data);
+  },
+
   updateShopSettings: async (data: Partial<ShopSettings>): Promise<ShopSettings> => {
     return apiClient.put<ShopSettings>('/api/shops/my-shop', data);
   },

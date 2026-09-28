@@ -21,6 +21,29 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     long countByShopId(Long shopId);
     long countByShopIdAndOrderStatus(Long shopId, String orderStatus);
 
+    @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
+           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
+           "ORDER BY o.createdAt DESC")
+    List<Order> findVisibleOrdersByShopId(@Param("shopId") Long shopId);
+
+    @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
+           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
+           "ORDER BY o.createdAt DESC")
+    org.springframework.data.domain.Page<Order> findVisibleOrdersByShopId(@Param("shopId") Long shopId, Pageable pageable);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED'))")
+    long countVisibleOrdersByShopId(@Param("shopId") Long shopId);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) IN ('NEW', 'PENDING', 'CONFIRMED', 'PREPARING') " +
+           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED'))")
+    long countPendingOrdersByShopId(@Param("shopId") Long shopId);
+
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
            "WHERE o.shop.id = :shopId " +
            "  AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
@@ -47,6 +70,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Object[]> findTopSellingProductsByShopId(@Param("shopId") Long shopId, Pageable pageable);
 
     org.springframework.data.domain.Page<Order> findByCustomerPhoneOrderByCreatedAtDesc(String customerPhone, Pageable pageable);
+
+    @Query("SELECT o FROM Order o WHERE o.customerPhone = :customerPhone " +
+           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
+           "ORDER BY o.createdAt DESC")
+    org.springframework.data.domain.Page<Order> findVisibleOrdersByCustomerPhone(@Param("customerPhone") String customerPhone, Pageable pageable);
 
     List<Order> findByShopIdAndCustomerEmailOrderByCreatedAtDesc(Long shopId, String customerEmail);
 

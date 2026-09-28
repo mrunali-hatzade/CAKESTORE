@@ -220,17 +220,26 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
                 setIsSubmitting(false);
               }
             },
-            onFailure: (errMsg) => {
-              setError(`Payment not completed: ${errMsg}. Order #${order.orderNumber} was saved as pending.`);
+            onFailure: async (errMsg) => {
+              try {
+                await ordersApi.cancelPaymentOrder(order.orderNumber, errMsg || 'Payment gateway failed');
+              } catch (_) {}
+              setError(`Payment was not completed: ${errMsg || 'Transaction failed'}. Your order was not placed.`);
               setIsSubmitting(false);
             },
-            onDismiss: () => {
-              setError(`Payment window was closed. Order #${order.orderNumber} has been created and remains pending.`);
+            onDismiss: async () => {
+              try {
+                await ordersApi.cancelPaymentOrder(order.orderNumber, 'Customer closed payment window');
+              } catch (_) {}
+              setError('Payment process was cancelled. Your order was not placed.');
               setIsSubmitting(false);
             },
           });
         } catch (paymentInitErr: any) {
-          setError(paymentInitErr?.message || `Unable to initiate online payment for Order #${order.orderNumber}. Order was saved as pending.`);
+          try {
+            await ordersApi.cancelPaymentOrder(order.orderNumber, paymentInitErr?.message || 'Payment initiation failed');
+          } catch (_) {}
+          setError(paymentInitErr?.message || `Unable to initiate online payment for Order #${order.orderNumber}. Your order was not placed.`);
           setIsSubmitting(false);
         }
       } else {

@@ -2,6 +2,7 @@ package com.cakeplatform.api.modules.shop;
 
 import com.cakeplatform.api.modules.user.User;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -14,6 +15,7 @@ import java.util.List;
 @Entity
 @Table(name = "shops")
 @Data
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Shop {
 
     @Id
@@ -101,22 +103,28 @@ public class Shop {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ShopDeliverySlot> deliverySlots = new ArrayList<>();
 
+    @JsonIgnore
     @OneToOne(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private ShopDeliveryConfig deliveryConfig;
 
+    @JsonIgnore
     @OneToOne(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private ShopStorefrontSettings storefrontSettings;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC, createdAt ASC")
     private List<ShopBanner> banners = new ArrayList<>();
 
+    @JsonIgnore
     @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ShopBusinessHours> businessHours = new ArrayList<>();
 
+    @JsonIgnore
     @OneToMany(mappedBy = "shop", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     private List<ShopCustomFormField> customFormFields = new ArrayList<>();

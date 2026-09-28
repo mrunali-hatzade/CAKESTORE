@@ -149,7 +149,9 @@ public class WebhookController {
                         order.setPaymentStatus("PAID");
                         order.setTransactionId(transactionId);
                         order.setPaidAt(LocalDateTime.now());
-                        if ("NEW".equalsIgnoreCase(order.getOrderStatus())) {
+                        if ("NEW".equalsIgnoreCase(order.getOrderStatus()) 
+                                || "PENDING".equalsIgnoreCase(order.getOrderStatus()) 
+                                || "PAYMENT_PENDING".equalsIgnoreCase(order.getOrderStatus())) {
                             order.setOrderStatus("CONFIRMED");
                         }
                         orderRepository.save(order);

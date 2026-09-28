@@ -597,6 +597,9 @@ public class CustomerStorefrontService {
             }
         }
 
+        boolean isOnlinePayment = "ONLINE_PAYMENT".equalsIgnoreCase(request.getPaymentMethod())
+                || "RAZORPAY".equalsIgnoreCase(request.getPaymentMethod());
+
         Order order = new Order();
         order.setShop(shop);
         order.setCustomerName(request.getCustomerName());
@@ -606,7 +609,7 @@ public class CustomerStorefrontService {
         order.setPaymentMethod(request.getPaymentMethod());
         order.setOrderNumber("ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         order.setPaymentStatus("PENDING");
-        order.setOrderStatus("NEW");
+        order.setOrderStatus(isOnlinePayment ? "PAYMENT_PENDING" : "NEW");
         order.setDeliveryDate(request.getDeliveryDate());
         order.setDeliverySlot(slot);
 
@@ -775,8 +778,8 @@ public class CustomerStorefrontService {
 
         Order savedOrder = orderRepository.save(order);
 
-        // Send Notification to Owner
-        if (notificationService != null && shop.getOwner() != null) {
+        // Send Notification to Owner (Only for COD orders upon placement; Online orders are notified upon successful payment verification)
+        if (!isOnlinePayment && notificationService != null && shop.getOwner() != null) {
             try {
                 notificationService.createNotification(
                         shop.getOwner(),
@@ -791,39 +794,43 @@ public class CustomerStorefrontService {
             }
         }
 
-        // Dispatch Admin Notification (NEW_ORDER)
-        try {
-            adminNotificationService.dispatchAdminNotification(
-                    com.cakeplatform.api.modules.notification.AdminNotificationType.NEW_ORDER,
-                    "New Order Placed: " + savedOrder.getOrderNumber(),
-                    String.format("Order %s (₹%s) placed at %s by %s.",
-                            savedOrder.getOrderNumber(),
-                            savedOrder.getTotalAmount(),
-                            shop.getBusinessName(),
-                            savedOrder.getCustomerName()),
-                    com.cakeplatform.api.modules.notification.AdminNotificationPriority.NORMAL,
-                    com.cakeplatform.api.modules.notification.AdminNotificationCategory.ORDERS,
-                    savedOrder.getOrderNumber(),
-                    "ORDER",
-                    "/admin/shops/" + shop.getId()
-            );
-        } catch (Exception ignored) {
-            // Safe failure isolation
+        // Dispatch Admin Notification (NEW_ORDER - Only for COD orders upon placement)
+        if (!isOnlinePayment && adminNotificationService != null) {
+            try {
+                adminNotificationService.dispatchAdminNotification(
+                        com.cakeplatform.api.modules.notification.AdminNotificationType.NEW_ORDER,
+                        "New Order Placed: " + savedOrder.getOrderNumber(),
+                        String.format("Order %s (₹%s) placed at %s by %s.",
+                                savedOrder.getOrderNumber(),
+                                savedOrder.getTotalAmount(),
+                                shop.getBusinessName(),
+                                savedOrder.getCustomerName()),
+                        com.cakeplatform.api.modules.notification.AdminNotificationPriority.NORMAL,
+                        com.cakeplatform.api.modules.notification.AdminNotificationCategory.ORDERS,
+                        savedOrder.getOrderNumber(),
+                        "ORDER",
+                        "/admin/shops/" + shop.getId()
+                );
+            } catch (Exception ignored) {
+                // Safe failure isolation
+            }
         }
         
-        // Send SMS to Customer
-        try {
-            org.springframework.web.context.request.RequestAttributes attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
-            if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes servletAttrs) {
-                com.cakeplatform.api.modules.notification.SmsService smsService = org.springframework.web.context.support.WebApplicationContextUtils
-                    .getRequiredWebApplicationContext(servletAttrs.getRequest().getServletContext())
-                    .getBean(com.cakeplatform.api.modules.notification.SmsService.class);
-                if (smsService != null) {
-                    smsService.sendSms(savedOrder.getCustomerPhone(), "Hi " + savedOrder.getCustomerName() + ", your Cake Platform order " + savedOrder.getOrderNumber() + " has been received! 🎂");
+        // Send SMS to Customer (Only for COD orders upon placement)
+        if (!isOnlinePayment) {
+            try {
+                org.springframework.web.context.request.RequestAttributes attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+                if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes servletAttrs) {
+                    com.cakeplatform.api.modules.notification.SmsService smsService = org.springframework.web.context.support.WebApplicationContextUtils
+                        .getRequiredWebApplicationContext(servletAttrs.getRequest().getServletContext())
+                        .getBean(com.cakeplatform.api.modules.notification.SmsService.class);
+                    if (smsService != null) {
+                        smsService.sendSms(savedOrder.getCustomerPhone(), "Hi " + savedOrder.getCustomerName() + ", your Cake Platform order " + savedOrder.getOrderNumber() + " has been received! 🎂");
+                    }
                 }
+            } catch (Exception ignored) {
+                // Non-blocking SMS dispatch
             }
-        } catch (Exception ignored) {
-            // Non-blocking SMS dispatch
         }
 
         return savedOrder;

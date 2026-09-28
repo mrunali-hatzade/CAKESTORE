@@ -26,6 +26,11 @@ export interface UnreadCountResponse {
   unreadCount: number;
 }
 
+export interface UnreadSummaryResponse {
+  total: number;
+  byType: Record<string, number>;
+}
+
 export const notificationsApi = {
   getNotifications: async (): Promise<NotificationRecord[]> => {
     return apiClient.get<NotificationRecord[]>('/api/notifications');
@@ -36,11 +41,19 @@ export const notificationsApi = {
     return res.unreadCount ?? 0;
   },
 
+  getUnreadSummary: async (): Promise<UnreadSummaryResponse> => {
+    return apiClient.get<UnreadSummaryResponse>('/api/notifications/unread-summary');
+  },
+
   markAsRead: async (id: number): Promise<void> => {
     await apiClient.patch(`/api/notifications/${id}/read`);
   },
 
   markAllAsRead: async (): Promise<void> => {
     await apiClient.patch('/api/notifications/read-all');
+  },
+
+  markTypeAsRead: async (type: string): Promise<void> => {
+    await apiClient.patch(`/api/notifications/read-type/${encodeURIComponent(type)}`);
   },
 };

@@ -141,7 +141,7 @@ public class StageFFinalCertificationTest {
         orderA.setShop(shopA);
         orderA.setOrderNumber("ORD-AAA-01");
 
-        when(orderRepository.findByShopIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(orderA));
+        when(orderRepository.findVisibleOrdersByShopId(1L)).thenReturn(List.of(orderA));
 
         List<Order> orders = orderService.getOrdersByUserId(101L);
         assertEquals(1, orders.size());

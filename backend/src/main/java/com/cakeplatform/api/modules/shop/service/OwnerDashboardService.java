@@ -33,8 +33,8 @@ public class OwnerDashboardService {
         stats.setActiveProducts(productRepository.countByShopIdAndStatusAndAvailability(shop.getId(), "ACTIVE", true));
         
         // Orders
-        stats.setTotalOrders(orderRepository.countByShopId(shop.getId()));
-        stats.setPendingOrders(orderRepository.countByShopIdAndOrderStatus(shop.getId(), "NEW"));
+        stats.setTotalOrders(orderRepository.countVisibleOrdersByShopId(shop.getId()));
+        stats.setPendingOrders(orderRepository.countPendingOrdersByShopId(shop.getId()));
         
         // Revenue
         BigDecimal revenue = orderRepository.sumRevenueByShopId(shop.getId());

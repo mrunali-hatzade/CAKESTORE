@@ -41,6 +41,17 @@ export const ordersApi = {
     return apiClient.post(`/api/storefront/orders/${orderNumber}/verify-payment`, payload);
   },
 
+  cancelPaymentOrder: async (
+    orderNumber: string,
+    reason?: string
+  ): Promise<{
+    status: string;
+    message: string;
+    orderNumber: string;
+  }> => {
+    return apiClient.post(`/api/storefront/orders/${orderNumber}/cancel-payment`, { reason });
+  },
+
   getOwnerOrders: async (status?: string, page = 0, size = 20): Promise<PaginatedResponse<Order>> => {
     return apiClient.get<PaginatedResponse<Order>>('/api/owner/orders', { params: { status, page, size } });
   },

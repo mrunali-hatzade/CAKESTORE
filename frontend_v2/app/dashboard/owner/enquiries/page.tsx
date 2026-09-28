@@ -25,6 +25,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
+import { notificationsApi } from '@/lib/api/notifications';
 import { CustomCakeRequest, GeneralEnquiry } from '@/types/owner';
 import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
@@ -37,7 +38,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function OwnerEnquiriesPage() {
-  const { registerRefreshHandler } = useOwner();
+  const { registerRefreshHandler, refreshSidebarCounts } = useOwner();
   const [activeTab, setActiveTab] = useState<'custom-cakes' | 'general'>('custom-cakes');
   const [customCakes, setCustomCakes] = useState<CustomCakeRequest[]>([]);
   const [generalEnquiries, setGeneralEnquiries] = useState<GeneralEnquiry[]>([]);
@@ -89,6 +90,14 @@ export default function OwnerEnquiriesPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    // When owner views enquiries, clear unread enquiry entries so badge reflects only unseen entries
+    Promise.allSettled([
+      notificationsApi.markTypeAsRead('CUSTOM_ORDER_REQUEST'),
+      notificationsApi.markTypeAsRead('NEW_ENQUIRY'),
+    ]).then(() => refreshSidebarCounts?.()).catch(() => {});
+  }, [refreshSidebarCounts]);
 
   useEffect(() => {
     const unregister = registerRefreshHandler(async () => {

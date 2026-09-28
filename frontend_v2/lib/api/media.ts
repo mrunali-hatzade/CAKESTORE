@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 
 export const mediaApi = {
-  uploadImage: async (file: File, type: 'products' | 'covers' | 'logos' = 'products'): Promise<{ url: string }> => {
+  uploadImage: async (file: File, type: 'products' | 'covers' | 'logos' | 'documents' = 'products'): Promise<{ url: string }> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);

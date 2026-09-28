@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -53,6 +54,9 @@ public class CustomerPaymentControllerTest {
 
     @MockBean
     private AdminNotificationService adminNotificationService;
+
+    @MockBean
+    private com.cakeplatform.api.modules.shop.CouponRepository couponRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -273,5 +277,46 @@ public class CustomerPaymentControllerTest {
 
         // No duplicate notifications or saves
         verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void cancelCustomerPayment_SuccessfullyCancelsOrderAndSetsPaymentFailed() throws Exception {
+        when(orderRepository.findByOrderNumber("ORD-TEST-1234")).thenReturn(Optional.of(testOrder));
+
+        mockMvc.perform(post("/api/storefront/orders/ORD-TEST-1234/cancel-payment")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("reason", "Customer closed payment modal"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("CANCELLED")))
+                .andExpect(jsonPath("$.orderNumber", is("ORD-TEST-1234")));
+
+        assertEquals("CANCELLED", testOrder.getOrderStatus());
+        assertEquals("FAILED", testOrder.getPaymentStatus());
+        verify(orderRepository).save(testOrder);
+    }
+
+    @Test
+    void cancelCustomerPayment_FailsIfOrderIsAlreadyPaid() throws Exception {
+        testOrder.setPaymentStatus("PAID");
+        testOrder.setOrderStatus("CONFIRMED");
+        when(orderRepository.findByOrderNumber("ORD-TEST-1234")).thenReturn(Optional.of(testOrder));
+
+        mockMvc.perform(post("/api/storefront/orders/ORD-TEST-1234/cancel-payment")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("reason", "Customer requested cancellation"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cancelCustomerPayment_IsIdempotentWhenAlreadyCancelled() throws Exception {
+        testOrder.setPaymentStatus("FAILED");
+        testOrder.setOrderStatus("CANCELLED");
+        when(orderRepository.findByOrderNumber("ORD-TEST-1234")).thenReturn(Optional.of(testOrder));
+
+        mockMvc.perform(post("/api/storefront/orders/ORD-TEST-1234/cancel-payment")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("CANCELLED")))
+                .andExpect(jsonPath("$.message", containsString("already cancelled")));
     }
 }

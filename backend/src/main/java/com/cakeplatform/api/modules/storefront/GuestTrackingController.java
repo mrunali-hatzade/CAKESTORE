@@ -55,7 +55,7 @@ public class GuestTrackingController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        Page<Order> orders = orderRepository.findByCustomerPhoneOrderByCreatedAtDesc(phone, PageRequest.of(page, size));
+        Page<Order> orders = orderRepository.findVisibleOrdersByCustomerPhone(phone, PageRequest.of(page, size));
         return ResponseEntity.ok(orders);
     }
 

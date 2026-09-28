@@ -154,8 +154,11 @@ export default function CheckoutPage() {
             clearCart();
             toast.success(`Payment verified (${paymentId})! Order #${order.orderNumber} confirmed.`);
           },
-          onFailure: (errMsg) => {
-            setError(errMsg || 'Online payment failed or was cancelled.');
+          onFailure: async (errMsg) => {
+            try {
+              await ordersApi.cancelPaymentOrder(order.orderNumber, errMsg || 'Payment was cancelled');
+            } catch (_) {}
+            setError(errMsg || 'Online payment was cancelled or failed. Your order was not placed.');
             setIsSubmitting(false);
           },
         });

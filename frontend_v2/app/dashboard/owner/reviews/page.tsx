@@ -19,6 +19,7 @@ import {
   Cake,
 } from 'lucide-react';
 import { reviewsApi, OwnerProductReview } from '@/lib/api/reviews';
+import { notificationsApi } from '@/lib/api/notifications';
 import { useOwner } from '@/context/OwnerContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -31,7 +32,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80';
 
 export default function OwnerReviewsPage() {
-  const { registerRefreshHandler } = useOwner();
+  const { registerRefreshHandler, refreshSidebarCounts } = useOwner();
   const [reviews, setReviews] = useState<OwnerProductReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,6 +68,13 @@ export default function OwnerReviewsPage() {
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
+
+  useEffect(() => {
+    // When owner views reviews, clear unread review/feedback entries so badge reflects only unseen entries
+    notificationsApi.markTypeAsRead('NEW_FEEDBACK')
+      .then(() => refreshSidebarCounts?.())
+      .catch(() => {});
+  }, [refreshSidebarCounts]);
 
   useEffect(() => {
     const unregister = registerRefreshHandler(async () => {

@@ -21,6 +21,9 @@ import {
   AlertCircle,
   RefreshCw,
   Sparkles,
+  FileText,
+  FileCheck,
+  Eye,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { mediaApi } from '@/lib/api/media';
@@ -52,6 +55,7 @@ export default function OwnerSettingsPage() {
   const [verificationInfo, setVerificationInfo] = useState<{
     verificationStatus: string;
     rejectionReason?: string | null;
+    documents?: any[];
   } | null>(null);
   const [businessName, setBusinessName] = useState('');
   const [description, setDescription] = useState('');
@@ -66,6 +70,13 @@ export default function OwnerSettingsPage() {
   const [pincode, setPincode] = useState('');
   const [locationErrors, setLocationErrors] = useState<Record<string, string>>({});
   const [fssaiRegistration, setFssaiRegistration] = useState('');
+
+  // FSSAI Document Certificate state
+  const [fssaiFile, setFssaiFile] = useState<File | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [docUploadSuccess, setDocUploadSuccess] = useState<string | null>(null);
+  const [docUploadError, setDocUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Payout fields
   const [payout, setPayout] = useState<ShopPayoutDetails | null>(null);
@@ -133,6 +144,33 @@ export default function OwnerSettingsPage() {
     return unregister;
   }, [registerRefreshHandler, fetchData]);
 
+  const handleUploadFssaiDoc = async () => {
+    if (!fssaiFile) return;
+    setIsUploadingDoc(true);
+    setDocUploadError(null);
+    setDocUploadSuccess(null);
+
+    try {
+      const { url } = await mediaApi.uploadImage(fssaiFile, 'documents');
+      await ownerApi.uploadVerificationDocument({
+        documentType: 'FSSAI_CERTIFICATE',
+        fileUrl: url,
+      });
+
+      setDocUploadSuccess('FSSAI Certificate uploaded and submitted for review!');
+      setFssaiFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      await fetchData(true);
+    } catch (err: any) {
+      setDocUploadError(err?.message || 'Failed to upload FSSAI document. Ensure file is under 5MB (PDF/JPG/PNG).');
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -154,6 +192,22 @@ export default function OwnerSettingsPage() {
         pincode,
         fssaiRegistration,
       });
+
+      if (fssaiFile) {
+        try {
+          const { url } = await mediaApi.uploadImage(fssaiFile, 'documents');
+          await ownerApi.uploadVerificationDocument({
+            documentType: 'FSSAI_CERTIFICATE',
+            fileUrl: url,
+          });
+          setFssaiFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          await fetchData(true);
+        } catch (docErr: any) {
+          console.warn('FSSAI document upload warning:', docErr);
+        }
+      }
+
       setProfile(updated);
       updateShop(updated);
       setSuccessMsg('Bakery profile settings saved successfully!');
@@ -192,6 +246,10 @@ export default function OwnerSettingsPage() {
       setIsSaving(false);
     }
   };
+
+  const fssaiDoc = verificationInfo?.documents?.find(
+    (d: any) => d.documentType === 'FSSAI_CERTIFICATE'
+  );
 
   if (loading) return <LoadingState message="Loading bakery settings & payout details..." />;
 
@@ -324,6 +382,179 @@ export default function OwnerSettingsPage() {
                 value={fssaiRegistration}
                 onChange={(e) => setFssaiRegistration(e.target.value)}
               />
+            </div>
+
+            {/* FSSAI Certificate Document Verification Block */}
+            <div className="pt-3 border-t border-owner-border/70 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-brand-plum" />
+                  <div>
+                    <h3 className="text-xs font-bold text-owner-heading">
+                      FSSAI Food License / Registration Certificate
+                    </h3>
+                    <p className="text-[11px] text-owner-muted">
+                      Official document required to activate verified status on your storefront.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status Badge */}
+                <div>
+                  {fssaiDoc ? (
+                    fssaiDoc.status === 'VERIFIED' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        Verified by Admin
+                      </span>
+                    ) : fssaiDoc.status === 'REJECTED' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                        Action Required
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        Under Review
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-[11px] font-medium text-owner-muted px-2.5 py-1 rounded-lg bg-owner-canvas border border-owner-border">
+                      Certificate Not Uploaded
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Current Attached Document Card if exists */}
+              {fssaiDoc && (
+                <div className="p-3.5 rounded-xl bg-owner-canvas/70 border border-owner-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-brand-blush text-brand-plum flex items-center justify-center shrink-0">
+                      <FileCheck className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-owner-heading truncate">
+                        Attached FSSAI Certificate
+                      </p>
+                      <p className="text-[11px] text-owner-muted">
+                        Submitted: {new Date(fssaiDoc.createdAt || fssaiDoc.updatedAt || Date.now()).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  {fssaiDoc.fileUrl && (
+                    <a
+                      href={fssaiDoc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-white border border-owner-border text-brand-plum hover:bg-brand-cream hover:text-brand-espresso transition-colors shrink-0 shadow-2xs cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View Current Document</span>
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Rejection / Note banner if rejected */}
+              {(fssaiDoc?.status === 'REJECTED' || verificationInfo?.verificationStatus === 'REJECTED') && verificationInfo?.rejectionReason && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                    <span>Admin Review Feedback:</span>
+                  </p>
+                  <p className="text-[11px] text-rose-700 pl-5 leading-relaxed">
+                    &ldquo;{verificationInfo.rejectionReason}&rdquo;
+                  </p>
+                </div>
+              )}
+
+              {/* Upload Dropzone */}
+              <div className="relative border-2 border-dashed border-owner-border hover:border-brand-plum/50 rounded-xl p-4 transition-colors bg-white text-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setFssaiFile(file);
+                    setDocUploadError(null);
+                    setDocUploadSuccess(null);
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div className="flex flex-col items-center justify-center pointer-events-none">
+                  <Upload className="w-5 h-5 text-brand-plum mb-1.5" />
+                  {fssaiFile ? (
+                    <p className="text-xs font-semibold text-brand-plum">
+                      Selected: {fssaiFile.name} ({(fssaiFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs font-semibold text-owner-heading">
+                        {fssaiDoc ? 'Click or drag to upload a replacement certificate' : 'Upload FSSAI License or Registration Certificate'}
+                      </p>
+                      <p className="text-[11px] text-owner-muted mt-0.5">
+                        Supports PDF, PNG, JPG up to 5MB. Fast-tracks your bakery verification badge.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected File Action Buttons */}
+              {fssaiFile && (
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFssaiFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-medium cursor-pointer"
+                  >
+                    Cancel selection
+                  </button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isUploadingDoc}
+                    onClick={handleUploadFssaiDoc}
+                    className="gap-1.5 shadow-2xs"
+                  >
+                    {isUploadingDoc ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading Certificate...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Submit Certificate for Verification</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {docUploadSuccess && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{docUploadSuccess}</span>
+                </div>
+              )}
+
+              {docUploadError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{docUploadError}</span>
+                </div>
+              )}
             </div>
 
             <Textarea

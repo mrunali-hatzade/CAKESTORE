@@ -7,7 +7,9 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +57,24 @@ public class NotificationService {
         return notificationRepository.countByRecipientIdAndIsReadFalse(userId);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> getUnreadSummary(Long userId) {
+        long totalCount = notificationRepository.countByRecipientIdAndIsReadFalse(userId);
+        List<Object[]> grouped = notificationRepository.countUnreadGroupedByType(userId);
+        
+        Map<String, Long> byType = new HashMap<>();
+        for (Object[] row : grouped) {
+            NotificationType type = (NotificationType) row[0];
+            Long count = (Long) row[1];
+            byType.put(type.name(), count);
+        }
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("total", totalCount);
+        response.put("byType", byType);
+        return response;
+    }
+
     @Transactional
     public void markAsRead(Long notificationId, Long userId) {
         Notification notification = notificationRepository.findById(notificationId)
@@ -69,5 +89,10 @@ public class NotificationService {
     @Transactional
     public void markAllAsRead(Long userId) {
         notificationRepository.markAllAsReadByRecipientId(userId);
+    }
+
+    @Transactional
+    public void markTypeAsRead(Long userId, NotificationType type) {
+        notificationRepository.markTypeAsReadByRecipientId(userId, type);
     }
 }

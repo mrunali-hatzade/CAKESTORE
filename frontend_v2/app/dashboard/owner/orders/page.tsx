@@ -8,6 +8,7 @@ import {
   CheckCircle2, AlertCircle, Check, Clock, Cake
 } from 'lucide-react';
 import { ordersApi } from '@/lib/api/orders';
+import { notificationsApi } from '@/lib/api/notifications';
 import { useOwner } from '@/context/OwnerContext';
 import { Order, OrderStatus } from '@/types/order';
 import { Card } from '@/components/ui/Card';
@@ -39,7 +40,7 @@ export default function OwnerOrdersPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [updatingPaymentId, setUpdatingPaymentId] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const { registerRefreshHandler, refreshDashboard } = useOwner();
+  const { registerRefreshHandler, refreshDashboard, refreshSidebarCounts } = useOwner();
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   
   // Pagination state
@@ -74,6 +75,13 @@ export default function OwnerOrdersPage() {
       if (p) setFilterPayment(p);
     }
   }, []);
+
+  useEffect(() => {
+    // When owner views orders, clear unread new order entries so badge reflects only unseen entries
+    notificationsApi.markTypeAsRead('NEW_ORDER')
+      .then(() => refreshSidebarCounts?.())
+      .catch(() => {});
+  }, [refreshSidebarCounts]);
 
   useEffect(() => {
     const unregister = registerRefreshHandler(async () => {
@@ -212,13 +220,24 @@ export default function OwnerOrdersPage() {
 
   const paidCount = orders.filter((o) => (o.paymentStatus || '').toUpperCase() === 'PAID').length;
 
+  const visibleOrders = orders.filter((o) => {
+    const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
+    const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
+    return isCod || isPaid;
+  });
+
   const filtered = orders.filter((o) => {
-    const s = (o.orderStatus || o.status || '').toUpperCase();
-    const matchesFilter = filterStatus === 'ALL' || s === filterStatus || (filterStatus === 'NEW' && s === 'PENDING');
-    
     const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
     const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
 
+    // Do NOT show uncompleted or cancelled online payment checkout attempts to the bakery owner
+    if (!isCod && !isPaid) {
+      return false;
+    }
+
+    const s = (o.orderStatus || o.status || '').toUpperCase();
+    const matchesFilter = filterStatus === 'ALL' || s === filterStatus || (filterStatus === 'NEW' && s === 'PENDING');
+    
     let matchesPayment = true;
     if (filterPayment === 'COD_PENDING') matchesPayment = isCod && !isPaid;
     else if (filterPayment === 'PAID') matchesPayment = isPaid;
@@ -252,7 +271,7 @@ export default function OwnerOrdersPage() {
             </Badge>
           )}
           <Badge variant="default" size="md">
-            {orders.length} Total Orders
+            {visibleOrders.length} Total Orders
           </Badge>
         </div>
       </div>
