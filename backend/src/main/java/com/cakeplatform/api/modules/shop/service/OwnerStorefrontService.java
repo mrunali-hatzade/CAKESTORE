@@ -188,6 +188,14 @@ public class OwnerStorefrontService {
         settings.setLeadTimeDays(request.getLeadTimeDays());
         settings.setLeadTimeMessage(request.getLeadTimeMessage());
         settings.setCustomCakesEnabled(request.getCustomCakesEnabled());
+        if (request.getCcFieldOccasionEnabled() != null) settings.setCcFieldOccasionEnabled(request.getCcFieldOccasionEnabled());
+        if (request.getCcFieldFlavourEnabled() != null) settings.setCcFieldFlavourEnabled(request.getCcFieldFlavourEnabled());
+        if (request.getCcFieldServingsEnabled() != null) settings.setCcFieldServingsEnabled(request.getCcFieldServingsEnabled());
+        if (request.getCcFieldDateEnabled() != null) settings.setCcFieldDateEnabled(request.getCcFieldDateEnabled());
+        if (request.getCcFieldBudgetEnabled() != null) settings.setCcFieldBudgetEnabled(request.getCcFieldBudgetEnabled());
+        if (request.getCcFieldDeliveryEnabled() != null) settings.setCcFieldDeliveryEnabled(request.getCcFieldDeliveryEnabled());
+        if (request.getCcFieldDesignEnabled() != null) settings.setCcFieldDesignEnabled(request.getCcFieldDesignEnabled());
+        if (request.getCcFieldReferenceEnabled() != null) settings.setCcFieldReferenceEnabled(request.getCcFieldReferenceEnabled());
         settings.setWhatsappEnabled(request.getWhatsappEnabled());
         settings.setPhoneEnabled(request.getPhoneEnabled());
         settings.setEmailEnabled(request.getEmailEnabled());

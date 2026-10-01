@@ -7,22 +7,51 @@ import {
   LayoutDashboard, Cake, ShoppingBag, Calendar, BarChart3,
   Tag, Users, MessageSquareQuote, Star, Settings, CreditCard,
   LogOut, Store, ExternalLink, Menu, Globe, X, RefreshCw, Images,
-  AlertCircle, Clock, ArrowLeft,
+  AlertCircle, Clock, ArrowLeft, Search,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { OwnerProvider, useOwner } from '@/context/OwnerContext';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { getSubscriptionHeaderInfo } from '@/lib/utils/subscription';
 import NotificationBell from '@/components/owner/NotificationBell';
 import OwnerFeedbackModal from '@/components/owner/OwnerFeedbackModal';
+import { OwnerCommandPalette } from '@/components/owner/OwnerCommandPalette';
 import { MessageCircle, Sparkles } from 'lucide-react';
 
 function OwnerLayoutContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, isAuthenticated, isLoading } = useAuth();
-  const { shop, refreshDashboard, isRefreshing, refreshStatus, refreshError, pendingOrdersCount, pendingEnquiriesCount, pendingReviewsCount } = useOwner();
+  const { shop, subscription, refreshDashboard, isRefreshing, refreshStatus, refreshError, pendingOrdersCount, pendingCustomCakesCount, pendingInquiriesCount, pendingReviewsCount } = useOwner();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global Ctrl+K / Cmd+K and '/' shortcut listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      } else if (
+        e.key === '/' &&
+        !['INPUT', 'TEXTAREA', 'SELECT'].includes(
+          (document.activeElement?.tagName || '').toUpperCase()
+        )
+      ) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const subHeaderInfo = React.useMemo(() => {
+    return getSubscriptionHeaderInfo(subscription, shop?.status, undefined, user?.role, Boolean(shop?.id));
+  }, [subscription, shop?.status, user?.role, shop?.id]);
 
   const handleBackNavigation = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
@@ -44,12 +73,13 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
     { label: 'Products', href: '/dashboard/owner/products', icon: Cake },
     { label: 'Cake Gallery', href: '/dashboard/owner/gallery', icon: Images },
     { label: 'Orders', href: '/dashboard/owner/orders', icon: ShoppingBag, count: pendingOrdersCount },
+    { label: 'Custom Cakes', href: '/dashboard/owner/custom-cakes', icon: Sparkles, count: pendingCustomCakesCount },
     { label: 'Delivery Slots', href: '/dashboard/owner/delivery-slots', icon: Calendar },
     { label: 'Storefront Website', href: '/dashboard/owner/website', icon: Globe },
     { label: 'Analytics', href: '/dashboard/owner/analytics', icon: BarChart3 },
     { label: 'Coupons', href: '/dashboard/owner/coupons', icon: Tag },
     { label: 'Customers', href: '/dashboard/owner/customers', icon: Users },
-    { label: 'Custom Enquiries', href: '/dashboard/owner/enquiries', icon: MessageSquareQuote, count: pendingEnquiriesCount },
+    { label: 'Store Inquiries', href: '/dashboard/owner/inquiries', icon: MessageSquareQuote, count: pendingInquiriesCount },
     { label: 'Reviews', href: '/dashboard/owner/reviews', icon: Star, count: pendingReviewsCount },
     { label: 'Store Settings', href: '/dashboard/owner/settings', icon: Settings },
     { label: 'Subscription', href: '/dashboard/owner/subscription', icon: CreditCard },
@@ -74,14 +104,17 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
     <>
       {navItems.map((item) => {
         const Icon = item.icon;
-        const isActive = pathname === item.href;
+        const isActive =
+          item.href === '/dashboard/owner'
+            ? pathname === '/dashboard/owner'
+            : pathname.startsWith(item.href);
         const hasBadge = Boolean(item.count && item.count > 0);
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setMobileMenuOpen(false)}
-            className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-[13px] font-medium transition-all ${
               isActive
                 ? 'bg-owner-sidebar-active text-white shadow-sm'
                 : 'text-owner-sidebar-text hover:text-white hover:bg-white/5'
@@ -117,7 +150,7 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
           </div>
           <div className="min-w-0 flex-1">
             <span
-              className="font-serif text-lg font-bold text-white block leading-tight truncate"
+              className="font-serif text-lg font-bold text-white block leading-tight line-clamp-2"
               title={shop?.businessName || 'My Bakery'}
             >
               {shop?.businessName || 'My Bakery'}
@@ -149,8 +182,15 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
           <span>Give Feedback</span>
         </button>
         <div className="mb-3 px-2">
-          <p className="text-xs text-white font-medium truncate">{user?.email || 'Bakery Owner'}</p>
-          <p className="text-[10px] text-owner-sidebar-text">Shop ID: {shop?.id || user?.shopId || 'N/A'}</p>
+          <p className="text-xs text-white font-medium truncate">
+            {user?.fullName || 'Bakery Owner'}
+          </p>
+          <p className="text-[10px] text-owner-sidebar-text truncate">
+            {user?.email}
+          </p>
+          <p className="text-[10px] text-brand-blush mt-0.5">
+            Shop ID: {shop?.id || user?.shopId || 'N/A'}
+          </p>
         </div>
         <button
           onClick={handleLogout}
@@ -183,10 +223,10 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="h-16 shrink-0 bg-white border-b border-owner-border px-4 sm:px-6 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 text-owner-muted hover:text-owner-heading rounded-xl hover:bg-owner-canvas transition-colors"
+              className="lg:hidden p-2 text-owner-muted hover:text-owner-heading rounded-xl hover:bg-owner-canvas transition-colors shrink-0"
               aria-label="Open menu"
             >
               <Menu className="w-5 h-5" />
@@ -195,46 +235,92 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={handleBackNavigation}
-                className="p-1.5 -ml-1 rounded-xl text-owner-muted hover:text-owner-heading hover:bg-owner-canvas border border-transparent hover:border-owner-border transition-all cursor-pointer"
+                className="p-1.5 -ml-1 rounded-xl text-owner-muted hover:text-owner-heading hover:bg-owner-canvas border border-transparent hover:border-owner-border transition-all cursor-pointer shrink-0"
                 title="Go back to previous page"
                 aria-label="Go back to previous page"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
-            <h2 className="font-serif font-bold text-lg text-owner-heading">Bakery Management</h2>
+
+            {/* Subscription Status + Days Remaining Indicator */}
+            {subHeaderInfo && (
+              <Link
+                href="/dashboard/owner/subscription"
+                className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full border border-owner-border/70 bg-owner-canvas hover:bg-brand-cream text-xs transition-all shrink-0 cursor-pointer shadow-2xs hover:border-brand-plum/30"
+                title={`Subscription: ${subHeaderInfo.badgeLabel} (${subHeaderInfo.daysRemainingText}) - Click to view subscription`}
+              >
+                <Badge
+                  variant={subHeaderInfo.badgeVariant}
+                  size="sm"
+                  className="font-bold tracking-wider text-[10px] uppercase px-1.5 sm:px-2 py-0.5"
+                >
+                  {subHeaderInfo.badgeLabel}
+                </Badge>
+                <span className="text-[11px] sm:text-xs text-owner-muted font-medium hidden sm:inline">
+                  {subHeaderInfo.daysRemainingText}
+                </span>
+              </Link>
+            )}
           </div>
-          <div className="flex items-center gap-2.5 sm:gap-3">
+
+          {/* Center: Global Command Palette Search Trigger */}
+          <div className="flex-1 max-w-md mx-2 sm:mx-4 min-w-0">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="w-full flex items-center justify-between gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl bg-owner-canvas hover:bg-brand-cream/60 border border-owner-border text-xs text-owner-muted hover:text-owner-heading transition-all shadow-2xs cursor-pointer group"
+              title="Search orders, cakes, customers, inquiries (Ctrl+K)"
+              aria-label="Open global search"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Search className="w-3.5 h-3.5 text-brand-plum shrink-0 group-hover:scale-110 transition-transform" />
+                <span className="truncate hidden sm:inline">Search orders, cakes, customers...</span>
+                <span className="truncate sm:hidden">Search...</span>
+              </div>
+              <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-white border border-owner-border rounded text-owner-muted shadow-2xs shrink-0">
+                <span className="text-[10px]">⌘</span>K
+              </kbd>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Live Operational Notification Bell & Popover */}
             <NotificationBell />
 
-            {/* Platform Feedback Button */}
-            <button
-              onClick={() => setIsFeedbackOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-owner-border bg-white hover:bg-brand-cream text-xs font-semibold text-brand-plum transition-all shadow-2xs cursor-pointer"
-              title="Give feedback about the CakeStore platform"
-            >
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Platform Feedback</span>
-            </button>
-
-            {/* Moved & Functional Top Header Refresh Button */}
+            {/* Streamlined Top Header Refresh Button */}
             <button
               onClick={refreshDashboard}
               disabled={isRefreshing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-owner-border bg-owner-canvas hover:bg-brand-cream text-xs font-semibold text-owner-heading transition-all disabled:opacity-60 cursor-pointer shadow-2xs"
+              className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl border border-owner-border bg-owner-canvas hover:bg-brand-cream text-xs font-semibold text-owner-heading transition-all disabled:opacity-60 cursor-pointer shadow-2xs flex items-center gap-1.5"
               aria-label="Refresh dashboard data"
-              title="Reload dashboard data"
+              title={isRefreshing ? 'Refreshing...' : refreshStatus === 'updated' ? 'Data Updated' : 'Refresh dashboard data'}
             >
               <RefreshCw className={`w-3.5 h-3.5 text-brand-plum ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">
-                {isRefreshing ? 'Refreshing...' : refreshStatus === 'updated' ? 'Data Updated' : 'Refresh'}
+              <span className="hidden xl:inline">
+                {isRefreshing ? 'Refreshing...' : refreshStatus === 'updated' ? 'Updated' : 'Refresh'}
               </span>
+            </button>
+
+            {/* WhatsApp Share Button */}
+            <button
+              onClick={() => {
+                const shopAny = shop as any;
+                const storeUrl = shopAny?.slug ? `/${shopAny.slug}` : `/shop/${shop?.id || user?.shopId || ''}`;
+                const fullUrl = `${window.location.origin}${storeUrl}`;
+                const text = `Hi! Check out my live menu and book your cake here: ${fullUrl}`;
+                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+              }}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#25D366] text-white text-xs font-semibold hover:bg-[#128C7E] transition-colors shadow-2xs cursor-pointer"
+              title="Share storefront on WhatsApp"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span>Share Shop</span>
             </button>
 
             {/* Single View Store Button */}
             <Link href={`/shop/${shop?.id || user?.shopId || ''}`} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="gap-1.5 shadow-2xs">
+              <Button variant="outline" size="sm" className="gap-1.5 shadow-2xs px-2.5 sm:px-3">
                 <Store className="w-3.5 h-3.5 text-brand-plum" />
                 <span className="hidden sm:inline">View Store</span>
                 <ExternalLink className="w-3 h-3 text-owner-muted" />
@@ -332,6 +418,11 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
       <OwnerFeedbackModal
         isOpen={isFeedbackOpen}
         onClose={() => setIsFeedbackOpen(false)}
+      />
+      <OwnerCommandPalette
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        shopId={shop?.id}
       />
     </div>
   );

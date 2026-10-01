@@ -16,9 +16,9 @@ function getGreeting(hour: number): string {
 
 function formatDateBadge(date: Date): string {
   return date.toLocaleDateString('en-GB', {
-    weekday: 'long',
+    weekday: 'short',
     day: 'numeric',
-    month: 'long',
+    month: 'short',
     year: 'numeric',
   });
 }
@@ -60,10 +60,10 @@ export default function OwnerGreeting({ businessName: _businessName }: OwnerGree
 
   return (
     <div className="bg-white rounded-3xl border border-owner-border shadow-soft px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      {/* Left – dynamic time-based greeting + subtitle (no repeated bakery name) */}
+      {/* Left – dynamic time-based greeting + subtitle */}
       <div className="space-y-1 min-w-0">
-        <h1 className="text-xl sm:text-2xl font-bold font-serif text-owner-heading leading-snug">
-          {greeting} 👋
+        <h1 className="text-xl sm:text-2xl font-bold font-serif text-owner-heading leading-snug truncate">
+          {greeting}{_businessName ? `, ${_businessName}` : ''} 👋
         </h1>
         <p className="text-xs text-owner-muted">
           Here&apos;s what&apos;s happening with your bakery today.

@@ -59,6 +59,14 @@ export interface ShopStorefrontSettings {
   leadTimeDays: number;
   leadTimeMessage?: string | null;
   customCakesEnabled: boolean;
+  ccFieldOccasionEnabled?: boolean;
+  ccFieldFlavourEnabled?: boolean;
+  ccFieldServingsEnabled?: boolean;
+  ccFieldDateEnabled?: boolean;
+  ccFieldBudgetEnabled?: boolean;
+  ccFieldDeliveryEnabled?: boolean;
+  ccFieldDesignEnabled?: boolean;
+  ccFieldReferenceEnabled?: boolean;
   whatsappEnabled: boolean;
   phoneEnabled: boolean;
   emailEnabled: boolean;

@@ -29,6 +29,9 @@ public class Enquiry {
     @Column(name = "customer_email", nullable = false)
     private String customerEmail;
 
+    @Column(name = "customer_mobile")
+    private String customerMobile;
+
     @Column(name = "enquiry_type", nullable = false)
     private String enquiryType;
 

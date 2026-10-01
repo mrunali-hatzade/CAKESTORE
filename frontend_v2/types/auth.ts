@@ -4,6 +4,7 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   shopId?: number | null;
+  fullName?: string;
 }
 
 export interface LoginRequest {
@@ -18,6 +19,7 @@ export interface LoginResponse {
   role: UserRole;
   email: string;
   shopId?: number | null;
+  fullName?: string;
 }
 
 export interface RegisterFormData {

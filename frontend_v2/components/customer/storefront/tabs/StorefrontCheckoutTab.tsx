@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -18,6 +18,11 @@ import {
   ArrowLeft,
   Clock,
   ShieldCheck,
+  Sparkles,
+  Eye,
+  X,
+  Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { DeliverySlot } from '@/types/deliverySlot';
@@ -42,13 +47,68 @@ interface StorefrontCheckoutTabProps {
 
 const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80';
 
+const formatTimeTo12Hour = (timeStr?: string): string => {
+  if (!timeStr) return '';
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const hoursStr = hours < 10 ? `0${hours}` : `${hours}`;
+  return `${hoursStr}:${minutes} ${ampm}`;
+};
+
+const format24To12 = (time24: string): string => {
+  if (!time24) return '';
+  const parts = time24.split(':');
+  let h = parseInt(parts[0], 10);
+  const m = parts[1] || '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  h = h ? h : 12;
+  const hStr = h < 10 ? `0${h}` : `${h}`;
+  return `${hStr}:${m} ${ampm}`;
+};
+
+const format12To24 = (time12: string): string => {
+  if (!time12) return '';
+  const match = time12.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return time12;
+  let h = parseInt(match[1], 10);
+  const m = match[2];
+  const ampm = match[3].toUpperCase();
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  const hStr = h < 10 ? `0${h}` : `${h}`;
+  return `${hStr}:${m}`;
+};
+
 export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
   shop,
   onNavigateTab,
 }) => {
   const router = useRouter();
-  const { items, totalPrice, clearCart, appliedCoupon } = useCart();
+  const { items, totalPrice, clearCart, appliedCoupon, setAppliedCoupon } = useCart();
   const toast = useToast();
+
+  const [viewingItem, setViewingItem] = useState<any | null>(null);
+
+  const [availableCoupons, setAvailableCoupons] = useState<
+    Array<{
+      code: string;
+      discountType: string;
+      discountValue: number;
+      minOrderValue?: number;
+      maxDiscountCap?: number;
+      expiryDate?: string;
+    }>
+  >([]);
+  const [couponInput, setCouponInput] = useState('');
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
 
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
   const [customerName, setCustomerName] = useState('');
@@ -57,6 +117,8 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<number | undefined>(undefined);
+  const [timeSelectionMode, setTimeSelectionMode] = useState<'SLOT' | 'CUSTOM'>('SLOT');
+  const [customDeliveryTime, setCustomDeliveryTime] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'ONLINE'>('COD');
 
@@ -71,12 +133,128 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
 
   useEffect(() => {
     if (shop?.id) {
+      storefrontApi
+        .getShopCoupons(shop.id)
+        .then((coupons) => setAvailableCoupons(coupons || []))
+        .catch(() => setAvailableCoupons([]));
+    }
+  }, [shop?.id]);
+
+  const handleApplyCoupon = async (specificCode?: string) => {
+    const codeToTest = (specificCode || couponInput).trim();
+    if (!codeToTest) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+    if (!shop?.id) return;
+
+    setIsValidatingCoupon(true);
+    setCouponError(null);
+    setCouponSuccess(null);
+
+    try {
+      const res = await storefrontApi.validateCoupon(shop.id, codeToTest, totalPrice);
+      if (res.valid && res.code) {
+        setAppliedCoupon({
+          code: res.code,
+          discountType: res.discountType || 'PERCENTAGE',
+          discountValue: res.discountValue || 0,
+          discountAmount: res.discountAmount || 0,
+        });
+        setCouponSuccess(res.message || 'Coupon applied successfully!');
+        setCouponInput('');
+        toast.success(`Coupon "${res.code}" applied! You saved ₹${res.discountAmount}`);
+      } else {
+        setCouponError(res.message || 'Invalid coupon code for this bakery.');
+      }
+    } catch (err: any) {
+      setCouponError(err.message || 'Failed to validate coupon.');
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError(null);
+    setCouponSuccess(null);
+    toast.info('Coupon removed.');
+  };
+
+  useEffect(() => {
+    if (items.length > 0) {
+      if (items[0].deliveryDate && !deliveryDate) {
+        setDeliveryDate(items[0].deliveryDate);
+      }
+      if (items[0].deliverySlotId && !selectedSlotId) {
+        setSelectedSlotId(items[0].deliverySlotId);
+      }
+      if (items[0].deliveryTime && !customDeliveryTime) {
+        setCustomDeliveryTime(items[0].deliveryTime);
+        setTimeSelectionMode('CUSTOM');
+      } else if (items[0].deliveryTimeType) {
+        setTimeSelectionMode(items[0].deliveryTimeType);
+      }
+    }
+  }, [items]);
+
+  useEffect(() => {
+    if (shop?.id) {
       deliverySlotsApi
         .getStorefrontSlots(shop.id, deliveryDate || undefined)
         .then(setSlots)
         .catch(() => setSlots([]));
     }
   }, [shop?.id, deliveryDate]);
+
+  const applicableSlots = useMemo<DeliverySlot[]>(() => {
+    if (!deliveryDate || slots.length === 0) return slots;
+    const [year, month, day] = deliveryDate.split('-').map(Number);
+    const chosenDate = new Date(year, month - 1, day);
+    const weekdayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+    const weekday = weekdayNames[chosenDate.getDay()];
+
+    const matched = slots.filter((s: DeliverySlot) => {
+      if (!s.dayOfWeek) return true;
+      const dow = s.dayOfWeek.toUpperCase();
+      return dow === weekday || dow === 'EVERYDAY' || dow === 'ALL';
+    });
+
+    return matched.length > 0 ? matched : slots;
+  }, [slots, deliveryDate]);
+
+  const resolvedSlotForCustomTime = useMemo(() => {
+    if (!customDeliveryTime || applicableSlots.length === 0) {
+      return applicableSlots.find((s) => s.available !== false) || applicableSlots[0] || null;
+    }
+    const raw24 = customDeliveryTime.includes('M') ? format12To24(customDeliveryTime) : customDeliveryTime;
+    const [h, m] = raw24.split(':').map(Number);
+    const customMinutes = (h || 0) * 60 + (m || 0);
+
+    const covering = applicableSlots.find((slot) => {
+      if (slot.available === false) return false;
+      const [sh, sm] = slot.startTime.split(':').map(Number);
+      const [eh, em] = slot.endTime.split(':').map(Number);
+      const startMin = (sh || 0) * 60 + (sm || 0);
+      let endMin = (eh || 0) * 60 + (em || 0);
+      if (endMin < startMin) endMin += 24 * 60;
+      return customMinutes >= startMin && customMinutes <= endMin;
+    });
+
+    if (covering) return covering;
+    return applicableSlots.find((s) => s.available !== false) || applicableSlots[0] || null;
+  }, [customDeliveryTime, applicableSlots]);
+
+  useEffect(() => {
+    if (selectedSlotId && applicableSlots.length > 0) {
+      const isValid = applicableSlots.some(
+        (s: DeliverySlot) => s.id === selectedSlotId && s.available !== false && (s.remainingCapacity === undefined || s.remainingCapacity > 0)
+      );
+      if (!isValid) {
+        setSelectedSlotId(undefined);
+      }
+    }
+  }, [applicableSlots, selectedSlotId]);
 
   // Fetch fresh delivery config every time checkout tab is shown
   useEffect(() => {
@@ -147,10 +325,35 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
       return;
     }
 
-    if (!selectedSlotId) {
-      setError('Please select a delivery slot window.');
-      return;
+    let finalSlotId = selectedSlotId;
+    if (timeSelectionMode === 'CUSTOM') {
+      if (!customDeliveryTime.trim()) {
+        setError('Please choose or enter your desired delivery time.');
+        return;
+      }
+      finalSlotId = resolvedSlotForCustomTime?.id || selectedSlotId || applicableSlots[0]?.id || slots[0]?.id;
+    } else {
+      if (!selectedSlotId) {
+        setError('Please select a delivery slot window.');
+        return;
+      }
     }
+
+    if (!finalSlotId && slots.length > 0) {
+      finalSlotId = slots[0]?.id;
+    }
+
+    const preferredTimeStr = timeSelectionMode === 'CUSTOM' && customDeliveryTime.trim()
+      ? (customDeliveryTime.includes('M') ? customDeliveryTime.trim() : format24To12(customDeliveryTime))
+      : undefined;
+
+    const enrichedDeliveryAddress = preferredTimeStr
+      ? `${deliveryAddress.trim()} [Preferred Delivery Time: ${preferredTimeStr}]`
+      : deliveryAddress.trim();
+
+    const enrichedInstructions = preferredTimeStr
+      ? `Preferred Delivery Time: ${preferredTimeStr}.${specialInstructions.trim() ? ' ' + specialInstructions.trim() : ''}`
+      : (specialInstructions.trim() || undefined);
 
     setIsSubmitting(true);
     setError(null);
@@ -163,10 +366,10 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
         customerEmail: customerEmail.trim(),
         customerPhone: cleanPhone,
         paymentMethod: backendPaymentMethod,
-        deliveryAddress: deliveryAddress.trim(),
+        deliveryAddress: enrichedDeliveryAddress,
         deliveryDate,
-        deliverySlotId: selectedSlotId,
-        specialInstructions: specialInstructions.trim() || undefined,
+        deliverySlotId: finalSlotId,
+        specialInstructions: enrichedInstructions,
         couponCode: appliedCoupon?.code || undefined,
         items: items.map((i) => ({
           productId: i.productId,
@@ -307,8 +510,11 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <span className="text-brand-muted block text-[11px]">Delivery Date</span>
-                <span className="font-semibold text-brand-espresso">{confirmedOrder.deliveryDate}</span>
+                <span className="text-brand-muted block text-[11px]">Delivery Schedule</span>
+                <span className="font-semibold text-brand-espresso">
+                  {confirmedOrder.deliveryDate}
+                  {customDeliveryTime ? ` • 🕒 ${customDeliveryTime}` : ''}
+                </span>
               </div>
               <div>
                 <span className="text-brand-muted block text-[11px]">Payment Mode</span>
@@ -476,31 +682,97 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
               />
-              <Select
-                label="Delivery Slot Window"
-                required
-                options={[
-                  { value: '', label: 'Select Delivery Window' },
-                  ...slots.map((s) => {
-                    const dayLabel = s.dayOfWeek ? s.dayOfWeek.charAt(0) + s.dayOfWeek.slice(1).toLowerCase() : 'Everyday';
-                    const timeRange = `${s.startTime.slice(0, 5)} - ${s.endTime.slice(0, 5)}`;
-                    let statusSuffix = '';
-                    if (s.available === false) {
-                      statusSuffix = ' — [Fully Booked]';
-                    } else if (s.remainingCapacity !== undefined) {
-                      statusSuffix = s.remainingCapacity <= 2 ? ` — [Only ${s.remainingCapacity} left]` : ` — [${s.remainingCapacity} available]`;
-                    }
-                    return {
-                      value: s.id,
-                      label: `${dayLabel} (${timeRange})${statusSuffix}`,
-                      disabled: s.available === false,
-                    };
-                  }),
-                ]}
-                value={selectedSlotId || ''}
-                onChange={(e) => setSelectedSlotId(e.target.value ? Number(e.target.value) : undefined)}
-                helperText={slots.length === 0 ? 'No delivery slots found for this bakery' : undefined}
-              />
+
+              {/* Delivery Timing Mode & Selector */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-brand-espresso">
+                    Delivery Timing Preference
+                  </label>
+                  <div className="flex items-center p-0.5 bg-brand-cream/80 rounded-lg border border-brand-border/60 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setTimeSelectionMode('SLOT')}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        timeSelectionMode === 'SLOT'
+                          ? 'bg-white text-[#5C1D2E] font-bold shadow-2xs'
+                          : 'text-brand-muted hover:text-brand-espresso'
+                      }`}
+                    >
+                      Bakery Slot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimeSelectionMode('CUSTOM')}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                        timeSelectionMode === 'CUSTOM'
+                          ? 'bg-[#5C1D2E] text-white font-bold shadow-2xs'
+                          : 'text-brand-muted hover:text-brand-espresso'
+                      }`}
+                    >
+                      <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                      <span>Exact Time</span>
+                    </button>
+                  </div>
+                </div>
+
+                {timeSelectionMode === 'SLOT' ? (
+                  <Select
+                    label=""
+                    required
+                    options={[
+                      { value: '', label: 'Select Delivery Window' },
+                      ...applicableSlots.map((s: DeliverySlot) => {
+                        const dayLabel = s.dayOfWeek ? s.dayOfWeek.charAt(0) + s.dayOfWeek.slice(1).toLowerCase() : 'Everyday';
+                        const timeRange = `${s.startTime.slice(0, 5)} - ${s.endTime.slice(0, 5)}`;
+                        let statusSuffix = '';
+                        if (s.available === false) {
+                          statusSuffix = ' — [Fully Booked]';
+                        } else if (s.remainingCapacity !== undefined) {
+                          statusSuffix = s.remainingCapacity <= 2 ? ` — [Only ${s.remainingCapacity} left]` : ` — [${s.remainingCapacity} available]`;
+                        }
+                        return {
+                          value: s.id,
+                          label: `${dayLabel} (${timeRange})${statusSuffix}`,
+                          disabled: s.available === false,
+                        };
+                      }),
+                    ]}
+                    value={selectedSlotId || ''}
+                    onChange={(e) => setSelectedSlotId(e.target.value ? Number(e.target.value) : undefined)}
+                    helperText={applicableSlots.length === 0 ? 'No delivery slots found for this date' : undefined}
+                  />
+                ) : (
+                  <div className="space-y-1.5 p-2.5 rounded-xl bg-[#FAF7F2] border border-[#5C1D2E]/25">
+                    <div className="relative">
+                      <input
+                        type="time"
+                        value={customDeliveryTime.includes('M') ? format12To24(customDeliveryTime) : customDeliveryTime}
+                        onChange={(e) => setCustomDeliveryTime(format24To12(e.target.value))}
+                        className="w-full h-9 px-3 pl-9 rounded-lg border border-brand-border bg-white text-xs font-semibold text-brand-espresso focus:outline-none focus:border-[#5C1D2E] cursor-pointer"
+                      />
+                      <Clock className="w-3.5 h-3.5 text-[#5C1D2E] absolute left-2.5 top-2.5 pointer-events-none" />
+                    </div>
+                    {/* Quick celebration presets */}
+                    <div className="flex flex-wrap gap-1">
+                      {['12:00 PM', '04:30 PM', '07:00 PM', '09:00 PM'].map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setCustomDeliveryTime(t)}
+                          className={`text-[10px] px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                            customDeliveryTime === t
+                              ? 'bg-[#5C1D2E] text-white border-[#5C1D2E] font-bold'
+                              : 'bg-white text-brand-espresso border-brand-border/70 hover:bg-brand-cream'
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Textarea
@@ -574,39 +846,193 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
             </div>
 
             {/* Items List */}
-            <div className="max-h-60 overflow-y-auto divide-y divide-brand-border/40 space-y-3 pr-1 text-xs">
-              {items.map((i) => (
-                <div key={i.cartLineId} className="pt-2.5 first:pt-0 flex justify-between items-center gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-brand-cream shrink-0 border border-brand-border/60">
-                      <img
-                        src={i.imageUrl || FALLBACK_CAKE}
-                        alt={i.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = FALLBACK_CAKE;
-                        }}
-                      />
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-brand-muted px-1">
+                <span>Items in your order</span>
+                <span className="text-brand-plum font-medium">Click cake to view details</span>
+              </div>
+              <div className="max-h-60 overflow-y-auto divide-y divide-brand-border/40 space-y-2 pr-1 text-xs">
+                {items.map((i) => (
+                  <div
+                    key={i.cartLineId}
+                    onClick={() => setViewingItem(i)}
+                    className="pt-2.5 first:pt-0 flex justify-between items-center gap-3 group cursor-pointer hover:bg-brand-cream/60 p-2 -mx-2 rounded-2xl transition-all border border-transparent hover:border-brand-border/60"
+                    title="Click to view cake details"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-brand-cream shrink-0 border border-brand-border/60 group-hover:ring-2 group-hover:ring-brand-plum/40 transition-all shadow-xs">
+                        <img
+                          src={i.imageUrl || FALLBACK_CAKE}
+                          alt={i.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = FALLBACK_CAKE;
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-brand-espresso truncate group-hover:text-brand-plum transition-colors">
+                            {i.name} &times; {i.quantity}
+                          </span>
+                          <Eye className="w-3.5 h-3.5 text-brand-plum opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-brand-muted">
+                          <span>{i.weight ? `${i.weight}` : (i.variantName || 'Standard')}</span>
+                          <span>•</span>
+                          <span>{i.isEggless ? '🌱 Eggless' : 'Contains Egg'}</span>
+                        </div>
+                        {i.customMessage && (
+                          <span className="block text-[11px] text-brand-plum italic truncate">
+                            Plaque: &quot;{i.customMessage}&quot;
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="space-y-0.5 min-w-0">
-                      <span className="font-bold text-brand-espresso block truncate">
-                        {i.name} &times; {i.quantity}
+                    <div className="text-right shrink-0">
+                      <span className="font-serif font-bold text-brand-espresso block">
+                        ₹{i.price * i.quantity}
                       </span>
-                      <span className="text-[11px] text-brand-muted block">
-                        {i.isEggless ? '🌱 Eggless' : 'Contains Egg'}
+                      <span className="text-[10px] text-brand-plum font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                        View Details &rarr;
                       </span>
-                      {i.customMessage && (
-                        <span className="block text-[11px] text-brand-plum italic truncate">
-                          Plaque: &quot;{i.customMessage}&quot;
-                        </span>
-                      )}
                     </div>
                   </div>
-                  <span className="font-serif font-bold text-brand-espresso shrink-0">
-                    ₹{i.price * i.quantity}
+                ))}
+              </div>
+            </div>
+
+            {/* Coupon Code Section */}
+            <div className="pt-2 border-t border-brand-border/50 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-brand-espresso flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-brand-plum" />
+                  Have a Coupon?
+                </span>
+                {appliedCoupon && (
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Coupon Applied
                   </span>
+                )}
+              </div>
+
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-emerald-800 uppercase tracking-wider text-xs">
+                          {appliedCoupon.code}
+                        </span>
+                        <span className="text-[11px] text-emerald-700 font-semibold">
+                          (-₹{appliedCoupon.discountAmount})
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-emerald-600">Bakery discount applied to your order</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="p-1.5 rounded-lg text-emerald-700 hover:text-red-600 hover:bg-emerald-100 transition-colors"
+                    title="Remove coupon"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Tag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+                      <input
+                        type="text"
+                        placeholder="Enter coupon code"
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          setCouponError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleApplyCoupon();
+                          }
+                        }}
+                        className="w-full pl-8 pr-3 py-2 text-xs uppercase font-medium bg-brand-cream/30 rounded-xl border border-brand-border focus:outline-none focus:border-brand-plum focus:ring-1 focus:ring-brand-plum transition-all"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleApplyCoupon()}
+                      disabled={isValidatingCoupon || !couponInput.trim()}
+                      className="rounded-xl px-4 text-xs font-bold text-brand-plum border-brand-plum hover:bg-brand-plum hover:text-white shrink-0 disabled:opacity-50"
+                    >
+                      {isValidatingCoupon ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        'Apply'
+                      )}
+                    </Button>
+                  </div>
+
+                  {couponError && (
+                    <p className="text-[11px] text-red-600 flex items-center gap-1 font-medium bg-red-50 p-2 rounded-xl border border-red-100">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{couponError}</span>
+                    </p>
+                  )}
+                  {couponSuccess && (
+                    <p className="text-[11px] text-emerald-600 flex items-center gap-1 font-medium bg-emerald-50 p-2 rounded-xl border border-emerald-100">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>{couponSuccess}</span>
+                    </p>
+                  )}
+
+                  {/* Available Bakery Coupons */}
+                  {availableCoupons.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                        Available Bakery Coupons:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {availableCoupons.map((c) => {
+                          const isApplicable = !c.minOrderValue || totalPrice >= c.minOrderValue;
+                          return (
+                            <button
+                              key={c.code}
+                              type="button"
+                              onClick={() => {
+                                setCouponInput(c.code);
+                                handleApplyCoupon(c.code);
+                              }}
+                              disabled={isValidatingCoupon || !isApplicable}
+                              className={`group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] border transition-all text-left ${
+                                isApplicable
+                                  ? 'bg-brand-blush/60 hover:bg-brand-blush border-brand-plum/30 text-brand-espresso cursor-pointer'
+                                  : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 cursor-not-allowed'
+                              }`}
+                              title={c.minOrderValue && !isApplicable ? `Requires min order of ₹${c.minOrderValue}` : 'Click to apply'}
+                            >
+                              <span className="font-mono font-bold text-brand-plum group-hover:underline">
+                                {c.code}
+                              </span>
+                              <span className="text-[10px] text-brand-muted">
+                                ({c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : `₹${c.discountValue}`} off)
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Price Calculations */}
@@ -659,6 +1085,128 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
           </div>
         </div>
       </form>
+
+      {/* Selected Cake Details Modal */}
+      {viewingItem && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-fade-in">
+          <div
+            className="fixed inset-0"
+            onClick={() => setViewingItem(null)}
+          />
+          <div className="relative bg-white rounded-3xl max-w-md w-full shadow-2xl border border-brand-border/80 overflow-hidden z-10 animate-scale-up">
+            {/* Modal Header Image */}
+            <div className="relative h-48 sm:h-52 bg-brand-cream overflow-hidden">
+              <img
+                src={viewingItem.imageUrl || FALLBACK_CAKE}
+                alt={viewingItem.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = FALLBACK_CAKE;
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+              
+              <button
+                type="button"
+                onClick={() => setViewingItem(null)}
+                className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-brand-espresso flex items-center justify-center backdrop-blur-xs shadow-md transition-all cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="absolute bottom-3.5 left-4 right-4 text-white">
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-brand-plum text-white mb-1 shadow-xs">
+                  {viewingItem.isEggless ? '🌱 100% Eggless' : 'Contains Egg'}
+                </span>
+                <h3 className="font-serif font-bold text-lg leading-snug drop-shadow-xs">
+                  {viewingItem.name}
+                </h3>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-2.5 text-xs">
+                <div className="bg-brand-cream-light/60 p-3 rounded-2xl border border-brand-border/50">
+                  <span className="text-[10px] text-brand-muted block font-medium uppercase tracking-wider">Weight / Size</span>
+                  <span className="font-bold text-brand-espresso text-sm mt-0.5 block">
+                    {viewingItem.weight ? `${viewingItem.weight}` : (viewingItem.variantName || 'Standard')}
+                  </span>
+                </div>
+                <div className="bg-brand-cream-light/60 p-3 rounded-2xl border border-brand-border/50">
+                  <span className="text-[10px] text-brand-muted block font-medium uppercase tracking-wider">Item Price</span>
+                  <span className="font-serif font-bold text-brand-plum text-sm mt-0.5 block">
+                    ₹{viewingItem.price} &times; {viewingItem.quantity} = ₹{viewingItem.price * viewingItem.quantity}
+                  </span>
+                </div>
+              </div>
+
+              {viewingItem.customMessage && (
+                <div className="bg-brand-blush/60 p-3 rounded-2xl border border-brand-border/60">
+                  <span className="text-[10px] font-bold text-brand-plum uppercase tracking-wider block mb-1">
+                    Cake Plaque Message
+                  </span>
+                  <p className="text-xs italic font-serif text-brand-espresso">
+                    &quot;{viewingItem.customMessage}&quot;
+                  </p>
+                </div>
+              )}
+
+              {(viewingItem.deliveryDate || viewingItem.deliverySlotName || viewingItem.deliveryTime) && (
+                <div className="bg-[#FAF7F2] p-3 rounded-2xl border border-brand-border/60 space-y-1">
+                  <span className="text-[10px] font-bold text-brand-espresso flex items-center gap-1.5 uppercase tracking-wider">
+                    <Clock className="w-3.5 h-3.5 text-brand-plum" />
+                    Delivery Schedule for this Cake
+                  </span>
+                  <p className="text-xs text-brand-espresso">
+                    {viewingItem.deliveryDate && (
+                      <span className="font-semibold">
+                        {new Date(viewingItem.deliveryDate + 'T00:00:00').toLocaleDateString('en-IN', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    )}
+                    {viewingItem.deliveryDate && (viewingItem.deliveryTime || viewingItem.deliverySlotName) ? ' • ' : ''}
+                    {viewingItem.deliveryTime ? (
+                      <span className="text-brand-plum font-semibold">
+                        Preferred Time: {formatTimeTo12Hour(viewingItem.deliveryTime)}
+                      </span>
+                    ) : viewingItem.deliverySlotName ? (
+                      <span className="text-brand-plum font-semibold">
+                        Slot: {viewingItem.deliverySlotName}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2.5 pt-2">
+                {viewingItem.productId && (
+                  <Link
+                    href={`/shop/${shop.id}/product/${viewingItem.productId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-brand-plum/40 text-brand-plum hover:bg-brand-blush/40 text-xs font-bold transition-all text-center"
+                  >
+                    <span>Full Cake Page</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                )}
+                <Button
+                  type="button"
+                  onClick={() => setViewingItem(null)}
+                  className="flex-1 rounded-xl text-xs font-bold bg-[#5C1D2E] hover:bg-[#4a1525] text-white"
+                >
+                  Back to Checkout
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

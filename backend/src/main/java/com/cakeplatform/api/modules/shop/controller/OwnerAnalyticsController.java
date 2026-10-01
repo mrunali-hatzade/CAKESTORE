@@ -19,7 +19,9 @@ public class OwnerAnalyticsController {
     private final AnalyticsService analyticsService;
 
     @GetMapping("/dashboard")
-    public ResponseEntity<Map<String, Object>> getDashboardAnalytics(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(analyticsService.getDashboardAnalytics(userDetails.getId()));
+    public ResponseEntity<Map<String, Object>> getDashboardAnalytics(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false, defaultValue = "7d") String range) {
+        return ResponseEntity.ok(analyticsService.getDashboardAnalytics(userDetails.getId(), range));
     }
 }

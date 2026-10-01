@@ -62,7 +62,7 @@ public class AnalyticsServiceTest {
     void testRealizedRevenueRule() {
         // Setup Shop A
         when(shopAccessValidator.getValidShopForOwner(1L)).thenReturn(shopA);
-        when(orderRepository.countByShopId(101L)).thenReturn(6L);
+        when(orderRepository.countVisibleOrdersByShopId(101L)).thenReturn(6L);
 
         // Expected Realized Revenue:
         // Valid Paid order: ₹1000 (INCLUDED)
@@ -74,8 +74,9 @@ public class AnalyticsServiceTest {
         // Net Realized Sum = 1000 + 500 = ₹1500
         BigDecimal expectedRealizedRevenue = new BigDecimal("1500.00");
         when(orderRepository.sumRevenueByShopId(101L)).thenReturn(expectedRealizedRevenue);
-        when(orderRepository.findRecentRealizedOrders(eq(101L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
-        when(orderRepository.findTopSellingProductsByShopId(eq(101L), any(PageRequest.class))).thenReturn(Collections.emptyList());
+        when(orderRepository.sumGrossSalesByShopId(anyLong())).thenReturn(new java.math.BigDecimal("5000.00"));
+        when(orderRepository.findRecentValidOrders(eq(101L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
+        when(orderRepository.findTopSellingProductsWithRevenueByShopId(eq(101L), any(PageRequest.class))).thenReturn(Collections.emptyList());
 
         Map<String, Object> result = analyticsService.getDashboardAnalytics(1L);
 
@@ -90,8 +91,9 @@ public class AnalyticsServiceTest {
     @DisplayName("G-H: 7-Day Real Sales Velocity Aggregation with Zero-Sales Days")
     void testSevenDayVelocityAggregation() {
         when(shopAccessValidator.getValidShopForOwner(1L)).thenReturn(shopA);
-        when(orderRepository.countByShopId(101L)).thenReturn(2L);
+        when(orderRepository.countVisibleOrdersByShopId(101L)).thenReturn(2L);
         when(orderRepository.sumRevenueByShopId(101L)).thenReturn(new BigDecimal("2200.00"));
+        when(orderRepository.sumGrossSalesByShopId(anyLong())).thenReturn(new java.math.BigDecimal("5000.00"));
 
         LocalDate today = LocalDate.now(analyticsService.getOperationalZone());
         LocalDate twoDaysAgo = today.minusDays(2);
@@ -112,9 +114,9 @@ public class AnalyticsServiceTest {
         orderTwoDaysAgo.setPaymentStatus("PAID");
         orderTwoDaysAgo.setCreatedAt(twoDaysAgo.atTime(10, 15));
 
-        when(orderRepository.findRecentRealizedOrders(eq(101L), any(LocalDateTime.class)))
+        when(orderRepository.findRecentValidOrders(eq(101L), any(LocalDateTime.class)))
                 .thenReturn(List.of(orderToday, orderTwoDaysAgo));
-        when(orderRepository.findTopSellingProductsByShopId(eq(101L), any(PageRequest.class)))
+        when(orderRepository.findTopSellingProductsWithRevenueByShopId(eq(101L), any(PageRequest.class)))
                 .thenReturn(Collections.emptyList());
 
         Map<String, Object> result = analyticsService.getDashboardAnalytics(1L);
@@ -145,19 +147,20 @@ public class AnalyticsServiceTest {
     @DisplayName("I-J: Top 5 Selling Products from OrderItem Snapshot and Empty Handling")
     void testTopSellingProducts() {
         when(shopAccessValidator.getValidShopForOwner(1L)).thenReturn(shopA);
-        when(orderRepository.countByShopId(101L)).thenReturn(10L);
+        when(orderRepository.countVisibleOrdersByShopId(101L)).thenReturn(10L);
         when(orderRepository.sumRevenueByShopId(101L)).thenReturn(new BigDecimal("8500.00"));
-        when(orderRepository.findRecentRealizedOrders(eq(101L), any(LocalDateTime.class)))
+        when(orderRepository.sumGrossSalesByShopId(anyLong())).thenReturn(new java.math.BigDecimal("5000.00"));
+        when(orderRepository.findRecentValidOrders(eq(101L), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
 
         List<Object[]> mockTopProducts = List.of(
-                new Object[]{"Belgian Chocolate Truffle", 42L},
-                new Object[]{"Red Velvet Supreme", 28L},
-                new Object[]{"Fresh Mango Delight", 19L},
-                new Object[]{"Lotus Biscoff Cheesecake", 15L},
-                new Object[]{"Pineapple Classic", 8L}
+                new Object[]{"Belgian Chocolate Truffle", 42L, new java.math.BigDecimal("1200.00")},
+                new Object[]{"Red Velvet Supreme", 28L, new java.math.BigDecimal("900.00")},
+                new Object[]{"Fresh Mango Delight", 19L, new java.math.BigDecimal("600.00")},
+                new Object[]{"Lotus Biscoff Cheesecake", 15L, new java.math.BigDecimal("400.00")},
+                new Object[]{"Pineapple Classic", 8L, new java.math.BigDecimal("200.00")}
         );
-        when(orderRepository.findTopSellingProductsByShopId(eq(101L), eq(PageRequest.of(0, 5))))
+        when(orderRepository.findTopSellingProductsWithRevenueByShopId(eq(101L), eq(PageRequest.of(0, 5))))
                 .thenReturn(mockTopProducts);
 
         Map<String, Object> result = analyticsService.getDashboardAnalytics(1L);
@@ -177,11 +180,12 @@ public class AnalyticsServiceTest {
     @DisplayName("Zero-Data Shop: Returns valid empty/zero structures (never null, never fake)")
     void testZeroDataBakery() {
         when(shopAccessValidator.getValidShopForOwner(1L)).thenReturn(shopA);
-        when(orderRepository.countByShopId(101L)).thenReturn(0L);
+        when(orderRepository.countVisibleOrdersByShopId(101L)).thenReturn(0L);
         when(orderRepository.sumRevenueByShopId(101L)).thenReturn(BigDecimal.ZERO);
-        when(orderRepository.findRecentRealizedOrders(eq(101L), any(LocalDateTime.class)))
+        when(orderRepository.sumGrossSalesByShopId(anyLong())).thenReturn(new java.math.BigDecimal("5000.00"));
+        when(orderRepository.findRecentValidOrders(eq(101L), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
-        when(orderRepository.findTopSellingProductsByShopId(eq(101L), any(PageRequest.class)))
+        when(orderRepository.findTopSellingProductsWithRevenueByShopId(eq(101L), any(PageRequest.class)))
                 .thenReturn(Collections.emptyList());
 
         Map<String, Object> result = analyticsService.getDashboardAnalytics(1L);
@@ -209,20 +213,22 @@ public class AnalyticsServiceTest {
     void testMultiTenantIsolation() {
         // Setup Owner 1 -> Shop A (₹1,000, Belgian Chocolate Truffle)
         when(shopAccessValidator.getValidShopForOwner(1L)).thenReturn(shopA);
-        when(orderRepository.countByShopId(101L)).thenReturn(1L);
+        when(orderRepository.countVisibleOrdersByShopId(101L)).thenReturn(1L);
         when(orderRepository.sumRevenueByShopId(101L)).thenReturn(new BigDecimal("1000.00"));
-        when(orderRepository.findRecentRealizedOrders(eq(101L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
-        List<Object[]> mockProductsA = Collections.singletonList(new Object[]{"Belgian Chocolate Truffle", 1L});
-        when(orderRepository.findTopSellingProductsByShopId(eq(101L), eq(PageRequest.of(0, 5))))
+        when(orderRepository.sumGrossSalesByShopId(anyLong())).thenReturn(new java.math.BigDecimal("5000.00"));
+        when(orderRepository.findRecentValidOrders(eq(101L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
+        List<Object[]> mockProductsA = Collections.singletonList(new Object[]{"Belgian Chocolate Truffle", 1L, new java.math.BigDecimal("1200.00")});
+        when(orderRepository.findTopSellingProductsWithRevenueByShopId(eq(101L), eq(PageRequest.of(0, 5))))
                 .thenReturn(mockProductsA);
 
         // Setup Owner 2 -> Shop B (₹5,000, Red Velvet Supreme)
         when(shopAccessValidator.getValidShopForOwner(2L)).thenReturn(shopB);
-        when(orderRepository.countByShopId(202L)).thenReturn(3L);
+        when(orderRepository.countVisibleOrdersByShopId(202L)).thenReturn(3L);
         when(orderRepository.sumRevenueByShopId(202L)).thenReturn(new BigDecimal("5000.00"));
-        when(orderRepository.findRecentRealizedOrders(eq(202L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
-        List<Object[]> mockProductsB = Collections.singletonList(new Object[]{"Red Velvet Supreme", 5L});
-        when(orderRepository.findTopSellingProductsByShopId(eq(202L), eq(PageRequest.of(0, 5))))
+        when(orderRepository.sumGrossSalesByShopId(anyLong())).thenReturn(new java.math.BigDecimal("5000.00"));
+        when(orderRepository.findRecentValidOrders(eq(202L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
+        List<Object[]> mockProductsB = Collections.singletonList(new Object[]{"Red Velvet Supreme", 5L, new java.math.BigDecimal("900.00")});
+        when(orderRepository.findTopSellingProductsWithRevenueByShopId(eq(202L), eq(PageRequest.of(0, 5))))
                 .thenReturn(mockProductsB);
 
         // Execute for Owner 1

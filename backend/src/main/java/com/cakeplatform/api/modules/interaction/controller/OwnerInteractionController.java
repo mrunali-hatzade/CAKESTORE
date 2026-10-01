@@ -1,6 +1,8 @@
 package com.cakeplatform.api.modules.interaction.controller;
 
 import com.cakeplatform.api.modules.interaction.*;
+import com.cakeplatform.api.modules.interaction.dto.ConvertToOrderRequest;
+import com.cakeplatform.api.modules.interaction.dto.ConvertToOrderResponse;
 import com.cakeplatform.api.modules.interaction.dto.ReplyRequest;
 import com.cakeplatform.api.modules.interaction.service.OwnerInteractionService;
 import com.cakeplatform.api.security.CustomUserDetails;
@@ -79,5 +81,13 @@ public class OwnerInteractionController {
             @RequestBody(required = false) ReplyRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(ownerInteractionService.updateCustomCakeRequestStatus(userDetails.getId(), id, status, request));
+    }
+
+    @PostMapping("/custom-cakes/{id}/convert-to-order")
+    public ResponseEntity<ConvertToOrderResponse> convertCustomCakeToOrder(
+            @PathVariable Long id,
+            @RequestBody(required = false) ConvertToOrderRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(ownerInteractionService.convertToOrder(userDetails.getId(), id, request));
     }
 }

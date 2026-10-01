@@ -52,13 +52,24 @@ export default function CheckoutPage() {
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
+    if (items.length > 0) {
+      if (items[0].deliveryDate && !deliveryDate) {
+        setDeliveryDate(items[0].deliveryDate);
+      }
+      if (items[0].deliverySlotId && !selectedSlotId) {
+        setSelectedSlotId(items[0].deliverySlotId);
+      }
+    }
+  }, [items]);
+
+  useEffect(() => {
     if (shop?.id) {
       deliverySlotsApi
-        .getStorefrontSlots(shop.id)
+        .getStorefrontSlots(shop.id, deliveryDate || undefined)
         .then(setSlots)
         .catch(() => setSlots([]));
     }
-  }, [shop?.id]);
+  }, [shop?.id, deliveryDate]);
 
   if (!shop && items.length > 0) return <div className="min-h-screen flex items-center justify-center">Loading checkout...</div>;
   if (items.length === 0) {
@@ -168,7 +179,18 @@ export default function CheckoutPage() {
         toast.success(`Order #${order.orderNumber} successfully placed!`);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to submit order. Please check all fields.');
+      const isSlotFull = err?.error === 'SLOT_FULL' || err?.message?.includes('SLOT_FULL') || err?.message?.toLowerCase().includes('fully booked');
+      if (isSlotFull) {
+        setError('This delivery slot was just filled by another order. Please select an available slot below.');
+        if (shop?.id) {
+          deliverySlotsApi.getStorefrontSlots(shop.id, deliveryDate || undefined)
+            .then(setSlots)
+            .catch(() => {});
+        }
+        setSelectedSlotId(undefined);
+      } else {
+        setError(err.message || 'Failed to submit order. Please check all fields.');
+      }
     } finally {
       setIsSubmitting(false);
     }

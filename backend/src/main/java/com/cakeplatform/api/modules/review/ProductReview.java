@@ -71,6 +71,16 @@ public class ProductReview {
     @Column(name = "owner_replied_at")
     private LocalDateTime ownerRepliedAt;
 
+    @Column(name = "cake_image_url", length = 1000)
+    private String cakeImageUrl;
+
+    @Column(name = "cake_video_url", length = 1000)
+    private String cakeVideoUrl;
+
+    @JsonIgnore
+    @Column(name = "edit_token", length = 100)
+    private String editToken;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

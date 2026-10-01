@@ -30,6 +30,14 @@ public class ShopStorefrontSettingsRequest {
     private String leadTimeMessage;
     @NotNull
     private Boolean customCakesEnabled;
+    private Boolean ccFieldOccasionEnabled;
+    private Boolean ccFieldFlavourEnabled;
+    private Boolean ccFieldServingsEnabled;
+    private Boolean ccFieldDateEnabled;
+    private Boolean ccFieldBudgetEnabled;
+    private Boolean ccFieldDeliveryEnabled;
+    private Boolean ccFieldDesignEnabled;
+    private Boolean ccFieldReferenceEnabled;
     @NotNull
     private Boolean whatsappEnabled;
     @NotNull

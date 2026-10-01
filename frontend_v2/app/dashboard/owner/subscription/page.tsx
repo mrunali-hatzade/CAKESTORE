@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import {
   CreditCard,
   Check,
@@ -8,7 +9,6 @@ import {
   ShieldCheck,
   ArrowRight,
   Zap,
-  RefreshCw,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -16,6 +16,7 @@ import {
   Download,
   FileText,
   Receipt,
+  ArrowDown,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { paymentsService } from '@/lib/services/payments';
@@ -26,18 +27,18 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingState } from '@/components/ui/LoadingState';
-
 import { plansApi, SubscriptionPlan } from '@/lib/api/plans';
+import { useToast } from '@/components/common/Toast';
 
 export default function OwnerSubscriptionPage() {
   const { user } = useAuth();
   const { registerRefreshHandler, shop, refreshShop, refreshDashboard } = useOwner();
+  const toast = useToast();
   const [subscription, setSubscription] = useState<SubscriptionRecord | null>(null);
   const [payments, setPayments] = useState<OwnerPaymentRecord[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [renewing, setRenewing] = useState(false);
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<number | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
@@ -58,22 +59,21 @@ export default function OwnerSubscriptionPage() {
   };
 
   const fetchSubscription = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setLoading(true);
+    if (!isManual) setLoading(true);
     setErrorNotice(null);
 
     try {
       const [data, plansData] = await Promise.all([
         ownerApi.getCurrentSubscription(),
-        plansApi.getActivePlans()
+        plansApi.getActivePlans(),
       ]);
       setSubscription(data);
-      setPlans(plansData);
-      
-      // Auto-select based on current subscription or first plan
+      setPlans(plansData || []);
+
+      // Auto-select based on current subscription or first active plan
       if (data?.plan?.id) {
         setSelectedPlanId(data.plan.id);
-      } else if (plansData.length > 0) {
+      } else if (plansData && plansData.length > 0) {
         setSelectedPlanId(plansData[0].planId);
       }
 
@@ -82,7 +82,6 @@ export default function OwnerSubscriptionPage() {
       setErrorNotice(err?.message || 'Failed to load subscription details');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -100,11 +99,10 @@ export default function OwnerSubscriptionPage() {
   const handleRenewPayment = async (planId?: number) => {
     const targetPlanId = planId || selectedPlanId;
     if (!targetPlanId) {
-      setErrorNotice('Please select a plan.');
+      setErrorNotice('Please select a subscription plan.');
       return;
     }
-    const targetPlan = plans.find(p => p.planId === targetPlanId);
-    
+
     setRenewing(true);
     setErrorNotice(null);
     setSuccessNotice(null);
@@ -127,7 +125,7 @@ export default function OwnerSubscriptionPage() {
           currency: orderData.currency || 'INR',
           name: 'CakeStore',
           description: `Platform License for ${shop?.businessName || 'Bakery'}`,
-          order_id: orderData.razorpayOrderId, // MUST pass order_id to get a signature back!
+          order_id: orderData.razorpayOrderId,
           prefill: {
             name: shop?.businessName || '',
             email: user?.email || '',
@@ -139,7 +137,7 @@ export default function OwnerSubscriptionPage() {
           handler: async (response: any) => {
             try {
               if (!response.razorpay_order_id || !response.razorpay_payment_id || !response.razorpay_signature) {
-                const errorMsg = `Incomplete payment details. Received -> order: ${response.razorpay_order_id || 'MISSING'}, payment: ${response.razorpay_payment_id || 'MISSING'}, sig: ${response.razorpay_signature ? 'PRESENT' : 'MISSING'}`;
+                const errorMsg = `Incomplete payment details received from gateway.`;
                 console.error(errorMsg, response);
                 throw new Error(errorMsg);
               }
@@ -159,14 +157,14 @@ export default function OwnerSubscriptionPage() {
                 refreshDashboard ? refreshDashboard() : Promise.resolve(),
               ]);
             } catch (err: any) {
-              setErrorNotice(err?.message || 'Payment verification failed. Please try again.');
+              setErrorNotice(err?.message || 'Payment verification failed. Please contact support.');
             } finally {
               setRenewing(false);
             }
           },
           modal: {
             ondismiss: () => {
-              setErrorNotice('Payment was cancelled or closed before completion.');
+              setErrorNotice('Payment checkout was closed before completion.');
               setRenewing(false);
             },
           },
@@ -203,29 +201,63 @@ export default function OwnerSubscriptionPage() {
     setDownloadingInvoiceId(paymentId);
     try {
       await ownerApi.downloadPaymentInvoice(paymentId);
+      toast.success('Invoice downloaded!');
     } catch (err: any) {
-      alert(err?.message || 'Failed to download invoice. Please try again.');
+      toast.error(err?.message || 'Failed to download invoice. Please try again.');
     } finally {
       setDownloadingInvoiceId(null);
     }
   };
 
-  const isPending = shop?.status === 'PENDING' || subscription?.status === 'PENDING';
+  const scrollToPlans = () => {
+    const el = document.getElementById('available-plans');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // State calculations adhering strictly to domain rules
+  const isAdminWithoutShop = (user?.role === 'ROLE_ADMIN' || (user?.role as string) === 'ADMIN') && !shop;
+
+  const hasActiveSubscription = Boolean(
+    subscription?.plan &&
+    (subscription?.status === 'ACTIVE' ||
+      subscription?.status === 'GRACE_PERIOD' ||
+      subscription?.status === 'EXPIRING_SOON')
+  );
+
+  const isPending =
+    shop?.status === 'PENDING' ||
+    subscription?.status === 'PENDING';
 
   const isExpired =
     shop?.status === 'EXPIRED' ||
     subscription?.status === 'EXPIRED' ||
     subscription?.status === 'SUSPENDED' ||
-    (!isPending && subscription?.expiryDate && new Date(subscription.expiryDate).getTime() < Date.now());
+    (Boolean(subscription?.expiryDate) &&
+      !isPending &&
+      new Date(subscription!.expiryDate!).getTime() < Date.now());
+
+  const isNoPlan = !hasActiveSubscription && !isPending && !isExpired;
 
   const daysRemaining = subscription?.expiryDate
     ? Math.max(
         0,
         Math.ceil((new Date(subscription.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       )
-    : 30;
+    : null;
 
-  const filteredPlans = plans.filter(p => p.billingCycle === billingCycle);
+  const filteredPlans = plans.filter((p) => p.billingCycle === billingCycle);
+
+  const currentPlanId = subscription?.plan?.id;
+
+  if (loading) {
+    return (
+      <div className="py-12 flex justify-center">
+        <LoadingState message="Loading subscription & billing details..." />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -243,18 +275,30 @@ export default function OwnerSubscriptionPage() {
             Manage your CakeStore merchant license, renewal dates, and commercial studio features
           </p>
         </div>
-
-        <button
-          onClick={() => fetchSubscription(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-owner-canvas hover:bg-brand-cream border border-owner-border text-xs font-semibold text-owner-heading transition-all disabled:opacity-60 cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-brand-plum ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
       </div>
 
-      {isPending && (
+      {/* Admin Context Banner */}
+      {isAdminWithoutShop && (
+        <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0" />
+            <div>
+              <p className="font-semibold text-sm">Platform Administrator Preview</p>
+              <p className="text-indigo-800 text-[11px] mt-0.5">
+                You are previewing the Owner Subscription portal with an administrator account (<span className="font-mono">Shop ID: N/A</span>). Bakery merchant subscriptions, Razorpay transactions, and invoices are linked to verified bakery owner accounts.
+              </p>
+            </div>
+          </div>
+          <Link href="/dashboard/admin/subscriptions">
+            <Button size="sm" variant="outline" className="shrink-0 bg-white border-indigo-200 hover:bg-indigo-100/50 text-indigo-700">
+              Admin Plan Manager
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* Payment Required Warning */}
+      {isPending && !isAdminWithoutShop && (
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2.5">
             <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
@@ -272,6 +316,29 @@ export default function OwnerSubscriptionPage() {
             className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
           >
             Activate Now
+          </Button>
+        </div>
+      )}
+
+      {/* Expired License Warning */}
+      {isExpired && !isAdminWithoutShop && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            <div>
+              <p className="font-semibold text-sm">Platform Subscription Expired</p>
+              <p className="text-rose-800 text-[11px] mt-0.5">
+                Your bakery license has expired. Renew your plan to reactivate your storefront and resume receiving customer orders.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => handleRenewPayment()}
+            isLoading={renewing}
+            className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white"
+          >
+            Renew Now
           </Button>
         </div>
       )}
@@ -295,52 +362,121 @@ export default function OwnerSubscriptionPage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <Badge variant={isPending ? 'warning' : isExpired ? 'error' : 'success'} size="md">
-                {isPending ? 'Payment Required' : isExpired ? 'License Expired' : 'Active Plan'}
+              <Badge
+                variant={
+                  hasActiveSubscription
+                    ? subscription?.status === 'EXPIRING_SOON'
+                      ? 'warning'
+                      : 'success'
+                    : isPending
+                    ? 'warning'
+                    : isExpired
+                    ? 'error'
+                    : 'warning'
+                }
+                size="md"
+              >
+                {hasActiveSubscription
+                  ? subscription?.status === 'EXPIRING_SOON'
+                    ? 'Expiring Soon'
+                    : 'Active Plan'
+                  : isPending
+                  ? 'Payment Required'
+                  : isExpired
+                  ? 'License Expired'
+                  : 'No Active Plan'}
               </Badge>
-              {!isPending && (
+
+              {hasActiveSubscription && daysRemaining !== null && (
                 <span className="text-xs text-owner-muted flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-brand-plum" />
-                  <span>{daysRemaining} days remaining in billing cycle</span>
+                  <span>{daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining in billing cycle</span>
                 </span>
               )}
             </div>
 
             <h2 className="text-2xl font-bold font-serif text-owner-heading">
-              {subscription?.plan?.name || 'Pro Baker Studio Suite'}
+              {hasActiveSubscription
+                ? subscription?.plan?.name || 'Pro Baker Studio Suite'
+                : isPending
+                ? 'License Activation Required'
+                : isExpired
+                ? 'License Renewal Required'
+                : 'No Active Subscription'}
             </h2>
             <p className="text-xs text-owner-muted max-w-xl leading-relaxed">
-              Includes full access to custom storefront, unlimited catalog, order invoicing, direct UPI customer payouts, and zero platform sales commission.
+              {hasActiveSubscription
+                ? subscription?.plan?.description ||
+                  'Includes full access to custom storefront, unlimited catalog, order invoicing, direct UPI customer payouts, and zero platform sales commission.'
+                : isPending
+                ? 'Complete your initial subscription payment to unlock your online bakery storefront and begin receiving cake bookings.'
+                : isExpired
+                ? 'Your bakery subscription has lapsed. Please renew your plan to restore customer ordering and studio tools.'
+                : 'Your bakery does not currently have an active platform license. Choose one of our studio plans below to activate your custom storefront, enable online ordering, and access order management.'}
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            <div className="text-right sm:pr-4 sm:border-r border-owner-border">
-              <p className="text-2xl font-extrabold font-serif text-brand-espresso">
-                ₹{subscription?.plan?.price || '0'}
-              </p>
-              <p className="text-[11px] text-owner-muted">
-                per {subscription?.plan?.durationDays === 365 ? 'year' : 'month'} / 0% commission
-              </p>
-            </div>
+            {hasActiveSubscription ? (
+              <>
+                <div className="text-right sm:pr-4 sm:border-r border-owner-border">
+                  <p className="text-2xl font-extrabold font-serif text-brand-espresso">
+                    ₹{Number(subscription?.plan?.price || 0).toLocaleString('en-IN')}
+                  </p>
+                  <p className="text-[11px] text-owner-muted">
+                    per {subscription?.plan?.durationDays === 365 ? 'year' : 'month'} / 0% commission
+                  </p>
+                </div>
 
-            <Button
-              onClick={() => handleRenewPayment()}
-              isLoading={renewing}
-              size="lg"
-              className="gap-2 shadow-soft"
-            >
-              <Zap className="w-4 h-4" />
-              <span>
-                {isPending ? 'Activate Bakery' : isExpired ? 'Renew Subscription' : 'Extend License'}
-              </span>
-            </Button>
+                <Button
+                  onClick={() => handleRenewPayment()}
+                  isLoading={renewing}
+                  size="lg"
+                  className="gap-2 shadow-soft"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Extend License</span>
+                </Button>
+              </>
+            ) : isPending || isExpired ? (
+              <>
+                {subscription?.plan?.price ? (
+                  <div className="text-right sm:pr-4 sm:border-r border-owner-border">
+                    <p className="text-2xl font-extrabold font-serif text-brand-espresso">
+                      ₹{Number(subscription.plan.price).toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[11px] text-owner-muted">
+                      per {subscription.plan.durationDays === 365 ? 'year' : 'month'} / 0% commission
+                    </p>
+                  </div>
+                ) : null}
+
+                <Button
+                  onClick={() => handleRenewPayment()}
+                  isLoading={renewing}
+                  size="lg"
+                  className="gap-2 shadow-soft"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>{isPending ? 'Activate Bakery' : 'Renew Subscription'}</span>
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={scrollToPlans}
+                size="lg"
+                className="gap-2 shadow-soft"
+              >
+                <ArrowDown className="w-4 h-4" />
+                <span>Select a Plan Below</span>
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Billing Cycle Toggle */}
-      <div className="flex items-center justify-between pt-4">
+      <div id="available-plans" className="flex items-center justify-between pt-4 scroll-mt-6">
         <div>
           <h2 className="font-serif font-bold text-lg text-owner-heading">Available Studio Plans</h2>
           <p className="text-xs text-owner-muted">Choose the scale that matches your kitchen volume</p>
@@ -373,77 +509,96 @@ export default function OwnerSubscriptionPage() {
       </div>
 
       {/* Plan Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {filteredPlans.map((plan) => {
-          const isCurrentPlan = subscription?.plan?.id === plan.planId;
-          let parsedFeatures: string[] = [];
-          try {
-            parsedFeatures = JSON.parse(plan.features);
-          } catch (e) {
-            parsedFeatures = [plan.description];
-          }
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredPlans.length === 0 ? (
+          <div className="col-span-full bg-white p-8 rounded-3xl border border-owner-border text-center text-xs text-owner-muted">
+            No {billingCycle} subscription plans currently available.
+          </div>
+        ) : (
+          filteredPlans.map((plan) => {
+            const isCurrentPlan = currentPlanId === plan.planId;
+            let parsedFeatures: string[] = [];
+            try {
+              const raw = JSON.parse(plan.features);
+              parsedFeatures = Array.isArray(raw) ? raw : [String(raw)];
+            } catch {
+              if (plan.features) {
+                parsedFeatures = plan.features.split(',').map((s) => s.trim()).filter(Boolean);
+              } else {
+                parsedFeatures = [plan.description];
+              }
+            }
 
-          return (
-            <Card
-              key={plan.planId}
-              className={`p-6 flex flex-col justify-between transition-all ${
-                isCurrentPlan
-                  ? 'border-2 border-brand-plum shadow-card ring-2 ring-brand-plum/10'
-                  : 'hover:border-owner-border/80'
-              }`}
-            >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-brand-plum">
-                    {plan.name}
-                  </span>
-                  {isCurrentPlan && (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      Current Plan
+            return (
+              <Card
+                key={plan.planId}
+                className={`p-6 flex flex-col justify-between transition-all ${
+                  isCurrentPlan
+                    ? 'border-2 border-brand-plum shadow-card ring-2 ring-brand-plum/10'
+                    : 'hover:border-owner-border/80'
+                }`}
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-brand-plum">
+                      {plan.name}
                     </span>
-                  )}
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-bold font-serif text-owner-heading">{plan.name}</h3>
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold font-serif text-brand-espresso">
-                      ₹{plan.price.toLocaleString()}
-                    </span>
-                    <span className="text-xs text-owner-muted">
-                      /{plan.billingCycle}
-                    </span>
+                    {isCurrentPlan && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Current Plan
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-owner-muted mt-1">{plan.description}</p>
-                </div>
 
-                <div className="space-y-2.5 pt-4 border-t border-owner-border/60">
-                  {parsedFeatures.map((feature, i) => (
-                    <div key={i} className="flex items-start gap-2.5 text-xs text-owner-heading">
-                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                      <span>{feature}</span>
+                  <div>
+                    <h3 className="text-lg font-bold font-serif text-owner-heading">{plan.name}</h3>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className="text-3xl font-extrabold font-serif text-brand-espresso">
+                        ₹{plan.price.toLocaleString('en-IN')}
+                      </span>
+                      <span className="text-xs text-owner-muted">
+                        /{plan.billingCycle}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <p className="text-[11px] text-owner-muted mt-1">{plan.description}</p>
+                  </div>
 
-              <div className="pt-6 mt-6 border-t border-owner-border/60">
-                <Button
-                  onClick={() => handleRenewPayment(plan.planId)}
-                  isLoading={renewing}
-                  className="w-full"
-                  size="sm"
-                  variant={isCurrentPlan ? "primary" : "outline"}
-                >
-                  {isCurrentPlan ? (isPending ? 'Activate Bakery' : isExpired ? 'Renew Subscription' : 'Extend License') : 'Switch Plan'}
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
+                  <div className="space-y-2.5 pt-4 border-t border-owner-border/60">
+                    {parsedFeatures.map((feature, i) => (
+                      <div key={i} className="flex items-start gap-2.5 text-xs text-owner-heading">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-6 mt-6 border-t border-owner-border/60">
+                  <Button
+                    onClick={() => handleRenewPayment(plan.planId)}
+                    isLoading={renewing}
+                    className="w-full"
+                    size="sm"
+                    variant={isCurrentPlan ? 'primary' : 'outline'}
+                  >
+                    {isCurrentPlan
+                      ? isPending
+                        ? 'Activate Bakery'
+                        : isExpired
+                        ? 'Renew Subscription'
+                        : 'Extend License'
+                      : isNoPlan
+                      ? 'Subscribe to This Plan'
+                      : 'Switch to This Plan'}
+                  </Button>
+                </div>
+              </Card>
+            );
+          })
+        )}
       </div>
 
-      {/* C3 & C5: Billing & Payment History Section */}
+      {/* Billing & Payment History Section */}
       <div className="pt-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -492,7 +647,6 @@ export default function OwnerSubscriptionPage() {
                     const statusUpper = (p.status || '').toUpperCase();
                     const isCompleted = statusUpper === 'COMPLETED';
                     const isFailed = statusUpper === 'FAILED';
-                    const isPending = !isCompleted && !isFailed;
                     const dateStr = p.paidAt || p.createdAt;
                     const formattedDate = dateStr
                       ? new Date(dateStr).toLocaleDateString('en-IN', {
@@ -566,4 +720,3 @@ export default function OwnerSubscriptionPage() {
     </div>
   );
 }
-

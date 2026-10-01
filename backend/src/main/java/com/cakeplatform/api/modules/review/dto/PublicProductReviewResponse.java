@@ -19,5 +19,9 @@ public class PublicProductReviewResponse {
     private Boolean isVerifiedPurchase;
     private String ownerReply;
     private LocalDateTime ownerRepliedAt;
+    private String cakeImageUrl;
+    private String cakeVideoUrl;
     private LocalDateTime createdAt;
+    private String source;
+    private String editToken;
 }

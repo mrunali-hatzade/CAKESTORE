@@ -49,7 +49,7 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public List<Notification> getUserNotifications(Long userId) {
-        return notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId);
+        return notificationRepository.findTop50ByRecipientIdOrderByCreatedAtDesc(userId);
     }
 
     @Transactional(readOnly = true)

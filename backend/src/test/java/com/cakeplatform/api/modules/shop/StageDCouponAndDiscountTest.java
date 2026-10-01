@@ -584,10 +584,11 @@ public class StageDCouponAndDiscountTest {
     @DisplayName("D7: Owner Analytics service calculates and aggregates coupon metrics")
     void testAnalyticsService_CalculatesCouponMetrics() {
         when(shopAccessValidator.getValidShopForOwner(1L)).thenReturn(shopA);
-        when(orderRepository.countByShopId(101L)).thenReturn(15L);
+        when(orderRepository.countVisibleOrdersByShopId(101L)).thenReturn(15L);
         when(orderRepository.sumRevenueByShopId(101L)).thenReturn(new BigDecimal("12500.00"));
-        when(orderRepository.findRecentRealizedOrders(eq(101L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
-        when(orderRepository.findTopSellingProductsByShopId(eq(101L), any())).thenReturn(Collections.emptyList());
+        when(orderRepository.sumGrossSalesByShopId(101L)).thenReturn(new BigDecimal("12500.00"));
+        when(orderRepository.findRecentValidOrders(eq(101L), any(LocalDateTime.class))).thenReturn(Collections.emptyList());
+        when(orderRepository.findTopSellingProductsWithRevenueByShopId(eq(101L), any())).thenReturn(Collections.emptyList());
 
         when(couponRepository.countByShopId(101L)).thenReturn(4L);
         when(couponRepository.countByShopIdAndIsActiveTrue(101L)).thenReturn(3L);

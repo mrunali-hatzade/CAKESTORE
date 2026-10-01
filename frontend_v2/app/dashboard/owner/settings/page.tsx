@@ -24,11 +24,16 @@ import {
   FileText,
   FileCheck,
   Eye,
+  EyeOff,
+  AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { mediaApi } from '@/lib/api/media';
+import { authApi } from '@/lib/api/auth';
 import { ShopSettings, ShopPayoutDetails } from '@/types/owner';
 import { useOwner } from '@/context/OwnerContext';
+import { useAuth } from '@/lib/auth/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -37,13 +42,18 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import OwnerFeedbackModal from '@/components/owner/OwnerFeedbackModal';
 import DeleteAccountModal from '@/components/owner/DeleteAccountModal';
 import CascadingLocationSelector from '@/components/owner/CascadingLocationSelector';
-import { MessageSquare, Star, AlertTriangle, Trash2 } from 'lucide-react';
 
 export default function OwnerSettingsPage() {
-  const { updateShop, registerRefreshHandler } = useOwner();
-  const [activeTab, setActiveTab] = useState<'PROFILE' | 'PAYOUT'>('PROFILE');
+  const { user, isLoading: authLoading } = useAuth();
+  const { updateShop, registerRefreshHandler, shop } = useOwner();
+
+  // Handle system administrators visiting owner settings without an assigned bakery
+  const isAdminWithoutShop = !authLoading && Boolean(
+    (user?.role === 'ROLE_ADMIN' || (user?.role as string) === 'ADMIN') && !user?.shopId && !shop
+  );
+
+  const [activeTab, setActiveTab] = useState<'PROFILE' | 'PAYOUT' | 'SECURITY'>('PROFILE');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -82,12 +92,27 @@ export default function OwnerSettingsPage() {
   const [payout, setPayout] = useState<ShopPayoutDetails | null>(null);
   const [beneficiaryName, setBeneficiaryName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [showAccountNumber, setShowAccountNumber] = useState(false);
   const [ifscCode, setIfscCode] = useState('');
   const [upiId, setUpiId] = useState('');
 
+  // Security fields
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
   const fetchData = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setLoading(true);
+    if (authLoading) return;
+
+    if (isAdminWithoutShop) {
+      setLoading(false);
+      return;
+    }
+
+    if (!isManual) setLoading(true);
     setErrorMsg(null);
 
     try {
@@ -129,13 +154,14 @@ export default function OwnerSettingsPage() {
       setErrorMsg(err?.message || 'Failed to load bakery settings');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  }, [updateShop]);
+  }, [authLoading, isAdminWithoutShop, updateShop]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (!authLoading) {
+      fetchData();
+    }
+  }, [fetchData, authLoading]);
 
   useEffect(() => {
     const unregister = registerRefreshHandler(async () => {
@@ -145,7 +171,7 @@ export default function OwnerSettingsPage() {
   }, [registerRefreshHandler, fetchData]);
 
   const handleUploadFssaiDoc = async () => {
-    if (!fssaiFile) return;
+    if (!fssaiFile || isAdminWithoutShop) return;
     setIsUploadingDoc(true);
     setDocUploadError(null);
     setDocUploadSuccess(null);
@@ -173,6 +199,7 @@ export default function OwnerSettingsPage() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAdminWithoutShop) return;
     setIsSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -226,6 +253,7 @@ export default function OwnerSettingsPage() {
 
   const handleSavePayout = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAdminWithoutShop) return;
     setIsSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -247,11 +275,43 @@ export default function OwnerSettingsPage() {
     }
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await authApi.changePassword({ currentPassword, newPassword });
+      setPasswordSuccess('Password successfully changed');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(null), 4000);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const fssaiDoc = verificationInfo?.documents?.find(
     (d: any) => d.documentType === 'FSSAI_CERTIFICATE'
   );
 
-  if (loading) return <LoadingState message="Loading bakery settings & payout details..." />;
+  if (loading || authLoading) {
+    return <LoadingState message="Loading bakery settings & payout details..." />;
+  }
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -269,16 +329,35 @@ export default function OwnerSettingsPage() {
             Configure your commercial bakery details, operational timings, and bank payout coordinates
           </p>
         </div>
-
-        <button
-          onClick={() => fetchData(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-owner-canvas hover:bg-brand-cream border border-owner-border text-xs font-semibold text-owner-heading transition-all disabled:opacity-60 cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-brand-plum ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
       </div>
+
+      {/* Admin Context Banner */}
+      {isAdminWithoutShop && (
+        <div className="p-5 rounded-3xl bg-blue-50/80 border border-blue-200 text-blue-900 shadow-soft">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2 rounded-xl bg-blue-100 text-blue-700 shrink-0 mt-0.5">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-bold text-sm text-blue-950 font-serif">
+                  Administrator Preview Mode
+                </h3>
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  You are logged in with administrator credentials (<code>{user?.email}</code>). Since this account does not have an active bakery storefront assigned, live configuration and payout details cannot be modified here.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/admin/shops"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors shrink-0 shadow-sm"
+            >
+              <span>Manage Bakeries</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {successMsg && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
@@ -295,44 +374,48 @@ export default function OwnerSettingsPage() {
       )}
 
       {/* KYC Compliance Status Alerts */}
-      {(verificationInfo?.verificationStatus === 'REJECTED' ||
-        verificationInfo?.verificationStatus === 'ACTION_REQUIRED' ||
-        profile?.verificationStatus === 'REJECTED' ||
-        profile?.verificationStatus === 'ACTION_REQUIRED') && (
-        <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 shadow-soft">
-          <div className="flex items-start gap-3.5">
-            <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0 mt-0.5">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-amber-950 font-serif">
-                  Business Verification Action Required
-                </h3>
-                <span className="px-2 py-0.5 rounded-md bg-amber-200/70 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
-                  Action Required
-                </span>
+      {!isAdminWithoutShop && (
+        <>
+          {(verificationInfo?.verificationStatus === 'REJECTED' ||
+            verificationInfo?.verificationStatus === 'ACTION_REQUIRED' ||
+            profile?.verificationStatus === 'REJECTED' ||
+            profile?.verificationStatus === 'ACTION_REQUIRED') && (
+            <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 shadow-soft">
+              <div className="flex items-start gap-3.5">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0 mt-0.5">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm text-amber-950 font-serif">
+                      Business Verification Action Required
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-200/70 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                      Action Required
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-900 leading-relaxed">
+                    {verificationInfo?.rejectionReason
+                      ? `Admin Note: "${verificationInfo.rejectionReason}". Please update your bakery registration details or contact platform support.`
+                      : 'Your verification submission was reviewed and requires updates. Please check your FSSAI registration details and re-submit.'}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-amber-900 leading-relaxed">
-                {verificationInfo?.rejectionReason
-                  ? `Admin Note: "${verificationInfo.rejectionReason}". Please update your bakery registration details or contact platform support.`
-                  : 'Your verification submission was reviewed and requires updates. Please check your FSSAI registration details and re-submit.'}
-              </p>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {(verificationInfo?.verificationStatus === 'VERIFIED' || profile?.verificationStatus === 'VERIFIED') && (
-        <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 flex items-center justify-between gap-3 shadow-soft">
-          <div className="flex items-center gap-2.5">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-xs font-semibold">Your bakery has been officially verified by CakeStore Platform Admin.</span>
-          </div>
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-            Verified Partner
-          </span>
-        </div>
+          {(verificationInfo?.verificationStatus === 'VERIFIED' || profile?.verificationStatus === 'VERIFIED') && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 flex items-center justify-between gap-3 shadow-soft">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="text-xs font-semibold">Your bakery has been officially verified by CakeStore Platform Admin.</span>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                Verified Partner
+              </span>
+            </div>
+          )}
+        </>
       )}
 
       {/* Tabs */}
@@ -362,6 +445,19 @@ export default function OwnerSettingsPage() {
           <CreditCard className="w-3.5 h-3.5" />
           <span>Payout Details (Bank & UPI)</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('SECURITY')}
+          className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'SECURITY'
+              ? 'bg-brand-plum text-white shadow-soft'
+              : 'text-owner-muted hover:text-owner-heading'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Security & Password</span>
+        </button>
       </div>
 
       {/* Tab 1: Bakery Profile */}
@@ -375,12 +471,14 @@ export default function OwnerSettingsPage() {
                 required
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
+                disabled={isAdminWithoutShop || isSaving}
               />
               <Input
                 label="FSSAI License / Registration #"
                 placeholder="e.g. 11521000000000"
                 value={fssaiRegistration}
                 onChange={(e) => setFssaiRegistration(e.target.value)}
+                disabled={isAdminWithoutShop || isSaving}
               />
             </div>
 
@@ -474,37 +572,39 @@ export default function OwnerSettingsPage() {
               )}
 
               {/* Upload Dropzone */}
-              <div className="relative border-2 border-dashed border-owner-border hover:border-brand-plum/50 rounded-xl p-4 transition-colors bg-white text-center">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,image/png,image/jpeg,image/webp"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setFssaiFile(file);
-                    setDocUploadError(null);
-                    setDocUploadSuccess(null);
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-                <div className="flex flex-col items-center justify-center pointer-events-none">
-                  <Upload className="w-5 h-5 text-brand-plum mb-1.5" />
-                  {fssaiFile ? (
-                    <p className="text-xs font-semibold text-brand-plum">
-                      Selected: {fssaiFile.name} ({(fssaiFile.size / 1024).toFixed(1)} KB)
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-xs font-semibold text-owner-heading">
-                        {fssaiDoc ? 'Click or drag to upload a replacement certificate' : 'Upload FSSAI License or Registration Certificate'}
+              {!isAdminWithoutShop && (
+                <div className="relative border-2 border-dashed border-owner-border hover:border-brand-plum/50 rounded-xl p-4 transition-colors bg-white text-center">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setFssaiFile(file);
+                      setDocUploadError(null);
+                      setDocUploadSuccess(null);
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="flex flex-col items-center justify-center pointer-events-none">
+                    <Upload className="w-5 h-5 text-brand-plum mb-1.5" />
+                    {fssaiFile ? (
+                      <p className="text-xs font-semibold text-brand-plum">
+                        Selected: {fssaiFile.name} ({(fssaiFile.size / 1024).toFixed(1)} KB)
                       </p>
-                      <p className="text-[11px] text-owner-muted mt-0.5">
-                        Supports PDF, PNG, JPG up to 5MB. Fast-tracks your bakery verification badge.
-                      </p>
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <p className="text-xs font-semibold text-owner-heading">
+                          {fssaiDoc ? 'Click or drag to upload a replacement certificate' : 'Upload FSSAI License or Registration Certificate'}
+                        </p>
+                        <p className="text-[11px] text-owner-muted mt-0.5">
+                          Supports PDF, PNG, JPG up to 5MB. Fast-tracks your bakery verification badge.
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Selected File Action Buttons */}
               {fssaiFile && (
@@ -523,7 +623,7 @@ export default function OwnerSettingsPage() {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={isUploadingDoc}
+                    disabled={isUploadingDoc || isAdminWithoutShop}
                     onClick={handleUploadFssaiDoc}
                     className="gap-1.5 shadow-2xs"
                   >
@@ -563,6 +663,7 @@ export default function OwnerSettingsPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Tell cake lovers what makes your bakes unique..."
+              disabled={isAdminWithoutShop || isSaving}
             />
           </Card>
 
@@ -573,12 +674,14 @@ export default function OwnerSettingsPage() {
                 label="Kitchen Phone / Order Hotline"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                disabled={isAdminWithoutShop || isSaving}
               />
               <Input
                 label="Official Notification Email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isAdminWithoutShop || isSaving}
               />
             </div>
 
@@ -588,6 +691,7 @@ export default function OwnerSettingsPage() {
               placeholder="Shop No. 4, Ground Floor, Lane 3"
               value={addressLine1}
               onChange={(e) => setAddressLine1(e.target.value)}
+              disabled={isAdminWithoutShop || isSaving}
             />
 
             <Input
@@ -595,6 +699,7 @@ export default function OwnerSettingsPage() {
               placeholder="Near Datta Mandir, Akurdi"
               value={addressLine2}
               onChange={(e) => setAddressLine2(e.target.value)}
+              disabled={isAdminWithoutShop || isSaving}
             />
 
             <CascadingLocationSelector
@@ -614,7 +719,7 @@ export default function OwnerSettingsPage() {
                 });
               }}
               fieldErrors={locationErrors}
-              disabled={isSaving}
+              disabled={isSaving || isAdminWithoutShop}
             />
           </Card>
 
@@ -671,9 +776,9 @@ export default function OwnerSettingsPage() {
             </div>
           </Card>
 
-          <Button type="submit" size="lg" className="w-full" isLoading={isSaving}>
+          <Button type="submit" size="lg" className="w-full" isLoading={isSaving} disabled={isAdminWithoutShop}>
             <Save className="w-4 h-4 mr-2" />
-            Save Bakery Profile Settings
+            {isAdminWithoutShop ? 'Preview Mode (Read-Only for Admin)' : 'Save Bakery Profile Settings'}
           </Button>
         </form>
       )}
@@ -695,23 +800,48 @@ export default function OwnerSettingsPage() {
               placeholder="e.g. Pune Artisan Bakes LLP or Baker Name"
               value={beneficiaryName}
               onChange={(e) => setBeneficiaryName(e.target.value)}
+              disabled={isAdminWithoutShop || isSaving}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="Bank Account Number"
-                required
-                type="password"
-                placeholder="Enter bank account number"
-                value={bankAccountNumber}
-                onChange={(e) => setBankAccountNumber(e.target.value)}
-              />
+              {/* Bank Account Number with Show/Hide toggle */}
+              <div className="w-full space-y-1.5">
+                <label className="block text-sm font-medium text-brand-espresso">
+                  Bank Account Number <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showAccountNumber ? 'text' : 'password'}
+                    required
+                    placeholder="Enter bank account number"
+                    value={bankAccountNumber}
+                    onChange={(e) => setBankAccountNumber(e.target.value)}
+                    disabled={isAdminWithoutShop || isSaving}
+                    className="w-full px-3.5 py-2.5 pr-10 bg-white rounded-xl border border-brand-border text-brand-espresso placeholder:text-brand-muted/60 text-sm font-mono tracking-wider transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountNumber(!showAccountNumber)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-owner-muted hover:text-owner-heading transition-colors p-1"
+                    title={showAccountNumber ? 'Hide account number' : 'Show account number'}
+                    tabIndex={-1}
+                  >
+                    {showAccountNumber ? (
+                      <EyeOff className="w-4 h-4 text-brand-plum" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-owner-muted" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
               <Input
                 label="Bank IFSC Code"
                 required
                 placeholder="e.g. HDFC0001234"
                 value={ifscCode}
                 onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                disabled={isAdminWithoutShop || isSaving}
               />
             </div>
           </Card>
@@ -729,21 +859,81 @@ export default function OwnerSettingsPage() {
               placeholder="e.g. yourbakery@okhdfcbank"
               value={upiId}
               onChange={(e) => setUpiId(e.target.value)}
+              disabled={isAdminWithoutShop || isSaving}
             />
           </Card>
 
           <div className="p-4 rounded-2xl bg-brand-blush/60 border border-brand-blush-border text-xs text-brand-plum flex items-start gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>Bank Security Guarantee:</strong> All bank account numbers and routing codes are encrypted at rest with AES-256 standard. CakeStore never retains debit authority on your account.
-            </p>
+            <div className="space-y-0.5">
+              <p className="font-bold text-brand-espresso">Direct Settlement & Zero Commission</p>
+              <p className="leading-relaxed text-brand-muted text-[11px]">
+                100% of cake sale revenues are credited directly to your registered bank account with 0% platform commission. Banking coordinates are encrypted in transit over TLS and stored securely. CakeStore never requests or retains debit privileges on your account.
+              </p>
+            </div>
           </div>
 
-          <Button type="submit" size="lg" className="w-full" isLoading={isSaving}>
+          <Button type="submit" size="lg" className="w-full" isLoading={isSaving} disabled={isAdminWithoutShop}>
             <Save className="w-4 h-4 mr-2" />
-            Save Payout Coordinates
+            {isAdminWithoutShop ? 'Preview Mode (Read-Only for Admin)' : 'Save Payout Coordinates'}
           </Button>
         </form>
+      )}
+
+      {/* Tab 3: Security */}
+      {activeTab === 'SECURITY' && (
+        <div className="space-y-6">
+          <Card className="p-6 space-y-4">
+            <h2 className="font-serif font-bold text-base text-owner-heading">Account Security</h2>
+            <p className="text-xs text-owner-muted">
+              Update the password you use to log in to the CakeStore Owner Dashboard.
+            </p>
+
+            <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
+              <Input
+                label="Current Password"
+                type="password"
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                disabled={isChangingPassword}
+              />
+              <Input
+                label="New Password"
+                type="password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                disabled={isChangingPassword}
+              />
+              <Input
+                label="Confirm New Password"
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={isChangingPassword}
+              />
+
+              {passwordError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium">
+                  {passwordError}
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+                  {passwordSuccess}
+                </div>
+              )}
+
+              <Button type="submit" size="sm" className="w-full" isLoading={isChangingPassword}>
+                <ShieldCheck className="w-4 h-4 mr-1.5" />
+                Change Password
+              </Button>
+            </form>
+          </Card>
+        </div>
       )}
 
       {/* Danger Zone */}
@@ -763,7 +953,8 @@ export default function OwnerSettingsPage() {
             <Button
               type="button"
               onClick={() => setIsDeleteModalOpen(true)}
-              className="shrink-0 bg-red-600 hover:bg-red-700 text-white font-bold shadow-sm"
+              disabled={isAdminWithoutShop}
+              className="shrink-0 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold shadow-sm"
               size="sm"
             >
               <Trash2 className="w-4 h-4 mr-1.5" />

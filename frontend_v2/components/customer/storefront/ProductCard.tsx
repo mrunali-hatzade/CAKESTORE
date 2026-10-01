@@ -74,8 +74,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
   const hasVariants = Boolean(product.variants && product.variants.length > 0);
   const defaultVariant = hasVariants ? product.variants![0] : null;
   const displayPrice = defaultVariant ? Number(defaultVariant.price) : Number(product.price);
-  const displayOriginalPrice = defaultVariant
-    ? (defaultVariant.originalPrice ? Number(defaultVariant.originalPrice) : null)
+  const displayOriginalPrice = defaultVariant?.originalPrice
+    ? Number(defaultVariant.originalPrice)
     : (product.originalPrice ? Number(product.originalPrice) : null);
   const discountPercent = displayOriginalPrice && displayOriginalPrice > displayPrice
     ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
@@ -141,11 +141,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
   return (
     <div
       onClick={() => onSelect(product)}
-      className="group cursor-pointer flex flex-col justify-between overflow-hidden bg-white border border-brand-border/70 hover:border-[#C5A880]/60 rounded-2xl sm:rounded-3xl shadow-soft hover:shadow-elevated transition-all duration-300 hover:-translate-y-1 relative"
+      className="group cursor-pointer flex flex-col justify-between overflow-hidden bg-white border border-brand-border/70 hover:border-[#C5A880]/60 rounded-xl sm:rounded-2xl shadow-soft hover:shadow-elevated transition-all duration-300 hover:-translate-y-1 relative"
     >
-      <div>
-        {/* 1:1 Aspect Ratio Photo with Zoom Effect */}
-        <div className="relative aspect-square w-full overflow-hidden bg-[#FAF7F2]">
+        <div className="p-3 sm:p-4 pb-0">
+          {/* Padded Image Container */}
+          <div className="relative h-32 sm:h-36 w-full overflow-hidden bg-[#FAF7F2] rounded-xl border border-brand-border/40">
           <Image
             src={imgSrc}
             alt={product.name}
@@ -159,16 +159,29 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
           {/* Top-Left: VEG / Non-Veg Indicator Badge */}
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md shadow-xs text-[10px] font-bold z-10 border border-brand-border/40">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                product.isEggless ? 'bg-emerald-600 ring-2 ring-emerald-600/20' : 'bg-amber-600 ring-2 ring-amber-600/20'
-              }`}
-            />
-            <span className={product.isEggless ? 'text-emerald-800' : 'text-amber-900'}>
-              {product.isEggless ? 'VEG' : 'NON-VEG'}
-            </span>
-          </div>
+          {(() => {
+            const hasEggChoice = Boolean(product.allowEggChoice);
+            const isVeg = hasEggChoice
+              ? (product.eggPreferenceDefault === 'EGGLESS')
+              : (product.isEggless ?? (product.eggPreferenceDefault === 'EGGLESS'));
+            const badgeLabel = hasEggChoice
+              ? 'EGGLESS OPTION'
+              : (isVeg ? (shop?.isPureVeg ? '100% VEG' : 'VEG') : 'NON-VEG');
+            const isGreen = hasEggChoice || isVeg;
+
+            return (
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md shadow-xs text-[10px] font-bold z-10 border border-brand-border/40">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isGreen ? 'bg-emerald-600 ring-2 ring-emerald-600/20' : 'bg-amber-600 ring-2 ring-amber-600/20'
+                  }`}
+                />
+                <span className={isGreen ? 'text-emerald-800' : 'text-amber-900'}>
+                  {badgeLabel}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Out of Stock Overlay */}
           {!isAvailable && (
@@ -205,7 +218,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
         </div>
 
         {/* Card Content */}
-        <div className="p-3.5 sm:p-4 space-y-2">
+        <div className="p-3 sm:p-3.5 space-y-1.5">
           {/* Category & Rating Row */}
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] uppercase font-bold tracking-wider text-[#C5A880] truncate">
@@ -235,7 +248,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
           </h3>
 
           {/* Flavor Descriptor Chips */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+          <div className="flex items-center gap-1 flex-wrap pt-0.5">
             {flavorChips.map((chip, idx) => (
               <span
                 key={idx}
@@ -252,7 +265,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
           </div>
 
           {/* Prominent Price & Discount */}
-          <div className="pt-1 flex items-baseline gap-2 flex-wrap">
+          <div className="pt-0.5 flex items-baseline gap-1.5 flex-wrap">
             <span className="font-serif font-bold text-lg sm:text-xl text-[#2C1A1D]">
               ₹{displayPrice}
             </span>
@@ -274,7 +287,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, shop, onSelec
       </div>
 
       {/* Dual CTA Actions */}
-      <div className="p-3.5 sm:p-4 pt-0 grid grid-cols-2 gap-2 mt-2">
+      <div className="p-3 sm:p-3.5 pt-0 grid grid-cols-2 gap-2 mt-1.5">
         <button
           type="button"
           onClick={(e) => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sliders, Plus, Trash2, GripVertical, CheckCircle2 } from 'lucide-react';
+import { Sliders, Plus, Trash2, GripVertical, CheckCircle2, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -22,11 +22,12 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
   // New field state
   const [newLabel, setNewLabel] = useState('');
   const [newFieldKey, setNewFieldKey] = useState('');
-  const [newFieldType, setNewFieldType] = useState<'TEXT' | 'SELECT' | 'RADIO' | 'TEXTAREA' | 'FILE'>('TEXT');
+  const [newFieldType, setNewFieldType] = useState<'TEXT' | 'SELECT' | 'RADIO' | 'TEXTAREA' | 'FILE' | 'DATE' | 'TIME' | 'NUMBER'>('TEXT');
   const [newIsRequired, setNewIsRequired] = useState(false);
   const [newOptionsText, setNewOptionsText] = useState('');
 
@@ -83,6 +84,7 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
     if (!field.id) return;
     try {
       const updated = await ownerStorefrontApi.updateCustomFormField(field.id, {
+        ...field,
         isEnabled: !field.isEnabled,
       });
       onFieldsChange(fields.map((f) => (f.id === field.id ? updated : f)));
@@ -101,6 +103,47 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
     } catch (err: any) {
       console.error('Failed to delete field', err);
       setErrorMessage(err.message || 'Failed to delete field');
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    setDraggedItemIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedItemIndex === null || draggedItemIndex === targetIndex) return;
+
+    const newFields = [...fields];
+    const temp = newFields[draggedItemIndex];
+    newFields.splice(draggedItemIndex, 1);
+    newFields.splice(targetIndex, 0, temp);
+
+    setDraggedItemIndex(targetIndex);
+    onFieldsChange(newFields);
+  };
+
+  const handleDragEnd = async () => {
+    setDraggedItemIndex(null);
+    const reordered = fields.map((f, i) => ({ ...f, displayOrder: i }));
+    onFieldsChange(reordered);
+
+    try {
+      await Promise.all(
+        reordered.map((f) => {
+          if (f.id) {
+            return ownerStorefrontApi.updateCustomFormField(f.id, {
+              ...f,
+              displayOrder: f.displayOrder
+            });
+          }
+          return Promise.resolve();
+        })
+      );
+    } catch (err: any) {
+      console.error('Failed to persist field order', err);
+      setErrorMessage(err.message || 'Failed to save new order');
     }
   };
 
@@ -141,32 +184,24 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
             </div>
           )}
 
-          {/* Predefined Standard Fields Status */}
-          <div className="p-4 rounded-2xl bg-brand-cream-light/50 border border-brand-border/60">
-            <span className="text-xs font-bold text-owner-heading block mb-2">Standard In-built Fields</span>
-            <div className="flex flex-wrap gap-2 text-xs">
-              {['Event Date', 'Estimated Servings / Weight', 'Flavour Preference', 'Reference Cake Photo', 'Message on Cake'].map((std) => (
-                <span key={std} className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-xl border border-brand-border/70 text-owner-heading font-medium text-[11px]">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  {std}
-                </span>
-              ))}
-            </div>
-          </div>
-
           {/* Dynamic Custom Fields List */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-owner-muted">
-                Additional Custom Fields ({fields.length})
-              </span>
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-owner-heading block">
+                  Custom Cake Form Fields ({fields.length})
+                </span>
+                <span className="text-[11px] text-owner-muted">
+                  Drag items to reorder. Toggle switches to enable or disable questions on the customer page.
+                </span>
+              </div>
               {!isAdding && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setIsAdding(true)}
-                  className="flex items-center gap-1.5"
+                  className="flex items-center gap-1.5 shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Field</span>
@@ -195,6 +230,9 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
                       <option value="TEXTAREA">Multi-line Text (Paragraph)</option>
                       <option value="SELECT">Dropdown Menu</option>
                       <option value="RADIO">Single Choice (Radio)</option>
+                      <option value="DATE">Date Picker</option>
+                      <option value="TIME">Time Picker</option>
+                      <option value="NUMBER">Number / Weight / Budget</option>
                       <option value="FILE">Photo Upload</option>
                     </select>
                   </div>
@@ -251,17 +289,26 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
               </div>
             ) : (
               <div className="space-y-2">
-                {fields.map((field) => (
+                {fields.map((field, index) => (
                   <div
                     key={field.id}
-                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragEnter={(e) => handleDragEnter(e, index)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => e.preventDefault()}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-move ${
+                      draggedItemIndex === index ? 'opacity-40 border-brand-plum border-dashed shadow-md bg-brand-blush/30' : ''
+                    } ${
                       field.isEnabled
                         ? 'bg-white border-brand-border/70'
                         : 'bg-gray-50/70 border-brand-border/40 opacity-60'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <GripVertical className="w-4 h-4 text-owner-muted" />
+                      <div className="cursor-move text-owner-muted hover:text-owner-heading px-1 transition-colors">
+                        <GripVertical className="w-5 h-5" />
+                      </div>
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-owner-heading">

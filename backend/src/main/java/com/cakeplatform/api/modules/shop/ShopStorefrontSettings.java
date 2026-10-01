@@ -80,6 +80,38 @@ public class ShopStorefrontSettings {
     @Builder.Default
     private Boolean customCakesEnabled = true;
 
+    @Column(name = "cc_field_occasion_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldOccasionEnabled = true;
+
+    @Column(name = "cc_field_flavour_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldFlavourEnabled = true;
+
+    @Column(name = "cc_field_servings_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldServingsEnabled = true;
+
+    @Column(name = "cc_field_date_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldDateEnabled = true;
+
+    @Column(name = "cc_field_budget_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldBudgetEnabled = true;
+
+    @Column(name = "cc_field_delivery_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldDeliveryEnabled = true;
+
+    @Column(name = "cc_field_design_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldDesignEnabled = true;
+
+    @Column(name = "cc_field_reference_enabled", nullable = false)
+    @Builder.Default
+    private Boolean ccFieldReferenceEnabled = true;
+
     @Column(name = "whatsapp_enabled", nullable = false)
     @Builder.Default
     private Boolean whatsappEnabled = true;

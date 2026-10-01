@@ -183,20 +183,8 @@ public class WebhookController {
                             );
                         }
 
-                        // Dispatch Admin Notification (PAYMENT_RECEIVED)
-                        try {
-                            adminNotificationService.dispatchAdminNotification(
-                                    com.cakeplatform.api.modules.notification.AdminNotificationType.PAYMENT_RECEIVED,
-                                    "Payment Received: ₹" + order.getTotalAmount(),
-                                    String.format("Payment of ₹%s received for order %s (%s).",
-                                            order.getTotalAmount(), order.getOrderNumber(), order.getShop().getBusinessName()),
-                                    com.cakeplatform.api.modules.notification.AdminNotificationPriority.NORMAL,
-                                    com.cakeplatform.api.modules.notification.AdminNotificationCategory.PAYMENTS,
-                                    transactionId != null ? transactionId : order.getOrderNumber(),
-                                    "PAYMENT",
-                                    "/admin/shops/" + order.getShop().getId()
-                            );
-                        } catch (Exception ignored) {}
+                        // Admin notification for individual bakery order payment is suppressed per platform policy;
+                        // platform administrators monitor aggregated bakery performance via the Analytics Dashboard.
 
                         activityLogger.logActivity(null, order.getShop().getId(), "PAYMENT_CAPTURED_WEBHOOK", "ORDER", order.getId(), "Tx: " + transactionId);
                         return ResponseEntity.ok("Webhook processed (order confirmed)");

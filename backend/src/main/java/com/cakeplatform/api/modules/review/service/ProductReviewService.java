@@ -1,7 +1,9 @@
 package com.cakeplatform.api.modules.review.service;
 
+import com.cakeplatform.api.modules.notification.EmailService;
 import com.cakeplatform.api.modules.notification.NotificationService;
 import com.cakeplatform.api.modules.notification.NotificationType;
+import com.cakeplatform.api.modules.notification.SmsService;
 import com.cakeplatform.api.modules.order.Order;
 import com.cakeplatform.api.modules.order.OrderItem;
 import com.cakeplatform.api.modules.order.OrderItemRepository;
@@ -14,6 +16,8 @@ import com.cakeplatform.api.modules.review.dto.*;
 import com.cakeplatform.api.modules.shop.Shop;
 import com.cakeplatform.api.modules.shop.ShopRepository;
 import com.cakeplatform.api.modules.shop.ShopStatus;
+import com.cakeplatform.api.modules.interaction.Feedback;
+import com.cakeplatform.api.modules.interaction.FeedbackRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +38,11 @@ public class ProductReviewService {
     private final OrderItemRepository orderItemRepository;
     private final ShopRepository shopRepository;
     private final NotificationService notificationService;
+    private final EmailService emailService;
+    private final SmsService smsService;
+    private final FeedbackRepository feedbackRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
 
     private Shop getActiveShop(Long shopId) {
         Shop shop = shopRepository.findById(shopId)
@@ -114,6 +123,7 @@ public class ProductReviewService {
                 : "Verified Customer";
 
         // 10. Persist Verified Review
+        String editToken = java.util.UUID.randomUUID().toString();
         ProductReview review = ProductReview.builder()
                 .shop(shop)
                 .product(product)
@@ -123,7 +133,10 @@ public class ProductReviewService {
                 .customerPhone(order.getCustomerPhone())
                 .rating(request.getRating())
                 .reviewText(request.getReviewText() != null ? request.getReviewText().trim() : "")
+                .cakeImageUrl(request.getCakeImageUrl() != null && !request.getCakeImageUrl().isBlank() ? request.getCakeImageUrl().trim() : null)
+                .cakeVideoUrl(request.getCakeVideoUrl() != null && !request.getCakeVideoUrl().isBlank() ? request.getCakeVideoUrl().trim() : null)
                 .isVerifiedPurchase(true)
+                .editToken(editToken)
                 .build();
 
         ProductReview saved = productReviewRepository.save(review);
@@ -142,15 +155,22 @@ public class ProductReviewService {
             log.warn("Failed to dispatch owner notification for review: {}", ex.getMessage());
         }
 
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
+        }
+
         return PublicProductReviewResponse.builder()
                 .id(saved.getId())
                 .customerDisplayName(getMaskedDisplayName(saved.getCustomerName()))
                 .rating(saved.getRating())
                 .reviewText(saved.getReviewText())
+                .cakeImageUrl(saved.getCakeImageUrl())
+                .cakeVideoUrl(saved.getCakeVideoUrl())
                 .isVerifiedPurchase(saved.getIsVerifiedPurchase())
                 .ownerReply(saved.getOwnerReply())
                 .ownerRepliedAt(saved.getOwnerRepliedAt())
                 .createdAt(saved.getCreatedAt())
+                .editToken(saved.getEditToken())
                 .build();
     }
 
@@ -165,31 +185,76 @@ public class ProductReviewService {
         }
 
         List<ProductReview> reviews = productReviewRepository.findByProductIdOrderByCreatedAtDesc(productId);
-        long totalCount = reviews.size();
+
+        List<PublicProductReviewResponse> publicList = new ArrayList<>();
+        for (ProductReview r : reviews) {
+            publicList.add(PublicProductReviewResponse.builder()
+                    .id(r.getId())
+                    .customerDisplayName(getMaskedDisplayName(r.getCustomerName()))
+                    .rating(r.getRating())
+                    .reviewText(r.getReviewText())
+                    .isVerifiedPurchase(r.getIsVerifiedPurchase())
+                    .ownerReply(r.getOwnerReply())
+                    .ownerRepliedAt(r.getOwnerRepliedAt())
+                    .cakeImageUrl(r.getCakeImageUrl())
+                    .cakeVideoUrl(r.getCakeVideoUrl())
+                    .createdAt(r.getCreatedAt())
+                    .source("PRODUCT_REVIEW")
+                    .build());
+        }
+
+        if (feedbackRepository != null) {
+            try {
+                List<Feedback> feedbacks = feedbackRepository.findByShopIdAndIsApprovedTrueAndDeletedAtIsNullOrderByCreatedAtDesc(shopId);
+                String pName = product.getName() != null ? product.getName().trim() : "";
+                for (Feedback f : feedbacks) {
+                    boolean matchesProduct = (f.getProduct() != null && f.getProduct().getId().equals(productId))
+                            || (f.getProductName() != null && !pName.isEmpty() && f.getProductName().equalsIgnoreCase(pName))
+                            || (f.getComment() != null && !pName.isEmpty() && f.getComment().contains("[" + pName + "]"));
+                    if (matchesProduct) {
+                        String cleanComment = f.getComment() != null ? f.getComment() : "";
+                        if (!pName.isEmpty() && cleanComment.startsWith("[" + pName + "]")) {
+                            cleanComment = cleanComment.substring(("[" + pName + "]").length()).trim();
+                        }
+                        publicList.add(PublicProductReviewResponse.builder()
+                                .id(f.getId())
+                                .customerDisplayName(getMaskedDisplayName(f.getCustomerDisplayName()))
+                                .rating(f.getRating() != null ? f.getRating() : 5)
+                                .reviewText(cleanComment)
+                                .isVerifiedPurchase(f.getOrderReference() != null && !f.getOrderReference().isBlank())
+                                .ownerReply(f.getOwnerReply())
+                                .ownerRepliedAt(null)
+                                .cakeImageUrl(f.getCakeImageUrl())
+                                .cakeVideoUrl(f.getCakeVideoUrl())
+                                .createdAt(f.getCreatedAt())
+                                .source("FEEDBACK")
+                                .build());
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to load feedbacks for product summary: {}", ex.getMessage());
+            }
+        }
+
+        publicList.sort((a, b) -> {
+            if (a.getCreatedAt() == null && b.getCreatedAt() == null) return 0;
+            if (a.getCreatedAt() == null) return 1;
+            if (b.getCreatedAt() == null) return -1;
+            return b.getCreatedAt().compareTo(a.getCreatedAt());
+        });
+
+        long totalCount = publicList.size();
         double avg = totalCount > 0
-                ? reviews.stream().mapToInt(ProductReview::getRating).average().orElse(0.0)
+                ? publicList.stream().mapToInt(PublicProductReviewResponse::getRating).average().orElse(0.0)
                 : 0.0;
         double roundedAvg = Math.round(avg * 10.0) / 10.0;
 
         Map<Integer, Long> breakdown = new HashMap<>();
         for (int i = 1; i <= 5; i++) breakdown.put(i, 0L);
-        for (ProductReview r : reviews) {
+        for (PublicProductReviewResponse r : publicList) {
             int rating = r.getRating() != null ? r.getRating() : 5;
             breakdown.put(rating, breakdown.getOrDefault(rating, 0L) + 1);
         }
-
-        List<PublicProductReviewResponse> publicList = reviews.stream()
-                .map(r -> PublicProductReviewResponse.builder()
-                        .id(r.getId())
-                        .customerDisplayName(getMaskedDisplayName(r.getCustomerName()))
-                        .rating(r.getRating())
-                        .reviewText(r.getReviewText())
-                        .isVerifiedPurchase(r.getIsVerifiedPurchase())
-                        .ownerReply(r.getOwnerReply())
-                        .ownerRepliedAt(r.getOwnerRepliedAt())
-                        .createdAt(r.getCreatedAt())
-                        .build())
-                .collect(Collectors.toList());
 
         return ProductReviewsSummaryResponse.builder()
                 .productId(productId)
@@ -236,6 +301,9 @@ public class ProductReviewService {
                         .isEligible(isDelivered && !hasReviewed)
                         .existingReviewId(existing.map(ProductReview::getId).orElse(null))
                         .existingRating(existing.map(ProductReview::getRating).orElse(null))
+                        .existingReviewText(existing.map(ProductReview::getReviewText).orElse(null))
+                        .existingCakeImageUrl(existing.map(ProductReview::getCakeImageUrl).orElse(null))
+                        .existingCakeVideoUrl(existing.map(ProductReview::getCakeVideoUrl).orElse(null))
                         .build());
             }
         }
@@ -264,6 +332,8 @@ public class ProductReviewService {
                         .isVerifiedPurchase(r.getIsVerifiedPurchase())
                         .ownerReply(r.getOwnerReply())
                         .ownerRepliedAt(r.getOwnerRepliedAt())
+                        .cakeImageUrl(r.getCakeImageUrl())
+                        .cakeVideoUrl(r.getCakeVideoUrl())
                         .createdAt(r.getCreatedAt())
                         .build())
                 .collect(Collectors.toList());
@@ -287,6 +357,48 @@ public class ProductReviewService {
         review.setOwnerRepliedAt(LocalDateTime.now());
         ProductReview updated = productReviewRepository.save(review);
 
+        // Customer Notification on Baker Reply (Email and SMS)
+        try {
+            String customerEmail = updated.getOrder() != null ? updated.getOrder().getCustomerEmail() : null;
+            String bakeryName = shop.getBusinessName();
+            String productName = updated.getProduct() != null ? updated.getProduct().getName() : "your cake";
+
+            if (emailService != null && customerEmail != null && !customerEmail.isBlank()) {
+                String subject = String.format("[%s] The baker replied to your review!", bakeryName);
+                String body = String.format(
+                        "Hello %s,\n\n" +
+                        "%s has replied to your review for %s!\n\n" +
+                        "Your Rating: %d / 5 Stars\n" +
+                        "Your Review:\n\"%s\"\n\n" +
+                        "Bakery Response:\n\"%s\"\n\n" +
+                        "Thank you for choosing %s for your celebration!",
+                        updated.getCustomerName() != null ? updated.getCustomerName() : "Valued Customer",
+                        bakeryName,
+                        productName,
+                        updated.getRating(),
+                        updated.getReviewText() != null ? updated.getReviewText() : "(No text)",
+                        updated.getOwnerReply(),
+                        bakeryName
+                );
+                emailService.sendEmail(customerEmail, subject, body);
+            }
+
+            String customerPhone = updated.getCustomerPhone();
+            if ((customerPhone == null || customerPhone.isBlank()) && updated.getOrder() != null) {
+                customerPhone = updated.getOrder().getCustomerPhone();
+            }
+            if (smsService != null && customerPhone != null && !customerPhone.isBlank()) {
+                String replySnippet = updated.getOwnerReply();
+                if (replySnippet != null && replySnippet.length() > 80) {
+                    replySnippet = replySnippet.substring(0, 77) + "...";
+                }
+                String smsBody = String.format("%s replied to your review: \"%s\"", bakeryName, replySnippet);
+                smsService.sendSms(customerPhone, smsBody);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to dispatch customer notification on baker reply: {}", ex.getMessage());
+        }
+
         return OwnerProductReviewResponse.builder()
                 .id(updated.getId())
                 .productId(updated.getProduct() != null ? updated.getProduct().getId() : null)
@@ -299,7 +411,125 @@ public class ProductReviewService {
                 .isVerifiedPurchase(updated.getIsVerifiedPurchase())
                 .ownerReply(updated.getOwnerReply())
                 .ownerRepliedAt(updated.getOwnerRepliedAt())
+                .cakeImageUrl(updated.getCakeImageUrl())
+                .cakeVideoUrl(updated.getCakeVideoUrl())
                 .createdAt(updated.getCreatedAt())
                 .build();
+    }
+
+    private void validateAuthorToken(String storedToken, String providedToken) {
+        if (storedToken == null || storedToken.isBlank()) {
+            return;
+        }
+        if (providedToken == null || providedToken.isBlank() || !storedToken.trim().equals(providedToken.trim())) {
+            throw new org.springframework.security.access.AccessDeniedException("Unauthorized: You do not have permission to edit or delete this review.");
+        }
+    }
+
+    @Transactional
+    public PublicProductReviewResponse updateReview(Long shopId, Long productId, Long reviewId, SubmitProductReviewRequest request) {
+        return updateReview(shopId, productId, reviewId, request, null);
+    }
+
+    @Transactional
+    public PublicProductReviewResponse updateReview(Long shopId, Long productId, Long reviewId, SubmitProductReviewRequest request, String token) {
+        getActiveShop(shopId);
+
+        ProductReview review = productReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Review not found"));
+
+        if (!review.getShop().getId().equals(shopId)) {
+            throw new SecurityException("Review does not belong to this bakery");
+        }
+
+        boolean tokenValid = (review.getEditToken() != null && !review.getEditToken().isBlank()
+                && token != null && !token.isBlank() && review.getEditToken().trim().equals(token.trim()));
+
+        if (!tokenValid) {
+            Order order = review.getOrder();
+            boolean orderMatches = false;
+            if (order != null) {
+                boolean orderNumberOk = request.getOrderNumber() != null && !request.getOrderNumber().isBlank()
+                        && order.getOrderNumber().equalsIgnoreCase(request.getOrderNumber().trim());
+                String inputPhone = normalizePhone(request.getCustomerPhone());
+                String orderPhone = normalizePhone(order.getCustomerPhone());
+                boolean phoneOk = !inputPhone.isEmpty() && !orderPhone.isEmpty() && inputPhone.equals(orderPhone);
+                if (orderNumberOk || phoneOk) {
+                    orderMatches = true;
+                }
+            }
+
+            if (!orderMatches && review.getEditToken() != null && !review.getEditToken().isBlank()) {
+                throw new org.springframework.security.access.AccessDeniedException("Unauthorized: You do not have permission to edit this review.");
+            }
+        }
+
+        review.setRating(request.getRating());
+        review.setReviewText(request.getReviewText() != null ? request.getReviewText().trim() : null);
+        review.setCakeImageUrl(request.getCakeImageUrl() != null && !request.getCakeImageUrl().isBlank() ? request.getCakeImageUrl().trim() : null);
+        review.setCakeVideoUrl(request.getCakeVideoUrl() != null && !request.getCakeVideoUrl().isBlank() ? request.getCakeVideoUrl().trim() : null);
+
+        ProductReview saved = productReviewRepository.save(review);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
+        }
+
+        return PublicProductReviewResponse.builder()
+                .id(saved.getId())
+                .customerDisplayName(getMaskedDisplayName(saved.getCustomerName()))
+                .rating(saved.getRating())
+                .reviewText(saved.getReviewText())
+                .isVerifiedPurchase(saved.getIsVerifiedPurchase())
+                .cakeImageUrl(saved.getCakeImageUrl())
+                .cakeVideoUrl(saved.getCakeVideoUrl())
+                .ownerReply(saved.getOwnerReply())
+                .ownerRepliedAt(saved.getOwnerRepliedAt())
+                .createdAt(saved.getCreatedAt())
+                .editToken(saved.getEditToken())
+                .build();
+    }
+
+    @Transactional
+    public void deleteReview(Long shopId, Long productId, Long reviewId, String orderNumber, String phone) {
+        deleteReview(shopId, productId, reviewId, orderNumber, phone, null);
+    }
+
+    @Transactional
+    public void deleteReview(Long shopId, Long productId, Long reviewId, String orderNumber, String phone, String token) {
+        getActiveShop(shopId);
+
+        ProductReview review = productReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new IllegalArgumentException("Review not found"));
+
+        if (!review.getShop().getId().equals(shopId)) {
+            throw new SecurityException("Review does not belong to this bakery");
+        }
+
+        boolean tokenValid = (review.getEditToken() != null && !review.getEditToken().isBlank()
+                && token != null && !token.isBlank() && review.getEditToken().trim().equals(token.trim()));
+
+        if (!tokenValid) {
+            Order order = review.getOrder();
+            boolean orderMatches = false;
+            if (order != null) {
+                boolean orderNumberOk = orderNumber != null && !orderNumber.isBlank()
+                        && order.getOrderNumber().equalsIgnoreCase(orderNumber.trim());
+                String inputPhone = normalizePhone(phone);
+                String orderPhone = normalizePhone(order.getCustomerPhone());
+                boolean phoneOk = !inputPhone.isEmpty() && !orderPhone.isEmpty() && inputPhone.equals(orderPhone);
+                if (orderNumberOk || phoneOk) {
+                    orderMatches = true;
+                }
+            }
+
+            if (!orderMatches && review.getEditToken() != null && !review.getEditToken().isBlank()) {
+                throw new org.springframework.security.access.AccessDeniedException("Unauthorized: You do not have permission to delete this review.");
+            }
+        }
+
+        productReviewRepository.delete(review);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
+        }
     }
 }

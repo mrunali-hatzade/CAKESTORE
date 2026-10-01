@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Tag, Copy, Check, Sparkles, Percent, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Tag, Copy, Check, Sparkles, Percent, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { StorefrontTab } from '../StorefrontTabNav';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useToast } from '@/components/common/Toast';
 import { apiClient } from '@/lib/api/client';
+import { storefrontApi } from '@/lib/api/storefront';
+import { useCart } from '@/context/CartContext';
 
 interface PublicCoupon {
   code: string;
@@ -28,9 +30,11 @@ export const StorefrontOffersTab: React.FC<StorefrontOffersTabProps> = ({
   onNavigateTab,
 }) => {
   const toast = useToast();
+  const { items, totalPrice, appliedCoupon, setAppliedCoupon, setIsCartOpen } = useCart();
   const [coupons, setCoupons] = useState<PublicCoupon[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [applyingCode, setApplyingCode] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -59,6 +63,40 @@ export const StorefrontOffersTab: React.FC<StorefrontOffersTabProps> = ({
       toast.success(`Coupon "${code}" copied to clipboard!`);
       setTimeout(() => setCopiedCode(null), 2500);
     }
+  };
+
+  const handleApplyToCart = async (coupon: PublicCoupon) => {
+    if (items.length === 0) {
+      handleCopyCode(coupon.code);
+      toast.info(`Code "${coupon.code}" copied! Add a cake to your cart to enjoy this offer.`);
+      return;
+    }
+
+    setApplyingCode(coupon.code);
+    try {
+      const res = await storefrontApi.validateCoupon(shop.id, coupon.code, totalPrice);
+      if (res.valid && res.code) {
+        setAppliedCoupon({
+          code: res.code,
+          discountType: (res.discountType as 'PERCENTAGE' | 'FLAT') || coupon.discountType,
+          discountValue: res.discountValue || coupon.discountValue,
+          discountAmount: res.discountAmount || 0,
+        });
+        toast.success(`Coupon "${res.code}" applied! You save ₹${res.discountAmount}`);
+        setIsCartOpen(true);
+      } else {
+        toast.error(res.message || 'Cannot apply coupon to current cart.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to validate coupon.');
+    } finally {
+      setApplyingCode(null);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    toast.info('Coupon removed from cart.');
   };
 
   return (
@@ -99,66 +137,103 @@ export const StorefrontOffersTab: React.FC<StorefrontOffersTabProps> = ({
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {coupons.map((coupon) => (
-            <Card
-              key={coupon.code}
-              className="p-6 relative overflow-hidden border-2 border-dashed border-brand-border hover:border-brand-plum/40 transition-all flex flex-col justify-between group"
-            >
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] font-bold text-brand-plum uppercase tracking-wider">
-                      Bakery Offer
+          {coupons.map((coupon) => {
+            const isApplied = appliedCoupon?.code?.toUpperCase() === coupon.code.toUpperCase();
+            const isApplying = applyingCode === coupon.code;
+
+            return (
+              <Card
+                key={coupon.code}
+                className={`p-6 relative overflow-hidden border-2 transition-all flex flex-col justify-between group ${
+                  isApplied
+                    ? 'border-emerald-500 bg-emerald-50/20 shadow-md'
+                    : 'border-dashed border-brand-border hover:border-brand-plum/40'
+                }`}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-brand-plum uppercase tracking-wider">
+                          Bakery Offer
+                        </span>
+                        {isApplied && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Applied in Cart</span>
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-2xl font-serif font-bold text-brand-espresso mt-0.5">
+                        {coupon.discountType === 'PERCENTAGE'
+                          ? `${coupon.discountValue}% OFF`
+                          : `₹${coupon.discountValue} FLAT OFF`}
+                      </h3>
+                    </div>
+                    <div className="w-10 h-10 rounded-2xl bg-brand-blush flex items-center justify-center text-brand-plum shrink-0">
+                      <Percent className="w-5 h-5" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-xs text-brand-muted">
+                    {coupon.minOrderValue && coupon.minOrderValue > 0 ? (
+                      <p>• Min order value: <strong>₹{coupon.minOrderValue}</strong></p>
+                    ) : (
+                      <p>• No minimum order required</p>
+                    )}
+                    {coupon.maxDiscountCap && coupon.maxDiscountCap > 0 && (
+                      <p>• Maximum savings cap: <strong>₹{coupon.maxDiscountCap}</strong></p>
+                    )}
+                    {coupon.expiryDate ? (
+                      <p>• Valid till: <strong>{new Date(coupon.expiryDate).toLocaleDateString()}</strong></p>
+                    ) : (
+                      <p>• Ongoing seasonal offer</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Code Box & Action */}
+                <div className="mt-5 pt-4 border-t border-brand-border/60 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-3 py-1.5 rounded-xl bg-brand-cream-light font-mono text-xs font-bold text-brand-espresso border border-brand-border tracking-wider">
+                      {coupon.code}
                     </span>
-                    <h3 className="text-2xl font-serif font-bold text-brand-espresso mt-0.5">
-                      {coupon.discountType === 'PERCENTAGE'
-                        ? `${coupon.discountValue}% OFF`
-                        : `₹${coupon.discountValue} FLAT OFF`}
-                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(coupon.code)}
+                      className="p-1.5 text-brand-muted hover:text-brand-plum hover:bg-brand-cream rounded-lg transition-colors cursor-pointer"
+                      title="Copy Code"
+                    >
+                      {copiedCode === coupon.code ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                   </div>
-                  <div className="w-10 h-10 rounded-2xl bg-brand-blush flex items-center justify-center text-brand-plum shrink-0">
-                    <Percent className="w-5 h-5" />
-                  </div>
-                </div>
 
-                <div className="space-y-1 text-xs text-brand-muted">
-                  {coupon.minOrderValue && coupon.minOrderValue > 0 && (
-                    <p>• Min order value: <strong>₹{coupon.minOrderValue}</strong></p>
-                  )}
-                  {coupon.maxDiscountCap && coupon.maxDiscountCap > 0 && (
-                    <p>• Maximum savings cap: <strong>₹{coupon.maxDiscountCap}</strong></p>
-                  )}
-                  {coupon.expiryDate && (
-                    <p>• Valid till: <strong>{new Date(coupon.expiryDate).toLocaleDateString()}</strong></p>
-                  )}
-                </div>
-              </div>
-
-              {/* Code Box & Action */}
-              <div className="mt-5 pt-4 border-t border-brand-border/60 flex items-center justify-between gap-2">
-                <div className="px-3 py-1.5 rounded-xl bg-brand-cream-light font-mono text-xs font-bold text-brand-espresso border border-brand-border tracking-wider">
-                  {coupon.code}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleCopyCode(coupon.code)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-plum text-white text-xs font-bold hover:bg-brand-plum-hover transition-all cursor-pointer shadow-xs active:scale-95"
-                >
-                  {copiedCode === coupon.code ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-300" />
-                      <span>Copied!</span>
-                    </>
+                  {isApplied ? (
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                    >
+                      Remove
+                    </button>
                   ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Code</span>
-                    </>
+                    <button
+                      type="button"
+                      disabled={isApplying}
+                      onClick={() => handleApplyToCart(coupon)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-plum text-white text-xs font-bold hover:bg-brand-plum-hover transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                    >
+                      <span>{isApplying ? 'Applying...' : items.length > 0 ? 'Apply to Cart' : 'Use Code'}</span>
+                    </button>
                   )}
-                </button>
-              </div>
-            </Card>
-          ))}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -168,9 +243,9 @@ export const StorefrontOffersTab: React.FC<StorefrontOffersTabProps> = ({
           <ShieldCheck className="w-4 h-4 text-brand-plum" />
           <span>How to use coupons:</span>
         </div>
-        <p>1. Copy any active promo code above.</p>
-        <p>2. Add your favorite handcrafted celebration cakes to the in-store cart.</p>
-        <p>3. Paste the code into the &ldquo;Discount Coupon&rdquo; box in your cart drawer to see immediate savings applied.</p>
+        <p>1. Click &ldquo;Apply to Cart&rdquo; on any active offer above, or copy the code.</p>
+        <p>2. Add your favorite handcrafted celebration cakes to your cart.</p>
+        <p>3. Review your discount directly in the cart drawer and checkout tab before completing your order.</p>
       </div>
     </div>
   );

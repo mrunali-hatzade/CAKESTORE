@@ -41,4 +41,30 @@ public class CustomerProductReviewController {
             @RequestParam(required = false, defaultValue = "") String phone) {
         return ResponseEntity.ok(productReviewService.checkOrderEligibility(shopId, orderNumber, phone));
     }
+
+    @PutMapping("/products/{productId}/reviews/{reviewId}")
+    public ResponseEntity<PublicProductReviewResponse> updateProductReview(
+            @PathVariable Long shopId,
+            @PathVariable Long productId,
+            @PathVariable Long reviewId,
+            @RequestHeader(value = "X-Review-Token", required = false) String tokenHeader,
+            @RequestParam(value = "token", required = false) String tokenParam,
+            @Valid @RequestBody SubmitProductReviewRequest request) {
+        String token = (tokenHeader != null && !tokenHeader.isBlank()) ? tokenHeader : tokenParam;
+        return ResponseEntity.ok(productReviewService.updateReview(shopId, productId, reviewId, request, token));
+    }
+
+    @DeleteMapping("/products/{productId}/reviews/{reviewId}")
+    public ResponseEntity<java.util.Map<String, String>> deleteProductReview(
+            @PathVariable Long shopId,
+            @PathVariable Long productId,
+            @PathVariable Long reviewId,
+            @RequestParam(required = false, defaultValue = "") String orderNumber,
+            @RequestParam(required = false, defaultValue = "") String phone,
+            @RequestHeader(value = "X-Review-Token", required = false) String tokenHeader,
+            @RequestParam(value = "token", required = false) String tokenParam) {
+        String token = (tokenHeader != null && !tokenHeader.isBlank()) ? tokenHeader : tokenParam;
+        productReviewService.deleteReview(shopId, productId, reviewId, orderNumber, phone, token);
+        return ResponseEntity.ok(java.util.Map.of("message", "Review deleted successfully"));
+    }
 }

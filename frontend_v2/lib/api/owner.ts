@@ -5,6 +5,8 @@ import {
   CreateCouponPayload,
   CustomerProfile,
   CustomCakeRequest,
+  ConvertToOrderPayload,
+  ConvertToOrderResult,
   GeneralEnquiry,
   FeedbackRecord,
   ShopSettings,
@@ -13,6 +15,7 @@ import {
   PaymentMockResult,
   OwnerDashboardStats,
   OwnerPaymentRecord,
+  GlobalSearchResults,
 } from '@/types/owner';
 import { PaginatedResponse } from '@/types/order';
 
@@ -23,8 +26,10 @@ export const ownerApi = {
   },
 
   // Analytics
-  getAnalytics: async (): Promise<DashboardAnalytics> => {
-    return apiClient.get<DashboardAnalytics>('/api/owner/analytics/dashboard');
+  getAnalytics: async (range: string = '7d'): Promise<DashboardAnalytics> => {
+    return apiClient.get<DashboardAnalytics>('/api/owner/analytics/dashboard', {
+      params: { range },
+    });
   },
 
   // Coupons
@@ -44,12 +49,16 @@ export const ownerApi = {
     return apiClient.post<CouponRecord>('/api/owner/coupons', data);
   },
 
-  toggleCoupon: async (id: string | number): Promise<void> => {
-    await apiClient.patch(`/api/owner/coupons/${id}/toggle`);
+  updateOwnerCoupon: async (id: number | string, data: CreateCouponPayload): Promise<CouponRecord> => {
+    return apiClient.put<CouponRecord>(`/api/owner/coupons/${id}`, data);
   },
 
-  deleteCoupon: async (id: string | number): Promise<void> => {
-    await apiClient.delete(`/api/owner/coupons/${id}`);
+  toggleCoupon: async (id: string | number): Promise<CouponRecord> => {
+    return apiClient.patch<CouponRecord>(`/api/owner/coupons/${id}/toggle`);
+  },
+
+  deleteCoupon: async (id: string | number): Promise<{ message?: string }> => {
+    return apiClient.delete<{ message?: string }>(`/api/owner/coupons/${id}`);
   },
 
   // Customers
@@ -103,6 +112,13 @@ export const ownerApi = {
     return apiClient.post<CustomCakeRequest>(url, body);
   },
 
+  convertToOrder: async (
+    id: string | number,
+    payload?: ConvertToOrderPayload
+  ): Promise<ConvertToOrderResult> => {
+    return apiClient.post<ConvertToOrderResult>(`/api/owner/custom-cakes/${id}/convert-to-order`, payload || {});
+  },
+
   updateEnquiryStatus: async (id: string | number, status: any, quotedPrice?: number): Promise<void> => {
     const statusStr = String(status);
     const reply = quotedPrice ? `Quote: ?${quotedPrice}` : `Status: ${statusStr}`;
@@ -132,6 +148,10 @@ export const ownerApi = {
 
   deleteFeedback: async (id: number): Promise<{ message: string }> => {
     return apiClient.delete<{ message: string }>(`/api/owner/feedback/${id}`);
+  },
+
+  moderateFeedback: async (id: number | string, isApproved: boolean): Promise<FeedbackRecord> => {
+    return apiClient.patch<FeedbackRecord>(`/api/owner/feedback/${id}/moderation?isApproved=${isApproved}`);
   },
 
   // Shop Settings / Profile
@@ -240,6 +260,13 @@ export const ownerApi = {
 
   deleteAccount: async (data: { password: string; confirmationText: string }): Promise<{ success: boolean; message: string }> => {
     return apiClient.post<{ success: boolean; message: string }>('/api/owner/account/delete', data);
+  },
+
+  // Global Multi-Entity Command Palette Search
+  globalSearch: async (query: string): Promise<GlobalSearchResults> => {
+    return apiClient.get<GlobalSearchResults>('/api/shops/my-shop/search', {
+      params: { q: query },
+    });
   },
 };
 

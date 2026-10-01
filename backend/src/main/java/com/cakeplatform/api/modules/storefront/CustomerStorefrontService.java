@@ -736,7 +736,7 @@ public class CustomerStorefrontService {
             }
             
             if (coupon.getMinOrderValue() != null && subtotal.compareTo(coupon.getMinOrderValue()) < 0) {
-                throw new RuntimeException("Minimum order value of ₹" + coupon.getMinOrderValue() + " required for this coupon");
+                throw new RuntimeException("Minimum order value of \u20B9" + coupon.getMinOrderValue().stripTrailingZeros().toPlainString() + " required for this coupon");
             }
             
             // Server-side Authoritative Discount Calculation
@@ -794,27 +794,8 @@ public class CustomerStorefrontService {
             }
         }
 
-        // Dispatch Admin Notification (NEW_ORDER - Only for COD orders upon placement)
-        if (!isOnlinePayment && adminNotificationService != null) {
-            try {
-                adminNotificationService.dispatchAdminNotification(
-                        com.cakeplatform.api.modules.notification.AdminNotificationType.NEW_ORDER,
-                        "New Order Placed: " + savedOrder.getOrderNumber(),
-                        String.format("Order %s (₹%s) placed at %s by %s.",
-                                savedOrder.getOrderNumber(),
-                                savedOrder.getTotalAmount(),
-                                shop.getBusinessName(),
-                                savedOrder.getCustomerName()),
-                        com.cakeplatform.api.modules.notification.AdminNotificationPriority.NORMAL,
-                        com.cakeplatform.api.modules.notification.AdminNotificationCategory.ORDERS,
-                        savedOrder.getOrderNumber(),
-                        "ORDER",
-                        "/admin/shops/" + shop.getId()
-                );
-            } catch (Exception ignored) {
-                // Safe failure isolation
-            }
-        }
+        // Admin notification for individual bakery orders is suppressed per platform policy;
+        // platform administrators monitor aggregated bakery performance via the Analytics Dashboard.
         
         // Send SMS to Customer (Only for COD orders upon placement)
         if (!isOnlinePayment) {
@@ -983,7 +964,7 @@ public class CustomerStorefrontService {
                     .code(coupon.getCode())
                     .discountAmount(BigDecimal.ZERO)
                     .minOrderValue(coupon.getMinOrderValue())
-                    .message("Minimum order value of ₹" + coupon.getMinOrderValue() + " required")
+                    .message("Minimum order value of \u20B9" + coupon.getMinOrderValue().stripTrailingZeros().toPlainString() + " required")
                     .build();
         }
 

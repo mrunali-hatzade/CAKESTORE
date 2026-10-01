@@ -13,6 +13,8 @@ public class EnquiryRequest {
     @Email
     private String customerEmail;
 
+    private String customerMobile;
+
     @NotBlank
     private String enquiryType;
 

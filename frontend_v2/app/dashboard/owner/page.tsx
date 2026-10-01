@@ -13,6 +13,9 @@ import { ownerApi } from '@/lib/api/owner';
 import { ordersApi } from '@/lib/api/orders';
 import { deliverySlotsApi } from '@/lib/api/deliverySlots';
 import { Order } from '@/types/order';
+import { productsApi } from '@/lib/api/products';
+import { galleryApi } from '@/lib/api/gallery';
+import { storefrontApi } from '@/lib/api/storefront';
 import { OwnerDashboardStats, DashboardAnalytics, CustomCakeRequest } from '@/types/owner';
 import { DeliverySlot } from '@/types/deliverySlot';
 import { useOwner } from '@/context/OwnerContext';
@@ -22,10 +25,12 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { SetupChecklist } from '@/components/owner/SetupChecklist';
+import { useToast } from '@/components/common/Toast';
 
 export default function OwnerOverviewPage() {
   // Authoritative shop state strictly from OwnerContext
   const { registerRefreshHandler, shop } = useOwner();
+  const toast = useToast();
 
   const [stats, setStats] = useState<OwnerDashboardStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -35,18 +40,15 @@ export default function OwnerOverviewPage() {
   const [updatingPaymentId, setUpdatingPaymentId] = useState<number | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [_refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchDashboardData = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setIsLoading(true);
+    if (!isManual) setIsLoading(true);
     setError(null);
 
     // If shop is PENDING, operational endpoints require active subscription and will return 403
     if (shop?.status === 'PENDING') {
       setIsLoading(false);
-      setRefreshing(false);
       return;
     }
 
@@ -74,7 +76,6 @@ export default function OwnerOverviewPage() {
       setError(err?.message || 'Failed to load dashboard data');
     } finally {
       setIsLoading(false);
-      setRefreshing(false);
     }
   }, [shop?.status]);
 
@@ -110,11 +111,12 @@ export default function OwnerOverviewPage() {
             : o
         )
       );
+      toast.success(targetStatus === 'PAID' ? 'Payment marked as collected!' : 'Payment reverted to pending');
       // Synchronize backend stats & analytics in background
       ownerApi.getDashboardStats().then((s) => setStats(s)).catch(() => {});
       ownerApi.getAnalytics().then((a) => setAnalytics(a)).catch(() => {});
     } catch (err: any) {
-      alert(err?.message || 'Failed to update payment status');
+      toast.error(err?.message || 'Failed to update payment status');
     } finally {
       setUpdatingPaymentId(null);
     }
@@ -146,6 +148,23 @@ export default function OwnerOverviewPage() {
     .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
   const totalRevenue = Math.max(Number(stats?.totalRevenue || 0), realizedOrdersRevenue);
+
+  // Today's Revenue
+  const todayRevenue = orders
+    .filter((o) => {
+      const createdDate = new Date(o.createdAt).toLocaleDateString('en-CA');
+      const today = new Date().toLocaleDateString('en-CA');
+      const pStatus = (o.paymentStatus || '').toUpperCase();
+      const oStatus = (o.orderStatus || o.status || '').toUpperCase();
+      return (
+        createdDate === today &&
+        oStatus !== 'CANCELLED' &&
+        pStatus !== 'REFUNDED' &&
+        pStatus !== 'FAILED' &&
+        (pStatus === 'PAID' || (o.paymentMethod || '').toUpperCase() === 'COD')
+      );
+    })
+    .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
   // Real Phase 6A 7-Day Sales Velocity
   const rawSales = analytics?.salesByDay || {};
@@ -305,8 +324,8 @@ export default function OwnerOverviewPage() {
             </div>
           )}
 
-          {/* 2. Primary KPI Row — Realized Revenue, Orders, Catalog, Pending */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* 2. Primary KPI Row — Realized Revenue, Orders, Catalog, Pending, Today */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
         <Card className="p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-owner-muted">Active Cakes</span>
@@ -348,6 +367,21 @@ export default function OwnerOverviewPage() {
 
         <Card className="p-5">
           <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-owner-muted">Today&apos;s Revenue</span>
+            <div className="w-8 h-8 rounded-lg bg-brand-blush text-brand-plum flex items-center justify-center">
+              <Banknote className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold font-serif text-owner-heading mt-2">
+            ₹{Number(todayRevenue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-brand-plum font-medium inline-flex items-center mt-1">
+            Earned today
+          </span>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-owner-muted">Realized Revenue</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
@@ -362,7 +396,7 @@ export default function OwnerOverviewPage() {
         </Card>
       </div>
 
-      {/* 3. Quick Actions Bar — 6 operational shortcuts (No duplicate View Store) */}
+      {/* 3. Quick Actions Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Link
           href="/dashboard/owner/products"
@@ -395,13 +429,13 @@ export default function OwnerOverviewPage() {
         </Link>
 
         <Link
-          href="/dashboard/owner/enquiries"
+          href="/dashboard/owner/custom-cakes"
           className="p-3.5 bg-white rounded-2xl border border-owner-border hover:border-brand-plum/40 hover:shadow-soft transition-all flex items-center gap-3 group"
         >
-          <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center group-hover:bg-amber-700 group-hover:text-white transition-colors shrink-0">
-            <MessageSquareQuote className="w-4 h-4" />
+          <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center group-hover:bg-purple-700 group-hover:text-white transition-colors shrink-0">
+            <Sparkles className="w-4 h-4" />
           </div>
-          <span className="text-xs font-bold text-owner-heading truncate">Custom Enquiries</span>
+          <span className="text-xs font-bold text-owner-heading truncate">Custom Cakes</span>
         </Link>
 
         <Link
@@ -430,18 +464,20 @@ export default function OwnerOverviewPage() {
         {/* Left Column (7 cols): Recent Orders Table */}
         <Card className="lg:col-span-7 p-6 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-4 border-b border-owner-border mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-owner-border mb-4 gap-3">
               <div className="flex items-center gap-2">
                 <h3 className="font-serif font-bold text-base text-owner-heading">Recent Orders</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 bg-brand-blush text-brand-plum rounded-full border border-brand-blush-border">
                   {orders.length}
                 </span>
               </div>
-              <Link href="/dashboard/owner/orders">
-                <Button variant="ghost" size="sm">
-                  View All Orders <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href="/dashboard/owner/orders">
+                  <Button variant="ghost" size="sm">
+                    View All <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             {orders.length === 0 ? (
@@ -455,11 +491,13 @@ export default function OwnerOverviewPage() {
                     Orders placed on your public storefront will appear here in real-time.
                   </p>
                 </div>
-                <Link href="/dashboard/owner/products" className="inline-block pt-1">
-                  <Button size="sm" variant="outline">
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Add your first cake
-                  </Button>
-                </Link>
+                <div className="flex items-center justify-center gap-3 pt-1">
+                  <Link href="/dashboard/owner/products">
+                    <Button size="sm" variant="outline">
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Add your first cake
+                    </Button>
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -675,8 +713,14 @@ export default function OwnerOverviewPage() {
               <div className="space-y-3">
                 {todayDeliveries.map((ord) => {
                   const slot = deliverySlots.find(s => s.id === ord.deliverySlotId);
+                  const to12h = (t: string) => {
+                    const [h, m] = t.split(':').map(Number);
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    const hr = h % 12 || 12;
+                    return `${hr}:${String(m).padStart(2, '0')} ${ampm}`;
+                  };
                   const slotTimeStr = slot 
-                    ? `${slot.startTime.slice(0, 5)} – ${slot.endTime.slice(0, 5)}`
+                    ? `${to12h(slot.startTime)} – ${to12h(slot.endTime)}`
                     : 'Unscheduled / Anytime Today';
                   const cakeNote = ord.items?.[0]?.cakeMessage;
 
@@ -823,11 +867,11 @@ export default function OwnerOverviewPage() {
 
                 {pendingCustomEnquiries > 0 && (
                   <Link
-                    href="/dashboard/owner/enquiries"
+                    href="/dashboard/owner/custom-cakes"
                     className="p-3 rounded-2xl border border-purple-200/80 bg-purple-50/50 hover:bg-purple-50 transition-colors flex items-center justify-between text-xs group"
                   >
                     <div className="flex items-center gap-2.5">
-                      <MessageSquareQuote className="w-4 h-4 text-purple-700 shrink-0" />
+                      <Sparkles className="w-4 h-4 text-purple-700 shrink-0" />
                       <span className="font-semibold text-owner-heading">
                         {pendingCustomEnquiries} custom cake {pendingCustomEnquiries === 1 ? 'request' : 'requests'} pending
                       </span>

@@ -3,6 +3,7 @@ package com.cakeplatform.api.modules.shop.controller;
 import com.cakeplatform.api.modules.shop.dto.ShopResponse;
 import com.cakeplatform.api.modules.shop.dto.UpdateShopRequest;
 import com.cakeplatform.api.modules.shop.dto.OwnerDashboardStatsResponse;
+import com.cakeplatform.api.modules.shop.dto.OwnerGlobalSearchResponse;
 import com.cakeplatform.api.modules.shop.service.OwnerDashboardService;
 import com.cakeplatform.api.modules.shop.service.ShopService;
 import com.cakeplatform.api.security.CustomUserDetails;
@@ -40,5 +41,13 @@ public class ShopController {
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         return ResponseEntity.ok(dashboardService.getDashboardStats(userDetails.getId()));
+    }
+
+    @GetMapping("/my-shop/search")
+    public ResponseEntity<OwnerGlobalSearchResponse> globalSearch(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(name = "q", defaultValue = "") String query
+    ) {
+        return ResponseEntity.ok(dashboardService.globalSearch(userDetails.getId(), query));
     }
 }

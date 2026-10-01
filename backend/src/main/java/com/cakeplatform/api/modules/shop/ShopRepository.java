@@ -18,6 +18,8 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
     
     @Query("SELECT s FROM Shop s WHERE s.status = :status AND (" +
            "LOWER(s.city) LIKE LOWER(CONCAT('%', :location, '%')) OR " +
+           "LOWER(COALESCE(s.district, '')) LIKE LOWER(CONCAT('%', :location, '%')) OR " +
+           "LOWER(COALESCE(s.state, '')) LIKE LOWER(CONCAT('%', :location, '%')) OR " +
            "s.pincode = :location OR " +
            "LOWER(s.area) LIKE LOWER(CONCAT('%', :location, '%')) OR " +
            "LOWER(s.address) LIKE LOWER(CONCAT('%', :location, '%')))")
@@ -239,6 +241,8 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
                    "  )) " +
                    "  AND (CAST(:location AS text) IS NULL OR ( " +
                    "      LOWER(COALESCE(s.city, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
+                   "      LOWER(COALESCE(s.district, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
+                   "      LOWER(COALESCE(s.state, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
                    "      s.pincode = CAST(:location AS text) OR " +
                    "      LOWER(COALESCE(s.area, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
                    "      LOWER(COALESCE(s.address, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) " +
@@ -270,7 +274,7 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
                    "  AND (CAST(:pincode AS text) IS NULL OR s.pincode = CAST(:pincode AS text)) " +
                    "  AND (CAST(:businessType AS text) IS NULL OR s.business_type = CAST(:businessType AS text)) " +
                    "  AND (CAST(:search AS text) IS NULL OR ( LOWER(s.business_name) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR LOWER(COALESCE(s.description, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR LOWER(COALESCE(s.business_category, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR LOWER(COALESCE(s.city, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) OR LOWER(COALESCE(s.area, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) )) " +
-                   "  AND (CAST(:location AS text) IS NULL OR ( LOWER(COALESCE(s.city, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR s.pincode = CAST(:location AS text) OR LOWER(COALESCE(s.area, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR LOWER(COALESCE(s.address, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) )) " +
+                   "  AND (CAST(:location AS text) IS NULL OR ( LOWER(COALESCE(s.city, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR LOWER(COALESCE(s.district, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR LOWER(COALESCE(s.state, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR s.pincode = CAST(:location AS text) OR LOWER(COALESCE(s.area, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR LOWER(COALESCE(s.address, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) )) " +
                    "GROUP BY s.id " +
                    "ORDER BY s.created_at DESC NULLS LAST, s.id DESC " +
                    "LIMIT :limit OFFSET :offset",
@@ -300,6 +304,8 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
                    "  )) " +
                    "  AND (CAST(:location AS text) IS NULL OR ( " +
                    "      LOWER(COALESCE(s.city, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
+                   "      LOWER(COALESCE(s.district, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
+                   "      LOWER(COALESCE(s.state, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
                    "      s.pincode = CAST(:location AS text) OR " +
                    "      LOWER(COALESCE(s.area, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) OR " +
                    "      LOWER(COALESCE(s.address, '')) LIKE LOWER(CONCAT('%', CAST(:location AS text), '%')) " +

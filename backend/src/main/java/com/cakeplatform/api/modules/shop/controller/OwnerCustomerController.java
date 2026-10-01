@@ -58,17 +58,26 @@ public class OwnerCustomerController {
 
     private CustomerProfileResponse buildProfile(Long shopId, String identifier) {
         List<Order> orders = new ArrayList<>();
-        // 1. If identifier doesn't look like an email, prioritize lookup by customer name
-        if (identifier != null && !identifier.contains("@")) {
-            orders = orderRepository.findByShopIdAndCustomerNameOrderByCreatedAtDesc(shopId, identifier);
-        }
-        // 2. If not found or looks like an email, lookup by email
-        if (orders.isEmpty() && identifier != null) {
-            orders = orderRepository.findByShopIdAndCustomerEmailOrderByCreatedAtDesc(shopId, identifier);
-        }
-        // 3. Fallback to name search in case email had no matches
-        if (orders.isEmpty() && identifier != null) {
-            orders = orderRepository.findByShopIdAndCustomerNameOrderByCreatedAtDesc(shopId, identifier);
+        if (identifier != null && !identifier.isBlank()) {
+            String trimmed = identifier.trim();
+            // 1. If identifier contains '@', lookup by email
+            if (trimmed.contains("@")) {
+                orders = orderRepository.findByShopIdAndCustomerEmailOrderByCreatedAtDesc(shopId, trimmed.toLowerCase());
+                if (orders.isEmpty()) {
+                    orders = orderRepository.findByShopIdAndCustomerEmailOrderByCreatedAtDesc(shopId, trimmed);
+                }
+            }
+            // 2. If phone number (digits)
+            if (orders.isEmpty() && trimmed.replaceAll("[^0-9]", "").length() >= 7) {
+                orders = orderRepository.findByShopIdAndCustomerPhoneOrderByCreatedAtDesc(shopId, trimmed);
+                if (orders.isEmpty()) {
+                    orders = orderRepository.findByShopIdAndCustomerPhoneOrderByCreatedAtDesc(shopId, trimmed.replaceAll("[^0-9]", ""));
+                }
+            }
+            // 3. Fallback to name search
+            if (orders.isEmpty()) {
+                orders = orderRepository.findByShopIdAndCustomerNameOrderByCreatedAtDesc(shopId, trimmed);
+            }
         }
         
         if (orders.isEmpty()) {
@@ -78,8 +87,14 @@ public class OwnerCustomerController {
         Order mostRecent = orders.get(0);
         
         BigDecimal totalSpent = orders.stream()
-                .filter(o -> "PAID".equalsIgnoreCase(o.getPaymentStatus()) || "COMPLETED".equalsIgnoreCase(o.getPaymentStatus()))
+                .filter(o -> {
+                    String ps = o.getPaymentStatus() != null ? o.getPaymentStatus().toUpperCase() : "";
+                    String os = o.getOrderStatus() != null ? o.getOrderStatus().toUpperCase() : "";
+                    return ("PAID".equals(ps) || "COMPLETED".equals(ps) || "COMPLETED".equals(os) || "DELIVERED".equals(os))
+                            && !"REFUNDED".equals(ps) && !"FAILED".equals(ps) && !"CANCELLED".equals(os);
+                })
                 .map(Order::getTotalAmount)
+                .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return CustomerProfileResponse.builder()

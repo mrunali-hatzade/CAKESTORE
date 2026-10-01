@@ -6,9 +6,13 @@ export interface PublicReview {
   rating: number;
   reviewText: string;
   isVerifiedPurchase: boolean;
+  cakeImageUrl?: string;
+  cakeVideoUrl?: string;
   ownerReply?: string;
   ownerRepliedAt?: string;
   createdAt: string;
+  source?: 'PRODUCT_REVIEW' | 'FEEDBACK';
+  editToken?: string;
 }
 
 export interface ProductReviewsSummary {
@@ -29,6 +33,9 @@ export interface OrderItemEligibility {
   isEligible: boolean;
   existingReviewId?: number;
   existingRating?: number;
+  existingReviewText?: string;
+  existingCakeImageUrl?: string;
+  existingCakeVideoUrl?: string;
 }
 
 export interface SubmitReviewPayload {
@@ -37,6 +44,8 @@ export interface SubmitReviewPayload {
   orderItemId: number;
   rating: number;
   reviewText?: string;
+  cakeImageUrl?: string;
+  cakeVideoUrl?: string;
 }
 
 export interface OwnerProductReview {
@@ -49,6 +58,8 @@ export interface OwnerProductReview {
   rating: number;
   reviewText: string;
   isVerifiedPurchase: boolean;
+  cakeImageUrl?: string;
+  cakeVideoUrl?: string;
   ownerReply?: string;
   ownerRepliedAt?: string;
   createdAt: string;
@@ -111,6 +122,37 @@ export const reviewsApi = {
     return apiClient.post<OwnerProductReview>(
       `/api/owner/product-reviews/${reviewId}/reply`,
       { reply }
+    );
+  },
+
+  updateProductReview: async (
+    shopId: number | string,
+    productId: number | string,
+    reviewId: number | string,
+    payload: SubmitReviewPayload,
+    token?: string
+  ): Promise<PublicReview> => {
+    return apiClient.put<PublicReview>(
+      `/api/storefront/shops/${shopId}/products/${productId}/reviews/${reviewId}`,
+      payload,
+      token ? { headers: { 'X-Review-Token': token }, params: { token } } : undefined
+    );
+  },
+
+  deleteProductReview: async (
+    shopId: number | string,
+    productId: number | string,
+    reviewId: number | string,
+    orderNumber: string,
+    phone: string = '',
+    token?: string
+  ): Promise<{ message: string }> => {
+    return apiClient.delete<{ message: string }>(
+      `/api/storefront/shops/${shopId}/products/${productId}/reviews/${reviewId}`,
+      {
+        params: { orderNumber, phone, ...(token ? { token } : {}) },
+        headers: token ? { 'X-Review-Token': token } : undefined,
+      }
     );
   },
 };

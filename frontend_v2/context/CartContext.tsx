@@ -18,6 +18,11 @@ export interface CartItem {
   weight?: string | number;
   dietaryPreference?: string;
   addonIds?: number[];
+  deliveryDate?: string;
+  deliverySlotId?: number;
+  deliverySlotName?: string;
+  deliveryTime?: string;
+  deliveryTimeType?: 'SLOT' | 'CUSTOM';
 }
 
 export interface AppliedCouponInfo {
@@ -33,7 +38,10 @@ export const generateCartLineId = (item: CartItem): string => {
   const addons = Array.isArray(item.addonIds) && item.addonIds.length > 0 
     ? Array.from(new Set(item.addonIds)).sort((a, b) => a - b).join(',') 
     : '';
-  return `${item.productId}-${item.variantId || 0}-${dietary}-${customMsg}-${addons}`;
+  const date = item.deliveryDate ? `-${item.deliveryDate}` : '';
+  const slot = item.deliverySlotId ? `-slot-${item.deliverySlotId}` : '';
+  const time = item.deliveryTime ? `-time-${item.deliveryTime.replace(/[\s:]/g, '')}` : '';
+  return `${item.productId}-${item.variantId || 0}-${dietary}-${customMsg}-${addons}${date}${slot}${time}`;
 };
 
 interface CartContextType {

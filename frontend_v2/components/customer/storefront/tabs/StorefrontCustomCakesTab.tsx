@@ -1,26 +1,22 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  Sparkles,
-  Upload,
-  Calendar,
-  Users,
-  Send,
-  CheckCircle2,
-  AlertCircle,
-  Cake,
-  Palette,
-  Camera,
-  Link as LinkIcon,
-  MessageCircle,
-} from 'lucide-react';
-import { Shop, ShopCustomFormField } from '@/types/shop';
+import React, { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
-import { Card } from '@/components/ui/Card';
+import { Shop, ShopCustomFormField } from '@/types/shop';
+import {
+  Sparkles,
+  MessageCircle,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  Cake,
+  Camera,
+} from 'lucide-react';
 import { storefrontApi } from '@/lib/api/storefront';
 import { mediaApi } from '@/lib/api/media';
 
@@ -29,6 +25,18 @@ interface StorefrontCustomCakesTabProps {
   initialReferenceImage?: string;
 }
 
+// Field keys that represent contact details already captured in Section 1
+const CONTACT_FIELD_KEYS = new Set([
+  'customer_name',
+  'customer_email',
+  'customer_phone',
+  'customer_mobile',
+  'name',
+  'email',
+  'phone',
+  'mobile',
+]);
+
 export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> = ({
   shop,
   initialReferenceImage = '',
@@ -36,79 +44,94 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
-  const [occasion, setOccasion] = useState('BIRTHDAY');
-  const [cakeType, setCakeType] = useState('CUSTOM_DESIGN');
-  const [flavour, setFlavour] = useState('Belgian Dark Truffle');
-  const [servings, setServings] = useState('15');
-  const [budget, setBudget] = useState('2000');
-  const [requiredDate, setRequiredDate] = useState('');
-  const [deliveryPreference, setDeliveryPreference] = useState('DOORSTEP_DELIVERY');
-  const [designDescription, setDesignDescription] = useState('');
-  const [referenceImageUrl, setReferenceImageUrl] = useState(initialReferenceImage);
 
-  // Dynamic custom form fields
+  // Dynamic values stored by fieldKey
   const [dynamicValues, setDynamicValues] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (initialReferenceImage) {
-      setReferenceImageUrl(initialReferenceImage);
-    }
-  }, [initialReferenceImage]);
-
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingKey, setIsUploadingKey] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isCustomCakesEnabled = shop.storefrontSettings ? shop.storefrontSettings.customCakesEnabled !== false : true;
+  const isCustomCakesEnabled = shop.storefrontSettings
+    ? shop.storefrontSettings.customCakesEnabled !== false
+    : true;
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Active custom fields defined by the bakery owner, sorted by displayOrder
+  const allActiveFields: ShopCustomFormField[] = (shop.customCakeFormFields || [])
+    .filter((f) => f.isEnabled !== false)
+    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+  // Filter out contact fields to prevent any duplication with Section 1
+  const cakeSpecificationFields = allActiveFields.filter(
+    (f) => !CONTACT_FIELD_KEYS.has(f.fieldKey.toLowerCase().trim())
+  );
+
+  // Set initial reference image if passed
+  useEffect(() => {
+    if (initialReferenceImage) {
+      // Find the first image or reference field if present
+      const imageField = cakeSpecificationFields.find(
+        (f) => f.fieldType === 'IMAGE' || f.fieldType === 'FILE' || f.fieldKey.includes('image')
+      );
+      if (imageField) {
+        setDynamicValues((prev) => ({ ...prev, [imageField.fieldKey]: initialReferenceImage }));
+      } else {
+        setDynamicValues((prev) => ({ ...prev, reference_image: initialReferenceImage }));
+      }
+    }
+  }, [initialReferenceImage]);
+
+  const handleDynamicChange = (key: string, value: string) => {
+    setDynamicValues((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleFileUpload = async (key: string, file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       alert('Image must be under 5MB');
       return;
     }
-    setIsUploading(true);
+    setIsUploadingKey(key);
     try {
       const result = await mediaApi.uploadGuestReferenceImage(file);
-      setReferenceImageUrl(result.url);
+      handleDynamicChange(key, result.url);
     } catch (err: any) {
-      alert(err.message || 'Failed to upload image reference. Please ensure it is a valid JPEG, PNG, or WEBP under 5MB.');
+      alert(err.message || 'Failed to upload image reference. Please ensure it is a valid JPEG, PNG, or WebP under 5MB.');
     } finally {
-      setIsUploading(false);
+      setIsUploadingKey(null);
     }
   };
-
-  const handleDynamicChange = (key: string, value: string) => {
-    setDynamicValues(prev => ({ ...prev, [key]: value }));
-  };
-
-  const activeCustomFields = (shop.customCakeFormFields || [])
-    .filter(f => f.isEnabled !== false)
-    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    // Sanitize phone number (strip non-digits, drop leading 0)
+    // Sanitize phone number (strip non-digits, normalize Indian country code)
     let cleanPhone = customerMobile.replace(/\D/g, '');
     if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
     if (!cleanPhone.startsWith('91') && cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
 
     try {
-      // Build dynamic field values payload
-      const dynamicFieldValuesList = activeCustomFields
-        .filter(f => dynamicValues[f.fieldKey] !== undefined && dynamicValues[f.fieldKey] !== '')
-        .map(f => ({
+      // Build dynamic field values payload for the backend
+      const dynamicFieldValuesList = cakeSpecificationFields
+        .filter((f) => dynamicValues[f.fieldKey] !== undefined && dynamicValues[f.fieldKey] !== '')
+        .map((f) => ({
           fieldKey: f.fieldKey,
           fieldLabel: f.fieldLabel,
           fieldValue: dynamicValues[f.fieldKey],
         }));
+
+      // Extract well-known properties if the owner defined them
+      const occasion = dynamicValues['occasion'] || 'CUSTOM';
+      const cakeType = dynamicValues['cake_type'] || dynamicValues['cakeType'] || 'CUSTOM_DESIGN';
+      const flavour = dynamicValues['flavour'] || dynamicValues['cake_flavour'] || 'Custom';
+      const servings = parseInt(dynamicValues['servings'] || '1', 10) || 1;
+      const budget = dynamicValues['budget'] ? parseFloat(dynamicValues['budget']) : undefined;
+      const requiredDate = dynamicValues['delivery_date'] || dynamicValues['requiredDate'] || undefined;
+      const deliveryPreference = dynamicValues['delivery_preference'] || dynamicValues['fulfillment'] || 'DOORSTEP_DELIVERY';
+      const designDescription = dynamicValues['design_description'] || dynamicValues['additional_instructions'] || 'Bespoke custom cake inquiry';
+      const referenceImageUrl = dynamicValues['reference_image'] || dynamicValues['photo'] || undefined;
 
       const payload = {
         customerName: customerName.trim(),
@@ -117,12 +140,12 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
         occasion,
         cakeType,
         flavour,
-        servings: Number(servings) || 1,
-        budget: Number(budget) || undefined,
-        requiredDate: requiredDate || undefined,
+        servings,
+        budget,
+        requiredDate,
         deliveryPreference,
-        designDescription: designDescription.trim(),
-        referenceImageUrl: referenceImageUrl || undefined,
+        designDescription,
+        referenceImageUrl,
         dynamicFieldValues: dynamicFieldValuesList,
       };
 
@@ -136,25 +159,22 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
   };
 
   const getWhatsAppMessage = () => {
+    const specsText = cakeSpecificationFields
+      .filter((f) => dynamicValues[f.fieldKey])
+      .map((f) => `• *${f.fieldLabel}:* ${dynamicValues[f.fieldKey]}`)
+      .join('\n');
+
     return encodeURIComponent(
       `Hello ${shop.businessName}!\n\n` +
       `🎂 *CUSTOM BESPOKE CAKE CONSULTATION*\n` +
       `• *Customer:* ${customerName.trim()}\n` +
       `• *Mobile:* ${customerMobile.trim()}\n` +
-      `• *Occasion:* ${occasion}\n` +
-      `• *Cake Style:* ${cakeType.replace(/_/g, ' ')}\n` +
-      `• *Flavour:* ${flavour}\n` +
-      `• *Servings / Guests:* ${servings} guests\n` +
-      `• *Target Budget:* ₹${budget}\n` +
-      `• *Event Date:* ${requiredDate || 'Flexible'}\n` +
-      `• *Fulfillment:* ${deliveryPreference === 'DOORSTEP_DELIVERY' ? 'Doorstep Delivery' : 'Self Pickup'}\n` +
-      `• *Design & Plaque Text:* ${designDescription.trim()}\n` +
-      (referenceImageUrl ? `• *Reference Photo:* ${referenceImageUrl}\n` : '') +
+      (specsText ? `\n${specsText}\n` : '') +
       `\nPlease let me know your availability and estimated quote. Thank you!`
     );
   };
 
-  const cleanPhone = (shop.whatsappNumber || shop.phone || shop.businessPhone || '').replace(/\D/g, '');
+  const bakeryPhone = (shop.whatsappNumber || shop.phone || shop.businessPhone || '').replace(/\D/g, '');
 
   if (!isCustomCakesEnabled) {
     return (
@@ -188,21 +208,16 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
 
           <div className="p-4 rounded-2xl bg-brand-cream-light/80 border border-brand-border/60 text-xs text-brand-espresso space-y-2 text-left">
             <p>
-              <strong>Occasion:</strong> {occasion} • <strong>Flavour:</strong> {flavour}
-            </p>
-            <p>
-              <strong>Event Date:</strong> {requiredDate || 'As discussed'} • <strong>Estimated Servings:</strong> {servings} guests
+              <strong>Customer:</strong> {customerName} ({customerMobile})
             </p>
             <p className="text-brand-muted pt-1 border-t border-brand-border/40">
-              The pastry chef at <strong>{shop.businessName}</strong> has received your reference design and event specifications. They will review and contact you directly via WhatsApp or Phone to finalize your custom quote.
+              The pastry team at <strong>{shop.businessName}</strong> has received your specifications. They will review your order requirements and contact you directly via WhatsApp or Phone to finalize your custom quote.
             </p>
           </div>
 
           <Button
             onClick={() => {
               setSuccessResult(null);
-              setDesignDescription('');
-              setReferenceImageUrl('');
               setDynamicValues({});
             }}
             className="font-bold"
@@ -218,28 +233,26 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
     <div className="space-y-8 pb-16 max-w-4xl mx-auto">
       {/* Header */}
       <div className="text-center space-y-3">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-blush border border-brand-blush-border text-brand-plum text-xs font-semibold">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-blush text-brand-plum text-xs font-semibold">
           <Sparkles className="w-3.5 h-3.5" />
           <span>Bespoke Celebration Studio</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl font-serif font-bold text-brand-espresso">
-          Design Your Custom Cake with <span className="text-brand-plum italic">{shop.businessName}</span>
-        </h1>
-        <p className="text-xs sm:text-sm text-brand-muted max-w-2xl mx-auto leading-relaxed">
-          From multi-tier wedding cakes to themed birthday centerpieces, share your inspiration photos and event specifications for an artisan quote.
+        <h1 className="text-3xl font-serif font-bold text-brand-espresso">Custom Cake Consultation</h1>
+        <p className="text-xs sm:text-sm text-brand-muted max-w-xl mx-auto leading-relaxed">
+          Order a handcrafted bespoke cake tailored to your celebration theme, flavour preferences, and dietary requirements.
         </p>
       </div>
 
-      <Card className="p-6 sm:p-10 border border-brand-border/80 shadow-soft">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <Card className="p-6 sm:p-10 shadow-soft border-brand-border/70">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {errorMessage && (
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* Section 1: Customer Info */}
+          {/* Section 1: Customer Contact Info */}
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-brand-espresso uppercase tracking-wider border-b border-brand-border/60 pb-2">
               1. Your Contact Details
@@ -270,102 +283,20 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
             </div>
           </div>
 
-          {/* Section 2: Cake Specifications */}
+          {/* Section 2: Owner-Configured Custom Cake Specifications */}
           <div className="space-y-4 pt-2">
-            <h2 className="text-sm font-bold text-brand-espresso uppercase tracking-wider border-b border-brand-border/60 pb-2">
-              2. Celebration Details &amp; Flavour
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Select
-                label="Occasion"
-                value={occasion}
-                onChange={(e) => setOccasion(e.target.value)}
-                options={[
-                  { value: 'BIRTHDAY', label: '🎂 Birthday' },
-                  { value: 'WEDDING', label: '💍 Wedding' },
-                  { value: 'ANNIVERSARY', label: '🥂 Anniversary' },
-                  { value: 'BABY_SHOWER', label: '🍼 Baby Shower' },
-                  { value: 'CORPORATE', label: '🏢 Corporate Event' },
-                  { value: 'OTHER', label: '✨ Other Celebration' },
-                ]}
-              />
-
-              <Select
-                label="Cake Style"
-                value={cakeType}
-                onChange={(e) => setCakeType(e.target.value)}
-                options={[
-                  { value: 'CUSTOM_DESIGN', label: 'Bespoke Theme Cake' },
-                  { value: 'TIERED_WEDDING', label: 'Multi-Tier Luxe Cake' },
-                  { value: 'PHOTO_PRINT', label: 'Edible Photo Print Cake' },
-                  { value: '3D_SCULPTED', label: '3D Sculpted Fondant' },
-                  { value: 'NAKED_FLORAL', label: 'Rustic Naked & Floral' },
-                ]}
-              />
-
-              <Select
-                label="Preferred Flavour"
-                value={flavour}
-                onChange={(e) => setFlavour(e.target.value)}
-                options={[
-                  { value: 'Belgian Dark Truffle', label: '🍫 Belgian Dark Truffle' },
-                  { value: 'Red Velvet Cream Cheese', label: '🍓 Red Velvet Cream Cheese' },
-                  { value: 'Alfonso Mango Mascarpone', label: '🥭 Mango Mascarpone' },
-                  { value: 'Lotus Biscoff Ganache', label: '🍪 Lotus Biscoff' },
-                  { value: 'Nutella Hazelnut Praline', label: '🌰 Hazelnut Praline' },
-                  { value: 'Vanilla Bean Berry Compote', label: '🍰 Vanilla Berry' },
-                  { value: 'Custom Mix', label: '✨ Chef Consultation' },
-                ]}
-              />
-
-              <Input
-                label="Expected Guests / Servings"
-                type="number"
-                min="1"
-                required
-                placeholder="15"
-                value={servings}
-                onChange={(e) => setServings(e.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-              <Input
-                label="Event Delivery Date"
-                type="date"
-                required
-                value={requiredDate}
-                onChange={(e) => setRequiredDate(e.target.value)}
-              />
-
-              <Input
-                label="Estimated Budget (₹)"
-                type="number"
-                placeholder="2000"
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-              />
-
-              <Select
-                label="Fulfillment Preference"
-                value={deliveryPreference}
-                onChange={(e) => setDeliveryPreference(e.target.value)}
-                options={[
-                  { value: 'DOORSTEP_DELIVERY', label: '🚚 Doorstep Delivery' },
-                  { value: 'SELF_PICKUP', label: '🏪 Self Pickup from Kitchen' },
-                ]}
-              />
-            </div>
-          </div>
-
-          {/* Section 3: Owner-configured Dynamic Custom Fields (if configured) */}
-          {activeCustomFields.length > 0 && (
-            <div className="space-y-4 pt-2">
-              <h2 className="text-sm font-bold text-brand-espresso uppercase tracking-wider border-b border-brand-border/60 pb-2">
-                3. Additional Customization Options
+            <div className="flex items-center justify-between border-b border-brand-border/60 pb-2">
+              <h2 className="text-sm font-bold text-brand-espresso uppercase tracking-wider">
+                2. Cake Specifications & Requirements
               </h2>
+              <span className="text-[11px] text-brand-muted">
+                Configured by {shop.businessName}
+              </span>
+            </div>
+
+            {cakeSpecificationFields.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {activeCustomFields.map((field) => {
+                {cakeSpecificationFields.map((field) => {
                   let parsedOptions: string[] = [];
                   if (field.optionsJson) {
                     try {
@@ -373,11 +304,12 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
                         ? JSON.parse(field.optionsJson)
                         : field.optionsJson;
                     } catch {
-                      parsedOptions = field.optionsJson.split(',').map(s => s.trim());
+                      parsedOptions = field.optionsJson.split(',').map((s) => s.trim());
                     }
                   }
 
-                  if (field.fieldType === 'DROPDOWN') {
+                  // DROPDOWN / SELECT
+                  if (field.fieldType === 'DROPDOWN' || field.fieldType === 'SELECT') {
                     return (
                       <Select
                         key={field.fieldKey}
@@ -387,12 +319,43 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
                         onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
                         options={[
                           { value: '', label: `Select ${field.fieldLabel}` },
-                          ...parsedOptions.map(opt => ({ value: opt, label: opt })),
+                          ...parsedOptions.map((opt) => ({ value: opt, label: opt })),
                         ]}
                       />
                     );
                   }
 
+                  // RADIO BUTTONS
+                  if (field.fieldType === 'RADIO') {
+                    return (
+                      <div key={field.fieldKey} className="sm:col-span-2 space-y-2">
+                        <label className="text-xs font-semibold text-brand-espresso block">
+                          {field.fieldLabel} {field.isRequired && <span className="text-rose-500">*</span>}
+                        </label>
+                        <div className="flex flex-wrap gap-2.5">
+                          {parsedOptions.map((opt) => {
+                            const isSelected = dynamicValues[field.fieldKey] === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => handleDynamicChange(field.fieldKey, opt)}
+                                className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-brand-plum text-white border-brand-plum shadow-sm'
+                                    : 'bg-white text-brand-espresso border-brand-border hover:border-brand-plum/40 hover:bg-brand-cream-light/40'
+                                }`}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // TEXTAREA
                   if (field.fieldType === 'TEXTAREA') {
                     return (
                       <div key={field.fieldKey} className="sm:col-span-2">
@@ -400,6 +363,7 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
                           label={field.fieldLabel}
                           required={field.isRequired}
                           rows={3}
+                          placeholder={`Enter ${field.fieldLabel.toLowerCase()}...`}
                           value={dynamicValues[field.fieldKey] || ''}
                           onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
                         />
@@ -407,19 +371,67 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
                     );
                   }
 
-                  if (field.fieldType === 'NUMBER') {
+                  // IMAGE / FILE UPLOAD
+                  if (field.fieldType === 'IMAGE' || field.fieldType === 'FILE') {
+                    const isUploading = isUploadingKey === field.fieldKey;
+                    const imageUrl = dynamicValues[field.fieldKey];
                     return (
-                      <Input
-                        key={field.fieldKey}
-                        label={field.fieldLabel}
-                        type="number"
-                        required={field.isRequired}
-                        value={dynamicValues[field.fieldKey] || ''}
-                        onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
-                      />
+                      <div key={field.fieldKey} className="sm:col-span-2 space-y-2">
+                        <label className="text-xs font-semibold text-brand-espresso block">
+                          {field.fieldLabel} {field.isRequired && <span className="text-rose-500">*</span>}
+                        </label>
+                        <div>
+                          <input
+                            id={`file-input-${field.fieldKey}`}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileUpload(field.fieldKey, file);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`file-input-${field.fieldKey}`)?.click()}
+                            className="w-full border-2 border-dashed border-brand-border hover:border-brand-plum/40 rounded-2xl p-5 text-center transition-all bg-brand-cream-light/30 cursor-pointer"
+                          >
+                            {isUploading ? (
+                              <div className="text-xs text-brand-muted">Uploading photo...</div>
+                            ) : (
+                              <>
+                                <Camera className="w-6 h-6 text-brand-plum mx-auto mb-1.5" />
+                                <p className="text-xs font-bold text-brand-espresso">
+                                  {imageUrl ? 'Click to replace photo' : `Upload ${field.fieldLabel}`}
+                                </p>
+                                <p className="text-[11px] text-brand-muted mt-0.5">JPG, PNG, WebP up to 5MB</p>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {imageUrl && (
+                          <div className="flex items-center gap-3 p-3 rounded-2xl bg-brand-cream-light border border-brand-border/60">
+                            <div className="w-16 h-16 rounded-xl overflow-hidden bg-white border border-brand-border shrink-0">
+                              <img src={imageUrl} alt="Reference design" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="text-xs">
+                              <span className="font-semibold text-brand-espresso block">Photo Attached</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDynamicChange(field.fieldKey, '')}
+                                className="text-rose-600 hover:underline mt-0.5 text-[11px]"
+                              >
+                                Remove Photo
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   }
 
+                  // DATE
                   if (field.fieldType === 'DATE') {
                     return (
                       <Input
@@ -433,6 +445,35 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
                     );
                   }
 
+                  // TIME
+                  if (field.fieldType === 'TIME') {
+                    return (
+                      <Input
+                        key={field.fieldKey}
+                        label={field.fieldLabel}
+                        type="time"
+                        required={field.isRequired}
+                        value={dynamicValues[field.fieldKey] || ''}
+                        onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
+                      />
+                    );
+                  }
+
+                  // NUMBER
+                  if (field.fieldType === 'NUMBER') {
+                    return (
+                      <Input
+                        key={field.fieldKey}
+                        label={field.fieldLabel}
+                        type="number"
+                        required={field.isRequired}
+                        value={dynamicValues[field.fieldKey] || ''}
+                        onChange={(e) => handleDynamicChange(field.fieldKey, e.target.value)}
+                      />
+                    );
+                  }
+
+                  // DEFAULT: TEXT
                   return (
                     <Input
                       key={field.fieldKey}
@@ -445,81 +486,22 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {/* Section 4: Reference Image & Design Description */}
-          <div className="space-y-4 pt-2">
-            <h2 className="text-sm font-bold text-brand-espresso uppercase tracking-wider border-b border-brand-border/60 pb-2">
-              {activeCustomFields.length > 0 ? '4' : '3'}. Design Instructions &amp; Photo Reference
-            </h2>
-
-            <Textarea
-              label="Design Instructions &amp; Cake Message"
-              rows={4}
-              required
-              placeholder="Describe color palette, theme elements, topper text, dietary preferences (e.g., eggless, nut-free), and special requests..."
-              value={designDescription}
-              onChange={(e) => setDesignDescription(e.target.value)}
-            />
-
-            {/* Reference Image Upload / URL */}
-            <div className="space-y-3">
-              <label className="text-xs font-semibold text-brand-espresso block">
-                Reference Photo (Optional but Recommended)
-              </label>
-
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileUpload}
+            ) : (
+              // Clean fallback if bakery owner hasn't configured any custom fields yet
+              <div className="space-y-4">
+                <Textarea
+                  label="Cake Specifications & Message"
+                  rows={4}
+                  required
+                  placeholder="Describe your desired cake theme, occasion, preferred flavours, servings, and event date..."
+                  value={dynamicValues['specifications'] || ''}
+                  onChange={(e) => handleDynamicChange('specifications', e.target.value)}
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-brand-border hover:border-brand-plum/40 rounded-2xl p-6 text-center transition-all bg-brand-cream-light/30 cursor-pointer"
-                >
-                  {isUploading ? (
-                    <div className="text-xs text-brand-muted">Uploading reference photo...</div>
-                  ) : (
-                    <>
-                      <Camera className="w-6 h-6 text-brand-plum mx-auto mb-1.5" />
-                      <p className="text-xs font-bold text-brand-espresso">
-                        {referenceImageUrl ? 'Click to replace inspiration photo' : 'Click to upload inspiration photo'}
-                      </p>
-                      <p className="text-[11px] text-brand-muted mt-0.5">JPG, PNG, WebP up to 5MB</p>
-                    </>
-                  )}
-                </button>
               </div>
-
-              {referenceImageUrl && (
-                <div className="flex items-center gap-3 p-3 rounded-2xl bg-brand-cream-light border border-brand-border/60">
-                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-white border border-brand-border shrink-0">
-                    <img
-                      src={referenceImageUrl}
-                      alt="Reference design"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="text-xs">
-                    <span className="font-semibold text-brand-espresso block">Reference Photo Attached</span>
-                    <button
-                      type="button"
-                      onClick={() => setReferenceImageUrl('')}
-                      className="text-rose-600 hover:underline mt-0.5 text-[11px]"
-                    >
-                      Remove Photo
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
+          {/* Submit & WhatsApp Action Buttons */}
           <div className="pt-4 flex flex-col sm:flex-row gap-3">
             <Button
               type="submit"
@@ -531,9 +513,9 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
               <span>{isSubmitting ? 'Submitting Consultation...' : 'Submit Custom Cake Consultation'}</span>
             </Button>
 
-            {cleanPhone && (
+            {bakeryPhone && (
               <a
-                href={`https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${getWhatsAppMessage()}`}
+                href={`https://wa.me/${bakeryPhone.startsWith('91') ? bakeryPhone : `91${bakeryPhone}`}?text=${getWhatsAppMessage()}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all text-center"

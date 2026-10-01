@@ -55,4 +55,15 @@ public class AuthController {
         response.put("message", "Password has been successfully reset.");
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<java.util.Map<String, String>> changePassword(
+            @Valid @RequestBody com.cakeplatform.api.modules.auth.dto.ChangePasswordRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.cakeplatform.api.security.CustomUserDetails userDetails
+    ) {
+        authService.changePassword(userDetails.getId(), request.getCurrentPassword(), request.getNewPassword());
+        java.util.Map<String, String> response = new java.util.HashMap<>();
+        response.put("message", "Password has been successfully changed.");
+        return ResponseEntity.ok(response);
+    }
 }

@@ -25,4 +25,8 @@ public class SubmitProductReviewRequest {
 
     @Size(max = 1000, message = "Review text cannot exceed 1000 characters")
     private String reviewText;
+
+    private String cakeImageUrl;
+
+    private String cakeVideoUrl;
 }

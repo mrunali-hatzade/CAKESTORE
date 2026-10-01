@@ -27,6 +27,7 @@ interface StorefrontContactTabProps {
 export const StorefrontContactTab: React.FC<StorefrontContactTabProps> = ({ shop }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerMobile, setCustomerMobile] = useState('');
   const [enquiryType, setEnquiryType] = useState('GENERAL_INQUIRY');
   const [message, setMessage] = useState('');
 
@@ -69,6 +70,7 @@ export const StorefrontContactTab: React.FC<StorefrontContactTabProps> = ({ shop
       await storefrontApi.submitEnquiry(shop.id, {
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim(),
+        customerMobile: customerMobile.trim() || undefined,
         enquiryType,
         message: message.trim(),
       });
@@ -257,6 +259,7 @@ export const StorefrontContactTab: React.FC<StorefrontContactTabProps> = ({ shop
                 onClick={() => {
                   setSuccess(false);
                   setMessage('');
+                  setCustomerMobile('');
                 }}
               >
                 Send Another Message
@@ -298,6 +301,15 @@ export const StorefrontContactTab: React.FC<StorefrontContactTabProps> = ({ shop
                 onChange={(e) => setCustomerEmail(e.target.value)}
               />
             </div>
+
+            <Input
+              label="Phone / WhatsApp Number (Optional)"
+              type="tel"
+              placeholder="+91 98765 43210"
+              value={customerMobile}
+              onChange={(e) => setCustomerMobile(e.target.value)}
+              helperText="Share your mobile number if you'd like the baker to follow up via WhatsApp or call"
+            />
 
             <Select
               label="Enquiry Subject"

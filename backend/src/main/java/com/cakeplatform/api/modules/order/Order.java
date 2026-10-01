@@ -97,6 +97,26 @@ public class Order {
     @JsonIgnore
     private com.cakeplatform.api.modules.shop.ShopDeliverySlot deliverySlot;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("deliverySlotDetails")
+    public String fetchDeliverySlotDetails() {
+        if (deliverySlot == null) return null;
+        String rawDay = deliverySlot.getDayOfWeek();
+        String day = "";
+        if (rawDay != null && !rawDay.isBlank()) {
+            day = rawDay.substring(0, 1).toUpperCase() + rawDay.substring(1).toLowerCase() + " ";
+        }
+        String start = "";
+        String end = "";
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH);
+        if (deliverySlot.getStartTime() != null) {
+            start = deliverySlot.getStartTime().format(fmt);
+        }
+        if (deliverySlot.getEndTime() != null) {
+            end = deliverySlot.getEndTime().format(fmt);
+        }
+        return (!start.isEmpty() ? day + "(" + start + " - " + end + ")" : day.trim());
+    }
+
     @Column(name = "delivery_date")
     private java.time.LocalDate deliveryDate;
 

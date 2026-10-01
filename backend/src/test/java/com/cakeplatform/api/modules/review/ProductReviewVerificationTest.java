@@ -45,6 +45,12 @@ class ProductReviewVerificationTest {
     private ShopRepository shopRepository;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private com.cakeplatform.api.modules.notification.EmailService emailService;
+    @Mock
+    private com.cakeplatform.api.modules.notification.SmsService smsService;
+    @Mock
+    private com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository;
 
     @InjectMocks
     private ProductReviewService productReviewService;

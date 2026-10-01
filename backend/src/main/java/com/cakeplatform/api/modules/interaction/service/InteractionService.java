@@ -24,6 +24,9 @@ public class InteractionService {
     private final NotificationService notificationService;
     private final com.cakeplatform.api.modules.product.ProductRepository productRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
+
     @org.springframework.beans.factory.annotation.Autowired
     public InteractionService(
             FeedbackRepository feedbackRepository,
@@ -102,7 +105,14 @@ public class InteractionService {
             // Derive authoritative product name from database
             feedback.setProductName(product.getName());
         } else if (request.getProductName() != null && !request.getProductName().isBlank()) {
-            feedback.setProductName(request.getProductName().trim());
+            String pName = request.getProductName().trim();
+            feedback.setProductName(pName);
+            if (productRepository != null) {
+                productRepository.findByShopId(shop.getId()).stream()
+                        .filter(p -> p.getName() != null && p.getName().trim().equalsIgnoreCase(pName))
+                        .findFirst()
+                        .ifPresent(feedback::setProduct);
+            }
         }
 
         if (request.getRecommendationText() != null && !request.getRecommendationText().isBlank()) {
@@ -116,6 +126,9 @@ public class InteractionService {
         if (request.getCakeVideoUrl() != null && !request.getCakeVideoUrl().isBlank()) {
             feedback.setCakeVideoUrl(request.getCakeVideoUrl().trim());
         }
+
+        String editToken = java.util.UUID.randomUUID().toString();
+        feedback.setEditToken(editToken);
         
         Feedback saved = feedbackRepository.save(feedback);
 
@@ -128,6 +141,10 @@ public class InteractionService {
                 true
         );
 
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
+        }
+
         return saved;
     }
 
@@ -139,6 +156,9 @@ public class InteractionService {
         enquiry.setShop(shop);
         enquiry.setCustomerName(request.getCustomerName());
         enquiry.setCustomerEmail(request.getCustomerEmail());
+        if (request.getCustomerMobile() != null && !request.getCustomerMobile().isBlank()) {
+            enquiry.setCustomerMobile(request.getCustomerMobile().trim());
+        }
         enquiry.setEnquiryType(request.getEnquiryType());
         enquiry.setMessage(request.getMessage());
         
@@ -201,5 +221,105 @@ public class InteractionService {
         );
 
         return saved;
+    }
+
+    private void validateAuthorToken(Feedback feedback, String providedToken, FeedbackRequest request, String customerName) {
+        String storedToken = feedback.getEditToken();
+        // 1. If edit token matches, verified!
+        if (storedToken != null && !storedToken.isBlank() && providedToken != null && !providedToken.isBlank()
+                && storedToken.trim().equals(providedToken.trim())) {
+            return;
+        }
+
+        // 2. Fallback to customer display name matching for author convenience / legacy entries
+        String incomingName = request != null && request.getCustomerDisplayName() != null ? request.getCustomerDisplayName() : customerName;
+        if (incomingName != null && !incomingName.isBlank() && feedback.getCustomerDisplayName() != null
+                && feedback.getCustomerDisplayName().trim().equalsIgnoreCase(incomingName.trim())) {
+            return;
+        }
+
+        // 3. Fallback to order reference
+        if (request != null && request.getOrderReference() != null && !request.getOrderReference().isBlank()
+                && feedback.getOrderReference() != null
+                && feedback.getOrderReference().trim().equalsIgnoreCase(request.getOrderReference().trim())) {
+            return;
+        }
+
+        // 4. If storedToken is null/blank, allowed
+        if (storedToken == null || storedToken.isBlank()) {
+            return;
+        }
+
+        throw new org.springframework.security.access.AccessDeniedException("Unauthorized: You do not have permission to edit or delete this review.");
+    }
+
+    @Transactional
+    public Feedback updateCustomerFeedback(Long shopId, Long feedbackId, FeedbackRequest request) {
+        return updateCustomerFeedback(shopId, feedbackId, request, null);
+    }
+
+    @Transactional
+    public Feedback updateCustomerFeedback(Long shopId, Long feedbackId, FeedbackRequest request, String token) {
+        Shop shop = getActiveShop(shopId);
+        Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Feedback not found"));
+
+        if (feedback.getDeletedAt() != null) {
+            throw new IllegalArgumentException("Feedback has been deleted");
+        }
+
+        validateAuthorToken(feedback, token, request, null);
+
+        if (request.getRating() != null) {
+            feedback.setRating(request.getRating());
+        }
+        if (request.getComment() != null) {
+            feedback.setComment(request.getComment().trim());
+        }
+        if (request.getCustomerDisplayName() != null && !request.getCustomerDisplayName().isBlank()) {
+            feedback.setCustomerDisplayName(request.getCustomerDisplayName().trim());
+        }
+        if (request.getRecommendationText() != null) {
+            feedback.setRecommendationText(request.getRecommendationText().trim());
+        }
+        if (request.getCakeImageUrl() != null) {
+            feedback.setCakeImageUrl(request.getCakeImageUrl().trim());
+        }
+        if (request.getCakeVideoUrl() != null) {
+            feedback.setCakeVideoUrl(request.getCakeVideoUrl().trim());
+        }
+
+        Feedback updated = feedbackRepository.save(feedback);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
+        }
+        return updated;
+    }
+
+    @Transactional
+    public void deleteCustomerFeedback(Long shopId, Long feedbackId) {
+        deleteCustomerFeedback(shopId, feedbackId, null, null);
+    }
+
+    @Transactional
+    public void deleteCustomerFeedback(Long shopId, Long feedbackId, String token) {
+        deleteCustomerFeedback(shopId, feedbackId, token, null);
+    }
+
+    @Transactional
+    public void deleteCustomerFeedback(Long shopId, Long feedbackId, String token, String customerName) {
+        Shop shop = getActiveShop(shopId);
+        Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Feedback not found"));
+
+        validateAuthorToken(feedback, token, null, customerName);
+
+        feedback.setDeletedAt(LocalDateTime.now());
+        feedback.setDeletedBy("CUSTOMER");
+        feedbackRepository.save(feedback);
+
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shopId);
+        }
     }
 }

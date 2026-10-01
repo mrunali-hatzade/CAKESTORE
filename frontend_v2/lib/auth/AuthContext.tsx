@@ -44,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: res.email,
       role: res.role,
       shopId: res.shopId,
+      fullName: res.fullName,
     };
     localStorage.setItem('cakestore_user', JSON.stringify(authUser));
     setToken(res.token);

@@ -1,4 +1,5 @@
 export type OrderStatus =
+  | 'NEW'
   | 'PENDING'
   | 'CONFIRMED'
   | 'PREPARING'
@@ -6,6 +7,7 @@ export type OrderStatus =
   | 'READY_FOR_PICKUP'
   | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
+  | 'COMPLETED'
   | 'CANCELLED';
 
 export interface PaginatedResponse<T> {
@@ -50,13 +52,14 @@ export interface Order {
   deliveryAddress?: string;
   deliveryDate?: string;
   deliverySlotId?: number;
+  deliverySlotDetails?: string;
   subtotal?: number;
   deliveryCharge?: number;
   totalAmount: number;
   discountAmount?: number;
   status: OrderStatus;
   orderStatus?: string;
-  paymentStatus: 'PENDING' | 'PAID' | 'FAILED' | string;
+  paymentStatus: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | string;
   paymentMethod?: string;
   transactionId?: string;
   paidAt?: string;

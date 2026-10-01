@@ -33,6 +33,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "ORDER BY o.createdAt DESC")
     org.springframework.data.domain.Page<Order> findVisibleOrdersByShopId(@Param("shopId") Long shopId, Pageable pageable);
 
+    @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
+           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
+           "AND (LOWER(o.orderNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(COALESCE(o.customerEmail, '')) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "ORDER BY o.createdAt DESC")
+    List<Order> searchOrdersByShopId(@Param("shopId") Long shopId, @Param("query") String query, Pageable pageable);
+
     @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
            "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
            "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED'))")
@@ -59,6 +69,22 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "  AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED')")
     List<Order> findRecentRealizedOrders(@Param("shopId") Long shopId, @Param("startDate") LocalDateTime startDate);
 
+    @Query("SELECT o FROM Order o " +
+           "WHERE o.shop.id = :shopId " +
+           "  AND o.createdAt >= :startDate " +
+           "  AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "  AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "           AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
+           "ORDER BY o.createdAt ASC")
+    List<Order> findRecentValidOrders(@Param("shopId") Long shopId, @Param("startDate") LocalDateTime startDate);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+           "WHERE o.shop.id = :shopId " +
+           "  AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "  AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "           AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED'))")
+    BigDecimal sumGrossSalesByShopId(@Param("shopId") Long shopId);
+
     @Query("SELECT oi.productNameSnapshot, SUM(oi.quantity) " +
            "FROM OrderItem oi " +
            "WHERE oi.order.shop.id = :shopId " +
@@ -68,6 +94,49 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "GROUP BY oi.productNameSnapshot " +
            "ORDER BY SUM(oi.quantity) DESC")
     List<Object[]> findTopSellingProductsByShopId(@Param("shopId") Long shopId, Pageable pageable);
+
+    @Query("SELECT oi.productNameSnapshot, SUM(oi.quantity), SUM(oi.totalPrice), MAX(oi.productImageUrl) " +
+           "FROM OrderItem oi " +
+           "WHERE oi.order.shop.id = :shopId " +
+           "  AND UPPER(COALESCE(oi.order.orderStatus, '')) != 'CANCELLED' " +
+           "  AND (UPPER(COALESCE(oi.order.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(oi.order.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "  AND UPPER(COALESCE(oi.order.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED') " +
+           "GROUP BY oi.productNameSnapshot " +
+           "ORDER BY SUM(oi.quantity) DESC")
+    List<Object[]> findTopSellingProductsWithRevenueByShopId(@Param("shopId") Long shopId, Pageable pageable);
+
+    @Query("SELECT o.orderStatus, COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
+           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
+           "GROUP BY o.orderStatus")
+    List<Object[]> countOrdersByStatusForShop(@Param("shopId") Long shopId);
+
+    @Query("SELECT COALESCE(o.paymentMethod, 'OTHER'), COUNT(o), SUM(o.totalAmount) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED') " +
+           "GROUP BY COALESCE(o.paymentMethod, 'OTHER')")
+    List<Object[]> sumRevenueByPaymentMethodForShop(@Param("shopId") Long shopId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY') " +
+           "AND UPPER(COALESCE(o.paymentStatus, '')) = 'PENDING' " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED'")
+    List<Object[]> sumPendingCodForShop(@Param("shopId") Long shopId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY') " +
+           "AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED') " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED'")
+    List<Object[]> sumCollectedCodForShop(@Param("shopId") Long shopId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND UPPER(COALESCE(o.paymentMethod, '')) NOT IN ('COD', 'CASH_ON_DELIVERY') " +
+           "AND UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') " +
+           "AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED') " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED'")
+    List<Object[]> sumCollectedOnlineForShop(@Param("shopId") Long shopId);
 
     org.springframework.data.domain.Page<Order> findByCustomerPhoneOrderByCreatedAtDesc(String customerPhone, Pageable pageable);
 
@@ -79,13 +148,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByShopIdAndCustomerEmailOrderByCreatedAtDesc(Long shopId, String customerEmail);
 
+    List<Order> findByShopIdAndCustomerPhoneOrderByCreatedAtDesc(Long shopId, String customerPhone);
+
     List<Order> findByShopIdAndCustomerNameOrderByCreatedAtDesc(Long shopId, String customerName);
 
     @Query("SELECT DISTINCT o.customerEmail FROM Order o WHERE o.shop.id = :shopId AND o.customerEmail IS NOT NULL")
     List<String> findUniqueCustomerEmailsByShopId(@Param("shopId") Long shopId);
 
     @Query(value = "SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
-           "  COALESCE(NULLIF(TRIM(o.customerName), ''), o.customerEmail, 'Guest Customer'), " +
+           "  COALESCE(MAX(o.customerName), MAX(o.customerEmail), 'Guest Customer'), " +
            "  MAX(o.customerEmail), " +
            "  MAX(o.customerPhone), " +
            "  MAX(o.deliveryAddress), " +
@@ -95,11 +166,32 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            ") " +
            "FROM Order o " +
            "WHERE o.shop.id = :shopId " +
-           "GROUP BY COALESCE(NULLIF(TRIM(o.customerName), ''), o.customerEmail, 'Guest Customer') " +
+           "GROUP BY COALESCE(NULLIF(TRIM(LOWER(o.customerEmail)), ''), NULLIF(TRIM(o.customerPhone), ''), NULLIF(TRIM(o.customerName), ''), 'Guest Customer') " +
            "ORDER BY MAX(o.createdAt) DESC",
-           countQuery = "SELECT COUNT(DISTINCT COALESCE(NULLIF(TRIM(o.customerName), ''), o.customerEmail, 'Guest Customer')) FROM Order o WHERE o.shop.id = :shopId")
+           countQuery = "SELECT COUNT(DISTINCT COALESCE(NULLIF(TRIM(LOWER(o.customerEmail)), ''), NULLIF(TRIM(o.customerPhone), ''), NULLIF(TRIM(o.customerName), ''), 'Guest Customer')) FROM Order o WHERE o.shop.id = :shopId")
     org.springframework.data.domain.Page<com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse> findCustomerProfilesByShopId(
            @Param("shopId") Long shopId, 
+           Pageable pageable);
+
+    @Query(value = "SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
+           "  COALESCE(MAX(o.customerName), MAX(o.customerEmail), 'Guest Customer'), " +
+           "  MAX(o.customerEmail), " +
+           "  MAX(o.customerPhone), " +
+           "  MAX(o.deliveryAddress), " +
+           "  COUNT(o.id), " +
+           "  SUM(CASE WHEN UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED') THEN o.totalAmount ELSE 0 END), " +
+           "  MAX(o.createdAt) " +
+           ") " +
+           "FROM Order o " +
+           "WHERE o.shop.id = :shopId " +
+           "  AND (LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "    OR LOWER(COALESCE(o.customerEmail, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "GROUP BY COALESCE(NULLIF(TRIM(LOWER(o.customerEmail)), ''), NULLIF(TRIM(o.customerPhone), ''), NULLIF(TRIM(o.customerName), ''), 'Guest Customer') " +
+           "ORDER BY MAX(o.createdAt) DESC")
+    List<com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse> searchCustomerProfilesByShopId(
+           @Param("shopId") Long shopId, 
+           @Param("query") String query, 
            Pageable pageable);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +

@@ -1,5 +1,6 @@
 package com.cakeplatform.api.modules.product;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     
     @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId")
     List<Product> findByShopId(@Param("shopId") Long shopId);
+
+    @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId " +
+           "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR (p.category IS NOT NULL AND LOWER(p.category.name) LIKE LOWER(CONCAT('%', :query, '%')))) " +
+           "ORDER BY p.name ASC")
+    List<Product> searchProductsByShopId(@Param("shopId") Long shopId, @Param("query") String query, Pageable pageable);
 
     @Query("SELECT p FROM Product p WHERE p.id = :id AND p.shop.id = :shopId")
     Optional<Product> findByIdAndShopId(@Param("id") Long id, @Param("shopId") Long shopId);

@@ -1,15 +1,79 @@
+export interface DailySalesDataPoint {
+  date: string;
+  dayName: string;
+  shortDay: string;
+  label: string;
+  revenue: number;
+  orderCount: number;
+  isToday: boolean;
+}
+
+export interface PaymentMethodBreakdown {
+  method: string;
+  label: string;
+  orderCount: number;
+  revenue: number;
+  percentage: number;
+}
+
+export interface TopProductMetric {
+  name: string;
+  quantity: number;
+  revenue: number;
+  sharePercentage: number;
+  imageUrl?: string | null;
+}
+
+export interface CodSettlementSummary {
+  pendingAmount: number;
+  pendingOrders: number;
+  collectedAmount: number;
+  collectedOrders: number;
+  onlineCollectedAmount: number;
+  onlineOrders: number;
+  totalCollectedAmount: number;
+  totalCollectedOrders: number;
+}
+
 export interface DashboardAnalytics {
+  shopId: number;
+  range?: string;
   totalRevenue: number;
+  realizedRevenue?: number;
+  collectedRevenue?: number;
+  totalGrossSales?: number;
+  pendingReceivables?: number;
+  pendingCodAmount?: number;
+  pendingCodOrders?: number;
+  collectedCodAmount?: number;
+  collectedCodOrders?: number;
+  onlineCollectedAmount?: number;
+  onlineOrders?: number;
+  codSettlement?: CodSettlementSummary;
   totalOrders: number;
+  completedOrders?: number;
+  inProgressOrders?: number;
+  cancelledOrders?: number;
+  cancellationRate?: number;
+  averageOrderValue?: number;
+  periodRevenue?: number;
+  periodOrders?: number;
+  periodDailyAverage?: number;
+  peakDay?: string | null;
+  peakDate?: string | null;
+  peakAmount?: number;
+  dailyData?: DailySalesDataPoint[];
   salesByDay: Record<string, number>;
   topSellingProducts: Record<string, number>;
+  topProductsDetails?: TopProductMetric[];
+  paymentBreakdown?: PaymentMethodBreakdown[];
   conversionRate?: number;
-  averageOrderValue?: number;
   activeProductsCount?: number;
   totalCoupons?: number;
   activeCoupons?: number;
   totalDiscountGranted?: number;
   totalCouponOrders?: number;
+  couponUtilizationRate?: number;
 }
 
 export type DiscountType = 'PERCENTAGE' | 'FLAT';
@@ -34,11 +98,11 @@ export interface CreateCouponPayload {
   code: string;
   discountType: DiscountType;
   discountValue: number;
-  minOrderValue?: number;
-  maxDiscountCap?: number;
-  startDate?: string;
-  expiryDate?: string;
-  usageLimit?: number;
+  minOrderValue?: number | null;
+  maxDiscountCap?: number | null;
+  startDate?: string | null;
+  expiryDate?: string | null;
+  usageLimit?: number | null;
   isActive?: boolean;
 }
 
@@ -67,6 +131,12 @@ export interface OrderItemSummary {
   unitPrice: number;
   quantity: number;
   totalPrice: number;
+  variantName?: string;
+  dietaryPreference?: string;
+  cakeMessage?: string;
+  photoReferenceUrl?: string;
+  addonsSummary?: string;
+  productImageUrl?: string;
 }
 
 export interface CustomerOrderSummary {
@@ -76,13 +146,16 @@ export interface CustomerOrderSummary {
   orderStatus: string;
   paymentStatus: string;
   deliveryAddress?: string;
+  deliveryDate?: string;
+  couponCode?: string;
+  discountAmount?: number;
   createdAt: string;
   items?: OrderItemSummary[];
 }
 
 export interface CustomerProfile {
   name: string;
-  email: string;
+  email?: string;
   mobile?: string;
   address?: string;
   totalOrders: number;
@@ -118,8 +191,10 @@ export interface CustomCakeRequest {
   budget?: number;
   requiredDate?: string;
   deliveryPreference?: string;
-  status: 'PENDING' | 'REVIEWED' | 'ACCEPTED' | 'REJECTED' | string;
+  status: 'PENDING' | 'QUOTED' | 'REVIEWED' | 'ACCEPTED' | 'REJECTED' | string;
   ownerResponse?: string;
+  convertedOrderId?: number;
+  convertedOrderNumber?: string;
   fieldValues?: Array<{
     id?: number;
     fieldKey: string;
@@ -128,6 +203,28 @@ export interface CustomCakeRequest {
   }>;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface ConvertToOrderPayload {
+  agreedPrice?: number;
+  deliveryCharge?: number;
+  deliveryDate?: string;
+  deliveryAddress?: string;
+  fulfillmentType?: 'DOORSTEP_DELIVERY' | 'STORE_PICKUP';
+  deliverySlotId?: number;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  notes?: string;
+}
+
+export interface ConvertToOrderResult {
+  orderId: number;
+  orderNumber: string;
+  customCakeRequestId: number;
+  totalAmount: number;
+  orderStatus: string;
+  paymentStatus: string;
+  message: string;
 }
 
 export interface GeneralEnquiry {
@@ -166,6 +263,12 @@ export interface FeedbackRecord {
   rating: number;
   comment?: string;
   orderReference?: string;
+  productId?: number;
+  productName?: string;
+  cakeImageUrl?: string;
+  cakeVideoUrl?: string;
+  customerEmail?: string;
+  isApproved?: boolean;
   ownerReply?: string;
   deletedAt?: string;
   deletedBy?: string;
@@ -300,3 +403,61 @@ export interface OwnerPaymentRecord {
   subscriptionPlanName?: string;
   invoiceAvailable: boolean;
 }
+
+export interface GlobalSearchOrderResult {
+  id: number;
+  orderNumber: string;
+  customerName?: string;
+  customerPhone?: string;
+  totalAmount: number;
+  orderStatus: string;
+  paymentStatus: string;
+  createdAt: string;
+}
+
+export interface GlobalSearchProductResult {
+  id: number;
+  name: string;
+  price: number;
+  categoryName?: string;
+  imageUrl?: string;
+  status: string;
+  availability: boolean;
+}
+
+export interface GlobalSearchCustomerResult {
+  name: string;
+  email?: string;
+  mobile?: string;
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderDate?: string;
+}
+
+export interface GlobalSearchCustomCakeResult {
+  id: number;
+  customerName: string;
+  occasion?: string;
+  flavour?: string;
+  budget?: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface GlobalSearchEnquiryResult {
+  id: number;
+  customerName: string;
+  enquiryType: string;
+  messageSnippet?: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface GlobalSearchResults {
+  orders: GlobalSearchOrderResult[];
+  products: GlobalSearchProductResult[];
+  customers: GlobalSearchCustomerResult[];
+  customCakes: GlobalSearchCustomCakeResult[];
+  enquiries: GlobalSearchEnquiryResult[];
+}
+

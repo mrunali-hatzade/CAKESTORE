@@ -46,7 +46,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "Origin",
                         "X-Requested-With",
                         "Access-Control-Request-Method",
-                        "Access-Control-Request-Headers"
+                        "Access-Control-Request-Headers",
+                        "X-Review-Token",
+                        "x-review-token",
+                        "X-Customer-Name",
+                        "x-customer-name",
+                        "X-Customer-Phone",
+                        "x-customer-phone",
+                        "X-Order-Reference",
+                        "x-order-reference"
                 )
                 .exposedHeaders("Retry-After", "Content-Disposition")
                 .allowCredentials(true);

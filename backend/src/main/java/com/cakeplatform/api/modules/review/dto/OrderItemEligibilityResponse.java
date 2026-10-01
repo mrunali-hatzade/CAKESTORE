@@ -19,4 +19,7 @@ public class OrderItemEligibilityResponse {
     private Boolean isEligible;
     private Long existingReviewId;
     private Integer existingRating;
+    private String existingReviewText;
+    private String existingCakeImageUrl;
+    private String existingCakeVideoUrl;
 }

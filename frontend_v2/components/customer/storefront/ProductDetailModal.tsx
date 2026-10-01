@@ -23,6 +23,8 @@ import {
   MessageCircle,
   ExternalLink,
   Share2,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Product } from '@/types/product';
@@ -33,6 +35,10 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/common/Toast';
 import { reviewsApi, ProductReviewsSummary } from '@/lib/api/reviews';
+import { storefrontApi } from '@/lib/api/storefront';
+import { apiClient } from '@/lib/api/client';
+import { reviewStorage } from '@/lib/utils/reviewStorage';
+import { CakeReviewModal } from './CakeReviewModal';
 import { getSafeImageUrl, isDummyOrInvalidImageUrl, FALLBACK_CAKE_IMAGE } from '@/lib/utils/image';
 
 interface ProductDetailModalProps {
@@ -44,6 +50,30 @@ interface ProductDetailModalProps {
 }
 
 const FALLBACK_CAKE = FALLBACK_CAKE_IMAGE;
+
+const renderRatingStars = (rating: number, starSize = 'w-3.5 h-3.5') => {
+  return (
+    <div className="flex items-center gap-0.5" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((starIndex) => {
+        const fillAmount = Math.max(0, Math.min(1, rating - (starIndex - 1)));
+        if (fillAmount >= 0.75) {
+          return <Star key={starIndex} className={`${starSize} fill-amber-400 text-amber-400 shrink-0`} />;
+        } else if (fillAmount >= 0.25) {
+          return (
+            <div key={starIndex} className={`relative inline-block ${starSize} shrink-0`}>
+              <Star className={`${starSize} text-gray-200 fill-gray-200`} />
+              <div className="absolute inset-0 overflow-hidden w-[50%]">
+                <Star className={`${starSize} fill-amber-400 text-amber-400`} />
+              </div>
+            </div>
+          );
+        } else {
+          return <Star key={starIndex} className={`${starSize} text-gray-200 fill-gray-200 shrink-0`} />;
+        }
+      })}
+    </div>
+  );
+};
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   isOpen,
@@ -76,6 +106,63 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   // Reviews state
   const [reviewsSummary, setReviewsSummary] = useState<ProductReviewsSummary | null>(null);
   const [loadingReviews, setLoadingReviews] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [editingReview, setEditingReview] = useState<any>(null);
+
+  const fetchReviews = () => {
+    if (shop.id && product?.id) {
+      setLoadingReviews(true);
+      reviewsApi
+        .getProductReviews(shop.id, product.id)
+        .then((res) => setReviewsSummary(res))
+        .catch(() => setReviewsSummary(null))
+        .finally(() => setLoadingReviews(false));
+    }
+  };
+
+  const myProductReview = reviewsSummary?.reviews?.find((r) =>
+    reviewStorage.isCustomerReview(r.id, r.customerDisplayName, r.source)
+  );
+
+  const handleOpenEditReview = (r: any) => {
+    const token = r.editToken || reviewStorage.getStoredReviewToken(r.id, r.source);
+    setEditingReview({
+      id: r.id,
+      customerDisplayName: r.customerDisplayName,
+      rating: r.rating,
+      reviewText: r.reviewText,
+      cakeImageUrl: r.cakeImageUrl,
+      cakeVideoUrl: r.cakeVideoUrl,
+      orderReference: r.orderReference,
+      source: r.source || 'FEEDBACK',
+      editToken: token,
+    });
+    setIsReviewModalOpen(true);
+  };
+
+  const handleDeleteReview = async (r: any) => {
+    if (!window.confirm('Are you sure you want to delete your review?')) return;
+    try {
+      const token = r.editToken || reviewStorage.getStoredReviewToken(r.id, r.source);
+      const customerName = r.customerDisplayName || reviewStorage.getStoredCustomerName();
+      if (r.source === 'PRODUCT_REVIEW' && product?.id) {
+        const phone = reviewStorage.getStoredCustomerPhone();
+        const orderNumber = r.orderReference || '';
+        try {
+          await reviewsApi.deleteProductReview(shop.id, product.id, r.id, orderNumber, phone, token);
+        } catch {
+          await storefrontApi.deleteFeedback(shop.id, r.id, token, customerName);
+        }
+      } else {
+        await storefrontApi.deleteFeedback(shop.id, r.id, token, customerName);
+      }
+      reviewStorage.removeStoredReview(r.id, r.source);
+      toast.success('Your review has been removed.');
+      fetchReviews();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete review');
+    }
+  };
 
   // Reset or initialize when product changes
   useEffect(() => {
@@ -140,8 +227,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const isAvailable = product.availability !== false && product.inStock !== false && isVariantAvailable;
   const ratingsEnabled = shop.storefrontSettings?.ratingsEnabled !== false;
 
-  const effectiveOriginalPrice = selectedVariant
-    ? (selectedVariant.originalPrice ? Number(selectedVariant.originalPrice) : null)
+  const effectiveOriginalPrice = selectedVariant?.originalPrice
+    ? Number(selectedVariant.originalPrice)
     : (product.originalPrice ? Number(product.originalPrice) : null);
 
   const discountPercent = effectiveOriginalPrice && effectiveOriginalPrice > unitPrice
@@ -331,11 +418,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/95 backdrop-blur-md shadow-xs text-xs font-bold text-brand-espresso border border-brand-border/40">
                   <span
                     className={`w-2 h-2 rounded-full ${
-                      product.isEggless ? 'bg-emerald-600 ring-2 ring-emerald-600/20' : 'bg-amber-600'
+                      isEgglessPreference ? 'bg-emerald-600 ring-2 ring-emerald-600/20' : 'bg-amber-600'
                     }`}
                   />
-                  <span>{isEgglessPreference ? '100% Pure Veg' : 'Contains Egg'}</span>
+                  <span>
+                    {product.allowEggChoice
+                      ? (isEgglessPreference ? 'Eggless Option' : 'Contains Egg')
+                      : (product.isEggless ?? (product.eggPreferenceDefault === 'EGGLESS'))
+                        ? (shop?.isPureVeg ? '100% Pure Veg (Eggless)' : 'Eggless')
+                        : 'Contains Egg'}
+                  </span>
                 </span>
+                {product.allowEggChoice && (
+                  <span className="text-[10px] font-semibold text-brand-muted bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-full border border-brand-border/30">
+                    Choice Allowed
+                  </span>
+                )}
 
                 {(product.categoryName || product.category) && (
                   <span className="hidden sm:inline-flex text-[11px] font-bold uppercase tracking-wider bg-black/40 text-white backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
@@ -406,6 +504,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
           {/* Configuration Form Controls */}
           <div className="space-y-4 bg-[#FAF7F2] p-4 sm:p-5 rounded-2xl border border-brand-border/60">
+
             {/* Variants Selector (Only when real variants exist in database) */}
             {hasVariants && (
               <div className="space-y-2">
@@ -457,7 +556,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         : 'bg-white text-brand-espresso border-brand-border hover:bg-emerald-50'
                     }`}
                   >
-                    <span className="block text-xs font-bold">🌱 100% Eggless</span>
+                    <span className="block text-xs font-bold">🌱 Eggless</span>
                     {product.egglessPriceDiff && Number(product.egglessPriceDiff) > 0 ? (
                       <span className="text-[10px] opacity-90">+₹{product.egglessPriceDiff}</span>
                     ) : null}
@@ -631,10 +730,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         </p>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 pt-0.5">
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                        {isEgglessPreference ? '🌱 100% Pure Veg (Eggless)' : 'Contains Egg'}
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                          isEgglessPreference
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {product.allowEggChoice
+                          ? (isEgglessPreference ? '🌱 Eggless Option Selected' : 'Contains Egg Selected')
+                          : (product.isEggless ?? (product.eggPreferenceDefault === 'EGGLESS'))
+                            ? (shop?.isPureVeg ? '🌱 100% Pure Veg (Eggless)' : '🌱 Eggless')
+                            : 'Contains Egg'}
                       </span>
+                      {product.allowEggChoice && (
+                        <span className="text-[10px] text-brand-muted bg-brand-cream/40 px-2 py-0.5 rounded-full border border-brand-border/40">
+                          Choice Allowed (Default: {product.eggPreferenceDefault || 'EGGLESS'})
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -671,7 +785,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
             {/* 4. Verified Customer Reviews */}
             {ratingsEnabled && (
-              <div className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white shadow-2xs">
+              <div id="modal-reviews-section" className="border border-brand-border/80 rounded-2xl overflow-hidden bg-white shadow-2xs">
                 <button
                   type="button"
                   onClick={() => toggleAccordion('reviews')}
@@ -681,24 +795,79 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                     <span>Verified Customer Reviews ({totalReviews})</span>
                   </div>
-                  {openAccordions.reviews ? <ChevronUp className="w-4 h-4 text-brand-muted" /> : <ChevronDown className="w-4 h-4 text-brand-muted" />}
+                  <div className="flex items-center gap-2">
+                    {myProductReview ? (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditReview(myProductReview);
+                        }}
+                        className="text-[11px] font-bold text-brand-plum bg-brand-blush hover:bg-brand-blush/80 px-2 py-0.5 rounded-lg border border-brand-plum/20 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Edit</span>
+                      </span>
+                    ) : (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingReview(null);
+                          setIsReviewModalOpen(true);
+                        }}
+                        className="text-[11px] font-bold text-brand-plum hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Review</span>
+                      </span>
+                    )}
+                    {openAccordions.reviews ? <ChevronUp className="w-4 h-4 text-brand-muted" /> : <ChevronDown className="w-4 h-4 text-brand-muted" />}
+                  </div>
                 </button>
                 {openAccordions.reviews && (
                   <div className="px-4 pb-4 pt-2 border-t border-brand-border/40 space-y-4">
                     {/* Rating Breakdown Header */}
-                    <div className="bg-[#FAF7F2] rounded-xl p-3 border border-brand-border/60 flex items-center justify-between">
-                      <div>
+                    <div className="bg-[#FAF7F2] rounded-xl p-3.5 border border-brand-border/60 flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3">
                         <div className="text-2xl font-serif font-bold text-brand-espresso">
-                          {averageRating > 0 ? `${averageRating.toFixed(1)}★` : 'New'}
+                          {totalReviews > 0 && averageRating > 0 ? averageRating.toFixed(1) : 'New'}
                         </div>
-                        <p className="text-[10px] text-brand-muted">
-                          {totalReviews > 0 ? 'Verified Celebration Ratings' : 'No ratings yet'}
-                        </p>
+                        <div className="space-y-0.5">
+                          {totalReviews > 0 && averageRating > 0 ? (
+                            <>
+                              <div className="flex items-center gap-1.5">
+                                {renderRatingStars(averageRating, 'w-4 h-4')}
+                                <span className="text-xs font-semibold text-brand-muted">/ 5.0</span>
+                              </div>
+                              <p className="text-[11px] text-brand-muted">
+                                {totalReviews} verified celebration {totalReviews === 1 ? 'rating' : 'ratings'}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-[11px] text-brand-muted">No customer ratings yet</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>100% Authentic Purchases</span>
-                      </div>
+                      {myProductReview ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditReview(myProductReview)}
+                          className="text-xs font-bold text-brand-plum bg-brand-blush hover:bg-brand-blush/80 px-2.5 py-1 rounded-lg border border-brand-plum/20 inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit My Review</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingReview(null);
+                            setIsReviewModalOpen(true);
+                          }}
+                          className="text-xs font-bold text-brand-plum hover:underline cursor-pointer"
+                        >
+                          Post Review
+                        </button>
+                      )}
                     </div>
 
                     {/* Reviews List */}
@@ -711,27 +880,92 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {reviewsSummary.reviews.map((rev) => (
-                          <div key={rev.id} className="p-3 rounded-xl bg-white border border-brand-border/60 space-y-1.5 text-xs">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-brand-espresso">{rev.customerDisplayName}</span>
-                              <div className="flex items-center gap-0.5">
-                                {[1, 2, 3, 4, 5].map((s) => (
-                                  <Star
-                                    key={s}
-                                    className={`w-3 h-3 ${s <= rev.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
+                        {reviewsSummary.reviews.map((rev) => {
+                          const isMine = reviewStorage.isCustomerReview(rev.id, rev.customerDisplayName, rev.source);
+                          return (
+                            <div
+                              key={`${rev.source || 'rev'}-${rev.id}`}
+                              className={`p-3 rounded-xl border space-y-1.5 text-xs transition-all ${
+                                isMine
+                                  ? 'bg-[#FAF7F2] border-brand-plum/40 ring-1 ring-brand-plum/20'
+                                  : 'bg-white border-brand-border/60'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-brand-espresso">{rev.customerDisplayName}</span>
+                                  {isMine && (
+                                    <span className="text-[10px] font-bold text-brand-plum bg-brand-blush px-2 py-0.5 rounded-full border border-brand-plum/30">
+                                      Your Review
+                                    </span>
+                                  )}
+                                  {rev.isVerifiedPurchase && (
+                                    <span className="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100">
+                                      Verified
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-0.5">
+                                  {[1, 2, 3, 4, 5].map((s) => (
+                                    <Star
+                                      key={s}
+                                      className={`w-3 h-3 ${s <= rev.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              {rev.reviewText && <p className="text-brand-muted italic">&ldquo;{rev.reviewText}&rdquo;</p>}
+                              {rev.cakeImageUrl && (
+                                <div className="mt-1.5 w-20 h-20 rounded-xl overflow-hidden border border-brand-border/60 bg-black/5">
+                                  <img
+                                    src={rev.cakeImageUrl}
+                                    alt="Customer cake photo"
+                                    className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                                    onClick={() => window.open(rev.cakeImageUrl, '_blank')}
                                   />
-                                ))}
-                              </div>
+                                </div>
+                              )}
+                              {rev.cakeVideoUrl && (
+                                <div className="mt-1.5 max-w-[240px] rounded-xl overflow-hidden border border-brand-border/60 bg-black">
+                                  <video
+                                    src={rev.cakeVideoUrl}
+                                    controls
+                                    playsInline
+                                    className="w-full max-h-36 object-cover rounded-xl"
+                                  />
+                                </div>
+                              )}
+                              {rev.ownerReply && (
+                                <div className="p-2 rounded-lg bg-brand-blush/40 text-[11px] text-brand-plum font-medium">
+                                  <strong>Chef&apos;s note:</strong> {rev.ownerReply}
+                                </div>
+                              )}
+                              {isMine && (
+                                <div className="pt-2 border-t border-brand-border/30 flex items-center justify-between text-[11px]">
+                                  <span className="text-brand-muted">You posted this review</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditReview(rev)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 font-semibold rounded-md text-brand-plum bg-brand-blush hover:bg-brand-blush/80 cursor-pointer"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                      <span>Edit</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteReview(rev)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 font-semibold rounded-md text-rose-600 bg-rose-50 hover:bg-rose-100 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                      <span>Delete</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            {rev.reviewText && <p className="text-brand-muted italic">&ldquo;{rev.reviewText}&rdquo;</p>}
-                            {rev.ownerReply && (
-                              <div className="p-2 rounded-lg bg-brand-blush/40 text-[11px] text-brand-plum font-medium">
-                                <strong>Chef&apos;s note:</strong> {rev.ownerReply}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -740,6 +974,23 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {product && (
+        <CakeReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => {
+            setIsReviewModalOpen(false);
+            setEditingReview(null);
+          }}
+          shopId={shop.id}
+          productId={product.id}
+          productName={product.name}
+          shopName={shop.businessName}
+          initialReview={editingReview}
+          onDelete={fetchReviews}
+          onReviewSubmitted={fetchReviews}
+        />
       )}
     </Modal>
   );

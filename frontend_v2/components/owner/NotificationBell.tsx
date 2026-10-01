@@ -35,8 +35,9 @@ function getNotificationDestination(type: NotificationType): string | null {
     case 'NEW_FEEDBACK':
       return '/dashboard/owner/reviews';
     case 'NEW_ENQUIRY':
+      return '/dashboard/owner/inquiries';
     case 'CUSTOM_ORDER_REQUEST':
-      return '/dashboard/owner/enquiries';
+      return '/dashboard/owner/custom-cakes';
     case 'SUBSCRIPTION_EXPIRING':
     case 'SUBSCRIPTION_EXPIRED':
       return '/dashboard/owner/subscription';

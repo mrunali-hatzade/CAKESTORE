@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShoppingBag, Plus, Minus, Trash2, ArrowRight, Store, Tag, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, ShoppingBag, Plus, Minus, Trash2, ArrowRight, Store, Tag, CheckCircle2, AlertCircle, Loader2, Calendar } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
@@ -227,6 +227,17 @@ export const CartDrawer: React.FC = () => {
                       <p className="text-[11px] text-brand-plum bg-brand-blush/60 p-2 rounded-xl italic">
                         &quot;{item.customMessage}&quot;
                       </p>
+                    )}
+
+                    {(item.deliveryDate || item.deliverySlotName || item.deliveryTime) && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-[#5C1D2E] bg-[#FAF7F2] px-2.5 py-1.5 rounded-xl border border-brand-border/60">
+                        <Calendar className="w-3.5 h-3.5 shrink-0 text-[#5C1D2E]" />
+                        <span className="font-medium line-clamp-1">
+                          {item.deliveryDate && new Date(item.deliveryDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          {item.deliveryDate && (item.deliveryTime || item.deliverySlotName) ? ' • ' : ''}
+                          {item.deliveryTime ? `🕒 Preferred: ${item.deliveryTime}` : item.deliverySlotName}
+                        </span>
+                      </div>
                     )}
 
                     <div className="flex items-center justify-between pt-2 border-t border-brand-border/40">

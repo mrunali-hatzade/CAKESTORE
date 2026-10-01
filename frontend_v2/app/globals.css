@@ -43,3 +43,25 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #5B2333;
 }
+
+/* Continuous Horizontal Marquee for Reviews & Highlights */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 35s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+

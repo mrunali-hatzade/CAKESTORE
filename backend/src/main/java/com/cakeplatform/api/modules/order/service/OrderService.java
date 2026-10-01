@@ -43,11 +43,11 @@ public class OrderService {
     }
 
     private static final java.util.Map<String, java.util.List<String>> ALLOWED_TRANSITIONS = java.util.Map.of(
-        "NEW", java.util.List.of("CONFIRMED", "PREPARING", "READY", "COMPLETED", "CANCELLED"),
-        "CONFIRMED", java.util.List.of("PREPARING", "READY", "COMPLETED", "CANCELLED"),
-        "PREPARING", java.util.List.of("READY", "COMPLETED", "CANCELLED"),
-        "READY", java.util.List.of("DELIVERED", "COMPLETED", "CANCELLED"),
-        "DELIVERED", java.util.List.of("COMPLETED")
+        "NEW", java.util.List.of("CONFIRMED", "PREPARING", "READY", "DELIVERED", "COMPLETED", "CANCELLED"),
+        "CONFIRMED", java.util.List.of("NEW", "PREPARING", "READY", "DELIVERED", "COMPLETED", "CANCELLED"),
+        "PREPARING", java.util.List.of("CONFIRMED", "READY", "DELIVERED", "COMPLETED", "CANCELLED"),
+        "READY", java.util.List.of("PREPARING", "DELIVERED", "COMPLETED", "CANCELLED"),
+        "DELIVERED", java.util.List.of("READY", "COMPLETED", "CANCELLED")
     );
 
     @Transactional
@@ -128,6 +128,10 @@ public class OrderService {
             if ("CASH_COLLECTED".equalsIgnoreCase(order.getTransactionId())) {
                 order.setTransactionId(null);
             }
+        } else if ("REFUNDED".equalsIgnoreCase(newStatus)) {
+            if (order.getTransactionId() == null || order.getTransactionId().isBlank()) {
+                order.setTransactionId(paymentNote != null && !paymentNote.isBlank() ? paymentNote : "REFUND_ISSUED");
+            }
         }
 
         Order updated = orderRepository.save(order);
@@ -135,9 +139,38 @@ public class OrderService {
         activityLogger.logActivity(userId, shop.getId(), "ORDER_PAYMENT_STATUS_CHANGED", "ORDER", updated.getId(),
                 "Payment Status: " + newStatus + (paymentNote != null ? " (" + paymentNote + ")" : ""));
 
-        notifyCustomerPaymentReceived(shop, updated);
+        if ("REFUNDED".equalsIgnoreCase(updated.getPaymentStatus())) {
+            notifyCustomerRefundProcessed(shop, updated);
+        } else {
+            notifyCustomerPaymentReceived(shop, updated);
+        }
 
         return updated;
+    }
+
+    private void notifyCustomerRefundProcessed(Shop shop, Order order) {
+        try {
+            String shopName = shop.getBusinessName() != null ? shop.getBusinessName() : "CakeStore Bakery";
+            String subject = String.format("Refund Processed: Order #%s at %s", order.getOrderNumber(), shopName);
+            String body = String.format("Hello %s,\n\nA refund of ₹%s for your cancelled order #%s at %s has been processed successfully.\n\nThank you for choosing us!",
+                    order.getCustomerName() != null ? order.getCustomerName() : "Customer",
+                    order.getTotalAmount(),
+                    order.getOrderNumber(),
+                    shopName
+            );
+
+            if (order.getCustomerEmail() != null && !order.getCustomerEmail().isBlank()) {
+                emailService.sendEmail(order.getCustomerEmail(), subject, body);
+            }
+
+            if (order.getCustomerPhone() != null && !order.getCustomerPhone().isBlank()) {
+                String smsBody = String.format("Refund processed: ₹%s for order #%s at %s.",
+                        order.getTotalAmount(), order.getOrderNumber(), shopName);
+                smsService.sendSms(order.getCustomerPhone(), smsBody);
+            }
+        } catch (Exception e) {
+            // Non-blocking notification failsafe
+        }
     }
 
     private void notifyCustomerPaymentReceived(Shop shop, Order order) {

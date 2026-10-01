@@ -8,7 +8,7 @@ import { Product, Category } from '@/types/product';
 import { useCart } from '@/context/CartContext';
 import { StorefrontNavbar } from '@/components/customer/storefront/StorefrontNavbar';
 import { StorefrontBanner } from '@/components/customer/storefront/StorefrontBanner';
-import { StorefrontTabNav, StorefrontTab } from '@/components/customer/storefront/StorefrontTabNav';
+import { StorefrontTab } from '@/components/customer/storefront/StorefrontTabNav';
 import { StorefrontHomeTab } from '@/components/customer/storefront/tabs/StorefrontHomeTab';
 import { StorefrontShopTab } from '@/components/customer/storefront/tabs/StorefrontShopTab';
 import { StorefrontAboutTab } from '@/components/customer/storefront/tabs/StorefrontAboutTab';
@@ -159,25 +159,18 @@ function StorefrontContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-brand-cream-light">
-      {/* Storefront Header with in-store basket trigger */}
+      {/* Merged Dual-Tier Storefront Header (Main Nav + Menu Tabs stacked directly below) */}
       <StorefrontNavbar
         shop={shop}
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
         activeTab={activeTab}
         onNavigateTab={handleTabChange}
-      />
-
-      {/* Bakery Hero Banner */}
-      <StorefrontBanner shop={shop} />
-
-      {/* Bakery Mini-Website 8-Destination Tab Navigation */}
-      <StorefrontTabNav
-        shop={shop}
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
         productCount={products.length}
       />
+
+      {/* Bakery Hero Banner (Shown on 'home' tab) */}
+      {activeTab === 'home' && <StorefrontBanner shop={shop} />}
 
       {/* Main Tab Content View Router */}
       <main className="w-full max-w-[1720px] mx-auto px-4 sm:px-8 lg:px-12 py-8 sm:py-10 flex-1">

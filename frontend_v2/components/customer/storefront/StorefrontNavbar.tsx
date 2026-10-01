@@ -22,6 +22,7 @@ import {
   MapPin,
   MessageCircle,
   Leaf,
+  Star,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { StorefrontTab } from './StorefrontTabNav';
@@ -36,10 +37,12 @@ interface StorefrontNavbarProps {
   shop: Shop;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
-  /** Current active storefront tab — used to highlight the active item in the hamburger menu */
+  /** Current active storefront tab — used to highlight the active item in the hamburger menu and menu bar */
   activeTab?: StorefrontTab;
-  /** Called when a menu item is selected from the hamburger — switches tab */
+  /** Called when a menu item is selected — switches tab */
   onNavigateTab?: (tab: StorefrontTab) => void;
+  productCount?: number;
+  offersCount?: number;
 }
 
 interface MobileMenuItem {
@@ -63,8 +66,10 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
   shop,
   searchQuery = '',
   onSearchChange,
-  activeTab,
+  activeTab = 'home',
   onNavigateTab,
+  productCount = 0,
+  offersCount = 0,
 }) => {
   const { totalItems, setIsCartOpen } = useCart();
   const { totalFavorites, setIsFavoritesOpen } = useFavorites();
@@ -119,6 +124,22 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
     (item) => !(item.id === 'custom-cakes' && !customCakesEnabled)
   );
 
+  const allMenuTabs: { id: StorefrontTab; label: string; icon: React.ElementType; badge?: string | number }[] = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'shop', label: 'Shop Cakes', icon: ShoppingBag, badge: productCount > 0 ? productCount : undefined },
+    { id: 'about', label: 'About Us', icon: Info },
+    { id: 'offers', label: 'Offers & Coupons', icon: Tag, badge: offersCount > 0 ? offersCount : undefined },
+    { id: 'custom-cakes', label: 'Custom Cakes', icon: Sparkles },
+    { id: 'gallery', label: 'Cake Gallery', icon: ImageIcon },
+    { id: 'contact', label: 'Contact Us', icon: MessageSquare },
+    { id: 'track', label: 'Track Order', icon: Truck },
+  ];
+
+  const menuTabs = allMenuTabs.filter((tab) => {
+    if (tab.id === 'custom-cakes' && !customCakesEnabled) return false;
+    return true;
+  });
+
   const addressParts = [shop.area, shop.city, shop.state].filter(Boolean);
   const displayAddress =
     addressParts.length > 0 ? addressParts.join(', ') : `${shop.city || 'Pune'}, ${shop.state || 'Maharashtra'}`;
@@ -127,6 +148,8 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
   const cleanPhone = rawPhone.replace(/\D/g, '');
   const fssaiNumber = shop.fssaiRegistration || (shop as any).fssaiLicenseNumber;
   const whatsappEnabled = shop.storefrontSettings?.whatsappEnabled !== false;
+  const effectiveRating = shop.averageRating ?? shop.rating;
+  const effectiveTotalReviews = shop.totalReviews ?? shop.reviewCount ?? 0;
 
   return (
     <div ref={menuRef} className="sticky top-0 z-30">
@@ -159,6 +182,28 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
                   <h1 className="font-serif font-bold text-base sm:text-lg lg:text-xl text-[#2C1A1D] leading-tight truncate">
                     {shop.businessName}
                   </h1>
+
+                  {/* Overall Bakery Rating Badge (like Zomato/Swiggy/Google Maps) */}
+                  {effectiveRating && effectiveRating > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onNavigateTab) onNavigateTab('home');
+                        setTimeout(() => {
+                          document.getElementById('customer-experiences-section')?.scrollIntoView({ behavior: 'smooth' });
+                        }, 100);
+                      }}
+                      className="inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                      title="View all verified customer reviews & ratings"
+                    >
+                      <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                      <span>{effectiveRating.toFixed(1)}</span>
+                      {effectiveTotalReviews > 0 && (
+                        <span className="text-amber-800/80 font-normal">({effectiveTotalReviews})</span>
+                      )}
+                    </button>
+                  ) : null}
+
                   {shop.verificationStatus === 'VERIFIED' && (
                     <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
                       <ShieldCheck className="w-3 h-3 text-emerald-600" />
@@ -320,6 +365,49 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
             )}
           </div>
         </div>
+
+        {/* Tier 2: Mini-Website Menu Nav Tabs (Directly merged below main navbar) */}
+        {onNavigateTab && (
+          <div className="border-t border-brand-border/60 bg-white/70 backdrop-blur-xs">
+            <div className="w-full max-w-[1720px] mx-auto px-4 sm:px-8 lg:px-12">
+              <nav
+                className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-2 no-scrollbar scroll-smooth"
+                aria-label="Bakery Mini-Website Tabs"
+              >
+                {menuTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => onNavigateTab(tab.id)}
+                      className={cn(
+                        'inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 select-none cursor-pointer',
+                        isActive
+                          ? 'bg-[#5C1D2E] text-white shadow-xs'
+                          : 'bg-brand-cream-light/80 text-brand-espresso hover:bg-brand-blush hover:text-[#5C1D2E] border border-brand-border/50'
+                      )}
+                    >
+                      <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-white' : 'text-[#5C1D2E]')} />
+                      <span>{tab.label}</span>
+                      {tab.badge !== undefined && (
+                        <span
+                          className={cn(
+                            'ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold',
+                            isActive ? 'bg-white/20 text-white' : 'bg-brand-cream text-brand-espresso'
+                          )}
+                        >
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Mobile Navigation Overlay Menu */}

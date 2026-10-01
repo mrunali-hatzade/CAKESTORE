@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Users,
   Search,
-  RefreshCw,
   Mail,
   Phone,
   ShoppingBag,
-  DollarSign,
+  IndianRupee,
   Calendar,
   MapPin,
   MessageCircle,
@@ -29,11 +29,11 @@ import { Modal } from '@/components/ui/Modal';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
-export default function OwnerCustomersPage() {
-  const { registerRefreshHandler } = useOwner();
+function OwnerCustomersContent() {
+  const searchParams = useSearchParams();
+  const { registerRefreshHandler, shop } = useOwner();
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Search
@@ -50,8 +50,7 @@ export default function OwnerCustomersPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const fetchCustomers = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setLoading(true);
+    if (!isManual) setLoading(true);
     setError(null);
 
     try {
@@ -63,7 +62,6 @@ export default function OwnerCustomersPage() {
       setError(err?.message || 'Failed to load customers');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [page]);
 
@@ -82,7 +80,8 @@ export default function OwnerCustomersPage() {
     setSelectedCustomer(c);
     setLoadingDetail(true);
     try {
-      const full = await ownerApi.getCustomerProfile(c.name || c.email);
+      const identifier = c.email || c.mobile || c.name || '';
+      const full = await ownerApi.getCustomerProfile(identifier);
       setCustomerDetail(full);
     } catch {
       setCustomerDetail(c);
@@ -90,6 +89,33 @@ export default function OwnerCustomersPage() {
       setLoadingDetail(false);
     }
   };
+
+  // Deep-linking from Global Search or external links
+  useEffect(() => {
+    if (!searchParams) return;
+    const s = searchParams.get('search');
+    const autoOpen = searchParams.get('autoOpen');
+    if (s) {
+      setSearchQuery(s);
+      if (autoOpen === 'true') {
+        const matching = customers.find(
+          (c) =>
+            (c.name && c.name.toLowerCase().includes(s.toLowerCase())) ||
+            (c.email && c.email.toLowerCase().includes(s.toLowerCase())) ||
+            (c.mobile && c.mobile.includes(s))
+        );
+        handleOpenCustomerDetail(
+          matching || {
+            name: s,
+            email: s.includes('@') ? s : undefined,
+            mobile: !s.includes('@') && /^\+?[0-9\s-]+$/.test(s) ? s : undefined,
+            totalOrders: 1,
+            totalSpent: 0,
+          }
+        );
+      }
+    }
+  }, [searchParams, customers]);
 
   // Filtered list
   const filteredCustomers = useMemo(() => {
@@ -104,14 +130,70 @@ export default function OwnerCustomersPage() {
   }, [customers, searchQuery]);
 
   // Derived KPIs
-  const totalCustomersCount = customers.length;
+  const totalCustomersCount = totalElements > 0 ? totalElements : customers.length;
   const repeatCustomersCount = customers.filter((c) => (c.totalOrders || 0) > 1).length;
   const totalOrdersCount = customers.reduce((sum, c) => sum + (c.totalOrders || 0), 0);
   const totalRevenue = customers.reduce((sum, c) => sum + Number(c.totalSpent || 0), 0);
 
   const cleanPhone = (phone?: string) => {
     if (!phone) return '';
-    return phone.replace(/[^0-9]/g, '');
+    let digits = phone.replace(/[^0-9]/g, '');
+    if (digits.startsWith('0')) digits = digits.substring(1);
+    if (digits.length === 10) digits = '91' + digits;
+    return digits;
+  };
+
+  const formatRelativeOrDateTime = (dateString?: string) => {
+    if (!dateString) return '—';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+
+      const now = new Date();
+      const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+      if (diffSec < 60) return 'Just now';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h ago`;
+      const diffDays = Math.floor(diffHr / 24);
+      if (diffDays === 1) {
+        return `Yesterday, ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+      }
+      if (diffDays < 7) {
+        return `${diffDays}d ago, ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+      }
+      return date.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return dateString || '—';
+    }
+  };
+
+  const formatFullDateTime = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return dateString || '';
+    }
   };
 
   const getOrderStatusBadge = (status: string) => {
@@ -149,15 +231,6 @@ export default function OwnerCustomersPage() {
             Track customer relationship profiles, lifetime orders, spending history, and direct WhatsApp touchpoints
           </p>
         </div>
-
-        <button
-          onClick={() => fetchCustomers(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-owner-canvas hover:bg-brand-cream border border-owner-border text-xs font-semibold text-owner-heading transition-all disabled:opacity-60 cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-brand-plum ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
       </div>
 
       {error && (
@@ -201,7 +274,7 @@ export default function OwnerCustomersPage() {
 
         <Card className="p-5 flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <DollarSign className="w-5 h-5" />
+            <IndianRupee className="w-5 h-5" />
           </div>
           <div>
             <p className="text-xs font-semibold text-owner-muted">Lifetime Revenue</p>
@@ -302,13 +375,12 @@ export default function OwnerCustomersPage() {
 
                       <td className="py-3.5 px-4 text-owner-muted text-[11px]">
                         {c.lastOrderDate ? (
-                          <span className="flex items-center gap-1">
+                          <span
+                            className="flex items-center gap-1.5"
+                            title={`Last ordered on ${formatFullDateTime(c.lastOrderDate)}`}
+                          >
                             <Calendar className="w-3 h-3 text-brand-plum" />
-                            {new Date(c.lastOrderDate).toLocaleDateString('en-IN', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
+                            <span>{formatRelativeOrDateTime(c.lastOrderDate)}</span>
                           </span>
                         ) : (
                           '—'
@@ -343,6 +415,35 @@ export default function OwnerCustomersPage() {
                 })}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-owner-border bg-owner-canvas/30 text-xs">
+                <p className="text-owner-muted text-[11px]">
+                  Page <strong className="text-owner-heading">{page + 1}</strong> of <strong className="text-owner-heading">{totalPages}</strong> ({totalElements} total customers)
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    className="text-xs"
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    className="text-xs"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       )}
@@ -356,87 +457,144 @@ export default function OwnerCustomersPage() {
         }}
         title={`Customer Profile: ${selectedCustomer?.name}`}
       >
-        {selectedCustomer && (
-          <div className="space-y-4">
-            {/* Customer Summary Cards */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <p className="text-[10px] text-owner-muted uppercase font-bold">Email Address</p>
-                <p className="font-semibold text-owner-heading mt-0.5 truncate">{selectedCustomer.email}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <p className="text-[10px] text-owner-muted uppercase font-bold">Phone Number</p>
-                <p className="font-semibold text-owner-heading mt-0.5 truncate">{selectedCustomer.mobile || 'Not provided'}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <p className="text-[10px] text-owner-muted uppercase font-bold">Total Orders</p>
-                <p className="font-semibold text-owner-heading mt-0.5">{selectedCustomer.totalOrders} celebrations</p>
-              </div>
-              <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
-                <p className="text-[10px] text-owner-muted uppercase font-bold">Total Lifetime Spend</p>
-                <p className="font-semibold text-owner-heading mt-0.5">₹{(selectedCustomer.totalSpent || 0).toLocaleString()}</p>
-              </div>
-            </div>
+        {selectedCustomer && (() => {
+          const modalPhoneDigits = cleanPhone(selectedCustomer.mobile);
+          const modalWhatsappUrl = modalPhoneDigits
+            ? `https://wa.me/${modalPhoneDigits}?text=${encodeURIComponent(
+                `Hello ${selectedCustomer.name}, warm greetings from ${shop?.businessName || 'your bakery'} on CakeStore!`
+              )}`
+            : null;
 
-            {/* Order History */}
-            <div className="space-y-2 pt-2 border-t border-owner-border">
-              <h3 className="font-serif font-bold text-sm text-owner-heading">Celebration Order History</h3>
-
-              {loadingDetail ? (
-                <div className="py-6 text-center text-xs text-owner-muted">Loading purchase history...</div>
-              ) : customerDetail?.orderHistory && customerDetail.orderHistory.length > 0 ? (
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {customerDetail.orderHistory.map((order) => (
-                    <div
-                      key={order.id}
-                      className="p-3 rounded-xl bg-white border border-owner-border flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-owner-heading">{order.orderNumber}</span>
-                          {getOrderStatusBadge(order.orderStatus)}
-                        </div>
-                        <p className="text-[11px] text-owner-muted">
-                          {new Date(order.createdAt).toLocaleDateString('en-IN', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </p>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="font-bold text-owner-heading">₹{order.totalAmount}</p>
-                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded-md">
-                          {order.paymentStatus}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+          return (
+            <div className="space-y-4">
+              {/* Customer Summary Cards */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
+                  <p className="text-[10px] text-owner-muted uppercase font-bold">Email Address</p>
+                  <p className="font-semibold text-owner-heading mt-0.5 truncate">{selectedCustomer.email || 'N/A'}</p>
                 </div>
-              ) : (
-                <p className="text-xs text-owner-muted italic p-3 bg-brand-cream/40 rounded-xl">
-                  Order history details currently archived.
-                </p>
-              )}
-            </div>
+                <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
+                  <p className="text-[10px] text-owner-muted uppercase font-bold">Phone Number</p>
+                  <p className="font-semibold text-owner-heading mt-0.5 truncate">{selectedCustomer.mobile || 'Not provided'}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
+                  <p className="text-[10px] text-owner-muted uppercase font-bold">Total Orders</p>
+                  <p className="font-semibold text-owner-heading mt-0.5">{selectedCustomer.totalOrders} {selectedCustomer.totalOrders === 1 ? 'celebration' : 'celebrations'}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-owner-canvas border border-owner-border">
+                  <p className="text-[10px] text-owner-muted uppercase font-bold">Total Lifetime Spend</p>
+                  <p className="font-semibold text-owner-heading mt-0.5">₹{(selectedCustomer.totalSpent || 0).toLocaleString()}</p>
+                </div>
+              </div>
 
-            <div className="flex items-center justify-end pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedCustomer(null);
-                  setCustomerDetail(null);
-                }}
-              >
-                Close
-              </Button>
+              {/* Order History */}
+              <div className="space-y-2 pt-2 border-t border-owner-border">
+                <h3 className="font-serif font-bold text-sm text-owner-heading">Celebration Order History</h3>
+
+                {loadingDetail ? (
+                  <div className="py-6 text-center text-xs text-owner-muted">Loading purchase history...</div>
+                ) : customerDetail?.orderHistory && customerDetail.orderHistory.length > 0 ? (
+                  <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                    {customerDetail.orderHistory.map((order) => (
+                      <div
+                        key={order.id}
+                        className="p-3.5 rounded-xl bg-white border border-owner-border space-y-2 text-xs hover:border-brand-plum/40 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-owner-heading">{order.orderNumber}</span>
+                              {getOrderStatusBadge(order.orderStatus)}
+                            </div>
+                            <p className="text-[11px] text-owner-muted flex items-center gap-1.5" title={formatFullDateTime(order.createdAt)}>
+                              <Clock className="w-3 h-3 text-brand-plum" />
+                              <span>{formatRelativeOrDateTime(order.createdAt)}</span>
+                              {order.deliveryDate && (
+                                <span className="text-brand-plum font-medium">
+                                  • Event: {new Date(order.deliveryDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <p className="font-bold text-owner-heading">₹{Number(order.totalAmount || 0).toLocaleString()}</p>
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                              {order.paymentStatus}
+                            </span>
+                          </div>
+                        </div>
+
+                        {order.items && order.items.length > 0 && (
+                          <div className="pt-2 border-t border-owner-border/50 space-y-1">
+                            {order.items.map((item: any, iIdx: number) => (
+                              <div key={iIdx} className="flex items-center justify-between text-[11px] text-owner-muted">
+                                <span className="font-medium text-owner-heading">
+                                  {item.productNameSnapshot}
+                                  {item.variantName ? ` (${item.variantName})` : ''}
+                                  {item.dietaryPreference && item.dietaryPreference !== 'REGULAR' ? ` [${item.dietaryPreference}]` : ''}
+                                  {' '}× {item.quantity}
+                                </span>
+                                <span>₹{Number(item.totalPrice || 0).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {order.deliveryAddress && (
+                          <p className="text-[10px] text-owner-muted flex items-center gap-1 pt-1 border-t border-owner-border/30">
+                            <MapPin className="w-3 h-3 text-brand-plum shrink-0" />
+                            <span className="truncate">{order.deliveryAddress}</span>
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-owner-muted italic p-3 bg-brand-cream/40 rounded-xl">
+                    No order history recorded for this customer.
+                  </p>
+                )}
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="flex items-center justify-between pt-2">
+                {modalWhatsappUrl ? (
+                  <a
+                    href={modalWhatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition-colors"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>Chat on WhatsApp</span>
+                  </a>
+                ) : <div />}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setCustomerDetail(null);
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
     </div>
+  );
+}
+
+export default function OwnerCustomersPage() {
+  return (
+    <Suspense fallback={<LoadingState message="Loading customers CRM..." />}>
+      <OwnerCustomersContent />
+    </Suspense>
   );
 }

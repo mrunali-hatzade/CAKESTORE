@@ -175,6 +175,7 @@ export const storefrontApi = {
     payload: {
       customerName: string;
       customerEmail: string;
+      customerMobile?: string;
       enquiryType: string;
       message: string;
     }
@@ -206,6 +207,54 @@ export const storefrontApi = {
     }
   ): Promise<any> => {
     return apiClient.post(`/api/storefront/shops/${shopId}/feedback`, payload);
+  },
+
+  updateFeedback: async (
+    shopId: number | string,
+    feedbackId: number | string,
+    payload: {
+      customerDisplayName?: string;
+      rating: number;
+      comment: string;
+      orderReference?: string;
+      productId?: number | null;
+      productName?: string;
+      recommendationText?: string;
+      cakeImageUrl?: string;
+      cakeVideoUrl?: string;
+    },
+    token?: string
+  ): Promise<any> => {
+    return apiClient.put(
+      `/api/storefront/shops/${shopId}/feedback/${feedbackId}`,
+      payload,
+      token ? { headers: { 'X-Review-Token': token }, params: { token } } : undefined
+    );
+  },
+
+  deleteFeedback: async (
+    shopId: number | string,
+    feedbackId: number | string,
+    token?: string,
+    customerName?: string
+  ): Promise<any> => {
+    const params: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    if (token) {
+      params.token = token;
+      headers['X-Review-Token'] = token;
+    }
+    if (customerName) {
+      params.customerName = customerName;
+      headers['X-Customer-Name'] = customerName;
+    }
+    return apiClient.delete(
+      `/api/storefront/shops/${shopId}/feedback/${feedbackId}`,
+      {
+        params: Object.keys(params).length > 0 ? params : undefined,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+      }
+    );
   },
 
   uploadReviewMedia: async (file: File): Promise<{ url: string; fileName: string; type: string }> => {

@@ -59,6 +59,10 @@ public class Feedback {
     @Column(name = "customer_email")
     private String customerEmail;
 
+    @JsonIgnore
+    @Column(name = "edit_token", length = 100)
+    private String editToken;
+
     @Column(name = "is_approved", nullable = false)
     private Boolean isApproved = true;
 

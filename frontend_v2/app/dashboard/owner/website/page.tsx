@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  Globe, ExternalLink, Save, RefreshCw, CheckCircle2, AlertCircle, Sparkles, Store
+  Globe, ExternalLink, Save, CheckCircle2, AlertCircle, Sparkles, Store
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { ownerStorefrontApi } from '@/lib/api/ownerStorefront';
@@ -34,7 +34,6 @@ export default function OwnerWebsitePage() {
   const { shop, registerRefreshHandler } = useOwner();
 
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -92,8 +91,7 @@ export default function OwnerWebsitePage() {
   const [customFields, setCustomFields] = useState<ShopCustomFormField[]>([]);
 
   const fetchAllData = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setIsLoading(true);
+    if (!isManual) setIsLoading(true);
     setErrorMsg(null);
 
     try {
@@ -144,7 +142,6 @@ export default function OwnerWebsitePage() {
       setErrorMsg(err?.message || 'Failed to load storefront configuration');
     } finally {
       setIsLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -183,31 +180,31 @@ export default function OwnerWebsitePage() {
     }
 
     try {
-      // 1. Update Shop branding & contact fields
-      await ownerApi.updateShopSettings({
-        businessName,
-        logoUrl,
-        coverImageUrl,
-        aboutStory,
-        aboutImageUrl,
-        showAboutImage,
-        whatsappNumber,
-        phone,
-        email,
-        address,
-        mapLocationUrl,
-      });
-
-      // 2. Update Delivery Config
-      await ownerStorefrontApi.updateDeliveryConfig({
-        deliveryChargeType: deliveryConfig.deliveryChargeType,
-        fixedChargeAmount: deliveryConfig.fixedChargeAmount,
-        minOrderForFreeDelivery: deliveryConfig.minOrderForFreeDelivery,
-        deliveryNotes: deliveryConfig.deliveryNotes,
-      });
-
-      // 3. Update Storefront Visibility & Fulfillment Settings
-      await ownerStorefrontApi.updateStorefrontSettings(storefrontSettings);
+      await Promise.all([
+        // 1. Update Shop branding & contact fields
+        ownerApi.updateShopSettings({
+          businessName,
+          logoUrl,
+          coverImageUrl,
+          aboutStory,
+          aboutImageUrl,
+          showAboutImage,
+          whatsappNumber,
+          phone,
+          email,
+          address,
+          mapLocationUrl,
+        }),
+        // 2. Update Delivery Config
+        ownerStorefrontApi.updateDeliveryConfig({
+          deliveryChargeType: deliveryConfig.deliveryChargeType,
+          fixedChargeAmount: deliveryConfig.fixedChargeAmount,
+          minOrderForFreeDelivery: deliveryConfig.minOrderForFreeDelivery,
+          deliveryNotes: deliveryConfig.deliveryNotes,
+        }),
+        // 3. Update Storefront Visibility & Fulfillment Settings
+        ownerStorefrontApi.updateStorefrontSettings(storefrontSettings),
+      ]);
 
       setSuccessMsg('All storefront configurations saved and published successfully!');
       setTimeout(() => setSuccessMsg(null), 4000);
@@ -240,16 +237,6 @@ export default function OwnerWebsitePage() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => fetchAllData(true)}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-owner-canvas hover:bg-brand-cream border border-owner-border text-xs font-semibold text-owner-heading transition-all disabled:opacity-60 cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-brand-plum ${refreshing ? "animate-spin" : ""}`} />
-            <span>{refreshing ? 'Syncing...' : 'Refresh'}</span>
-          </button>
-
           {liveStoreUrl && (
             <Link
               href={liveStoreUrl}

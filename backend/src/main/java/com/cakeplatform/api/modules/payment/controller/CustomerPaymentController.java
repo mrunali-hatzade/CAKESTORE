@@ -224,21 +224,8 @@ public class CustomerPaymentController {
             );
         }
 
-        // Dispatch Admin Notification (PAYMENT_RECEIVED - idempotent by payment ID)
-        try {
-            adminNotificationService.dispatchAdminNotification(
-                    com.cakeplatform.api.modules.notification.AdminNotificationType.PAYMENT_RECEIVED,
-                    "Payment Received: ₹" + order.getTotalAmount(),
-                    String.format("Payment of ₹%s received for order %s (%s).",
-                            order.getTotalAmount(), order.getOrderNumber(),
-                            order.getShop() != null ? order.getShop().getBusinessName() : "Bakery"),
-                    com.cakeplatform.api.modules.notification.AdminNotificationPriority.NORMAL,
-                    com.cakeplatform.api.modules.notification.AdminNotificationCategory.PAYMENTS,
-                    razorpayPaymentId,
-                    "PAYMENT",
-                    order.getShop() != null ? "/admin/shops/" + order.getShop().getId() : "/admin/shops"
-            );
-        } catch (Exception ignored) {}
+        // Admin notification for individual bakery order payment is suppressed per platform policy;
+        // platform administrators monitor aggregated bakery performance via the Analytics Dashboard.
 
         return ResponseEntity.ok(Map.of(
                 "status", "SUCCESS",

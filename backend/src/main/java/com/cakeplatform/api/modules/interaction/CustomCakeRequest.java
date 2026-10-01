@@ -63,6 +63,12 @@ public class CustomCakeRequest {
     @Column(name = "owner_response", columnDefinition = "TEXT")
     private String ownerResponse;
 
+    @Column(name = "converted_order_id")
+    private Long convertedOrderId;
+
+    @Column(name = "converted_order_number")
+    private String convertedOrderNumber;
+
     @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private java.util.List<CustomCakeRequestFieldValue> fieldValues = new java.util.ArrayList<>();
 

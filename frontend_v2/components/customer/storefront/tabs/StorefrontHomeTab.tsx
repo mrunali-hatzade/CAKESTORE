@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Sparkles,
   ArrowRight,
@@ -22,6 +22,10 @@ import {
   Flame,
   Award,
   ShieldCheck,
+  Pencil,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { Product, Category } from '@/types/product';
@@ -33,6 +37,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { storefrontApi } from '@/lib/api/storefront';
+import { apiClient } from '@/lib/api/client';
+import { reviewStorage } from '@/lib/utils/reviewStorage';
 import { useToast } from '@/components/common/Toast';
 
 interface StorefrontHomeTabProps {
@@ -51,6 +57,31 @@ function isValidMediaUrl(url?: string | null): url is string {
   return typeof url === 'string' && url.trim().length > 4 && url.startsWith('http');
 }
 
+/** Accurate fractional star renderer for ratings (e.g. 4.5 => 4 full + 1 half star) */
+const renderRatingStars = (rating: number, starSize = 'w-5 h-5') => {
+  return (
+    <div className="flex items-center gap-1" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((starIndex) => {
+        const fillAmount = Math.max(0, Math.min(1, rating - (starIndex - 1)));
+        if (fillAmount >= 0.75) {
+          return <Star key={starIndex} className={`${starSize} fill-amber-400 text-amber-500 shrink-0`} />;
+        } else if (fillAmount >= 0.25) {
+          return (
+            <div key={starIndex} className={`relative inline-block ${starSize} shrink-0`}>
+              <Star className={`${starSize} text-brand-border/60 fill-transparent`} />
+              <div className="absolute inset-0 overflow-hidden w-[50%]">
+                <Star className={`${starSize} fill-amber-400 text-amber-500`} />
+              </div>
+            </div>
+          );
+        } else {
+          return <Star key={starIndex} className={`${starSize} text-brand-border/60 fill-transparent shrink-0`} />;
+        }
+      })}
+    </div>
+  );
+};
+
 export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   shop,
   products,
@@ -67,6 +98,77 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   const [feedbackList, setFeedbackList] = useState<any[]>([]);
   const [loadingFeedback, setLoadingFeedback] = useState<boolean>(true);
 
+  // Review Carousel forward/backward scroll state & handlers
+  const reviewsTrackRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState<boolean>(false);
+  const [canScrollRight, setCanScrollRight] = useState<boolean>(true);
+  const [isAutoMoving, setIsAutoMoving] = useState<boolean>(true);
+  const autoScrollResumeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const pauseAutoMoveTemporarily = useCallback((ms = 6000) => {
+    setIsAutoMoving(false);
+    if (autoScrollResumeTimerRef.current) {
+      clearTimeout(autoScrollResumeTimerRef.current);
+    }
+    autoScrollResumeTimerRef.current = setTimeout(() => {
+      setIsAutoMoving(true);
+    }, ms);
+  }, []);
+
+  const updateScrollButtons = useCallback(() => {
+    if (reviewsTrackRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = reviewsTrackRef.current;
+      setCanScrollLeft(scrollLeft > 15);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 15);
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = reviewsTrackRef.current;
+    if (!el) return;
+    updateScrollButtons();
+    el.addEventListener('scroll', updateScrollButtons, { passive: true });
+    window.addEventListener('resize', updateScrollButtons);
+    return () => {
+      el.removeEventListener('scroll', updateScrollButtons);
+      window.removeEventListener('resize', updateScrollButtons);
+    };
+  }, [feedbackList, updateScrollButtons]);
+
+  // Continuous / Periodic auto-movement for reviews carousel
+  useEffect(() => {
+    if (!isAutoMoving || feedbackList.length <= 1) return;
+
+    const interval = setInterval(() => {
+      const el = reviewsTrackRef.current;
+      if (!el) return;
+
+      const maxScrollLeft = el.scrollWidth - el.clientWidth;
+      if (maxScrollLeft <= 10) return;
+
+      // When reaching or near end, wrap seamlessly back to start
+      if (el.scrollLeft >= maxScrollLeft - 20) {
+        el.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        const step = Math.min(360, Math.floor(el.clientWidth * 0.75) || 320);
+        el.scrollBy({ left: step, behavior: 'smooth' });
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [isAutoMoving, feedbackList.length]);
+
+  const scrollReviews = (direction: 'left' | 'right') => {
+    pauseAutoMoveTemporarily(7000);
+    if (reviewsTrackRef.current) {
+      const scrollAmount = Math.max(340, Math.floor(reviewsTrackRef.current.clientWidth * 0.75));
+      reviewsTrackRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
+    }
+  };
+
   // Review / Feedback Modal state
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState<boolean>(false);
   const [reviewerName, setReviewerName] = useState<string>('');
@@ -82,8 +184,11 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   const [isFileVideo, setIsFileVideo] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
+  const [editingFeedbackId, setEditingFeedbackId] = useState<number | null>(null);
+  const [existingCakeImageUrl, setExistingCakeImageUrl] = useState<string | null>(null);
+  const [existingCakeVideoUrl, setExistingCakeVideoUrl] = useState<string | null>(null);
+  const [isDeletingFeedback, setIsDeletingFeedback] = useState<boolean>(false);
 
   // Settings toggles
   const topRatedEnabled = shop.storefrontSettings?.topRatedEnabled !== false;
@@ -132,6 +237,27 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
     };
   }, [shop.id, topRatedEnabled, reviewsEnabled, products]);
 
+  const myFeedback = feedbackList.find((item) =>
+    reviewStorage.isCustomerReview(item.id, item.customerDisplayName, 'FEEDBACK')
+  );
+
+  const totalFeedbackCount = feedbackList.length;
+  const overallAvgRating = totalFeedbackCount > 0
+    ? Math.round((feedbackList.reduce((sum, item) => sum + (Number(item.rating) || 5), 0) / totalFeedbackCount) * 10) / 10
+    : (shop.averageRating ?? 5.0);
+
+  const starCounts: Record<number, number> = {
+    5: feedbackList.filter((f) => Number(f.rating) === 5).length,
+    4: feedbackList.filter((f) => Number(f.rating) === 4).length,
+    3: feedbackList.filter((f) => Number(f.rating) === 3).length,
+    2: feedbackList.filter((f) => Number(f.rating) === 2).length,
+    1: feedbackList.filter((f) => Number(f.rating) === 1).length,
+  };
+
+  const positivePercent = totalFeedbackCount > 0
+    ? Math.round(((starCounts[5] + starCounts[4]) / totalFeedbackCount) * 100)
+    : 100;
+
   // Cleanup preview object URL on unmount / file change
   useEffect(() => {
     return () => {
@@ -156,15 +282,20 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   };
 
   const handleRemoveFile = () => {
-    if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+    if (filePreviewUrl && selectedFile) URL.revokeObjectURL(filePreviewUrl);
     setSelectedFile(null);
     setFilePreviewUrl(null);
     setIsFileVideo(false);
     setUploadError(null);
+    setExistingCakeImageUrl(null);
+    setExistingCakeVideoUrl(null);
   };
 
   const resetForm = () => {
-    setReviewerName('');
+    setEditingFeedbackId(null);
+    setExistingCakeImageUrl(null);
+    setExistingCakeVideoUrl(null);
+    setReviewerName(reviewStorage.getStoredCustomerName() || '');
     setReviewerRating(5);
     setReviewerComment('');
     setReviewerRecommendation('');
@@ -176,6 +307,53 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
   const handleCloseModal = () => {
     setIsFeedbackModalOpen(false);
     resetForm();
+  };
+
+  const handleEditFeedback = (item: any) => {
+    setEditingFeedbackId(item.id);
+    setReviewerName(item.customerDisplayName || '');
+    setReviewerRating(item.rating || 5);
+    setReviewerComment(item.comment || '');
+    setReviewerRecommendation(item.recommendationText || '');
+    if (item.productId) {
+      setSelectedProductId(String(item.productId));
+      setCustomCakeName('');
+    } else if (item.productName) {
+      setSelectedProductId(CUSTOM_CAKE_VALUE);
+      setCustomCakeName(item.productName);
+    } else {
+      setSelectedProductId('');
+      setCustomCakeName('');
+    }
+    setExistingCakeImageUrl(item.cakeImageUrl || null);
+    setExistingCakeVideoUrl(item.cakeVideoUrl || null);
+    setSelectedFile(null);
+    setFilePreviewUrl(item.cakeVideoUrl || item.cakeImageUrl || null);
+    setIsFileVideo(Boolean(item.cakeVideoUrl));
+    setUploadError(null);
+    setIsFeedbackModalOpen(true);
+  };
+
+  const handleDeleteFeedback = async (item: any) => {
+    if (!item?.id) return;
+    if (!window.confirm('Are you sure you want to delete your review?')) return;
+    setIsDeletingFeedback(true);
+    try {
+      const token = item.editToken || reviewStorage.getStoredReviewToken(item.id, 'FEEDBACK');
+      const customerName = item.customerDisplayName || reviewerName || reviewStorage.getStoredCustomerName();
+      await storefrontApi.deleteFeedback(shop.id, item.id, token, customerName);
+      reviewStorage.removeStoredReview(item.id, 'FEEDBACK');
+      toast.success('Your review has been removed.');
+      const updated = await storefrontApi.getShopFeedback(shop.id);
+      setFeedbackList(updated || []);
+      if (isFeedbackModalOpen) {
+        handleCloseModal();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete review');
+    } finally {
+      setIsDeletingFeedback(false);
+    }
   };
 
   const handleSubmitFeedback = async (e: React.FormEvent) => {
@@ -224,20 +402,65 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
       }
     }
 
-    // Step 2: Submit feedback with all Phase 1 fields
+    // Step 2: Submit feedback or Update feedback
     setIsSubmittingFeedback(true);
     try {
-      await storefrontApi.submitFeedback(shop.id, {
-        customerDisplayName: reviewerName.trim(),
-        rating: reviewerRating,
-        comment: reviewerComment.trim(),
-        recommendationText: reviewerRecommendation.trim() || undefined,
-        productId: resolvedProductId,
-        productName: resolvedProductName,
-        cakeImageUrl,
-        cakeVideoUrl,
-      });
-      toast.success('Thank you! Your review has been submitted for approval.');
+      let savedId = editingFeedbackId;
+      const finalImageUrl = cakeImageUrl !== undefined ? cakeImageUrl : (existingCakeImageUrl || undefined);
+      const finalVideoUrl = cakeVideoUrl !== undefined ? cakeVideoUrl : (existingCakeVideoUrl || undefined);
+      const existingToken = editingFeedbackId ? reviewStorage.getStoredReviewToken(editingFeedbackId, 'FEEDBACK') : undefined;
+      let capturedEditToken = existingToken;
+
+      if (editingFeedbackId) {
+        const updRes = await storefrontApi.updateFeedback(shop.id, editingFeedbackId, {
+          customerDisplayName: reviewerName.trim(),
+          rating: reviewerRating,
+          comment: reviewerComment.trim(),
+          recommendationText: reviewerRecommendation.trim() || undefined,
+          cakeImageUrl: finalImageUrl,
+          cakeVideoUrl: finalVideoUrl,
+        }, existingToken);
+        if (updRes?.editToken) {
+          capturedEditToken = updRes.editToken;
+        }
+        toast.success('Your celebration review has been updated!');
+      } else {
+        const res = await storefrontApi.submitFeedback(shop.id, {
+          customerDisplayName: reviewerName.trim(),
+          rating: reviewerRating,
+          comment: reviewerComment.trim(),
+          recommendationText: reviewerRecommendation.trim() || undefined,
+          productId: resolvedProductId,
+          productName: resolvedProductName,
+          cakeImageUrl: finalImageUrl,
+          cakeVideoUrl: finalVideoUrl,
+        });
+        savedId = res?.id;
+        if (res?.editToken) {
+          capturedEditToken = res.editToken;
+        }
+        toast.success('Thank you! Your review has been submitted for approval.');
+      }
+
+      if (savedId) {
+        reviewStorage.saveStoredReview({
+          id: savedId,
+          source: 'FEEDBACK',
+          shopId: shop.id,
+          productId: resolvedProductId,
+          productName: resolvedProductName,
+          customerDisplayName: reviewerName.trim(),
+          rating: reviewerRating,
+          reviewText: reviewerComment.trim(),
+          cakeImageUrl: finalImageUrl,
+          cakeVideoUrl: finalVideoUrl,
+          editToken: capturedEditToken,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      reviewStorage.setStoredCustomerName(reviewerName.trim());
+
       handleCloseModal();
       // Refresh feedback list
       const updated = await storefrontApi.getShopFeedback(shop.id);
@@ -308,7 +531,7 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
               <p className="text-xs text-brand-muted mt-1">Please check back shortly or request a custom order.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5 lg:gap-6">
               {displayProducts.map((product) => (
                 <ProductCard
                   key={product.id}
@@ -472,26 +695,195 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
 
       {/* 4. Real Customer Feedback Highlights */}
       {reviewsEnabled && (
-        <section className="space-y-5">
-          <div className="flex items-center justify-between">
+        <section id="customer-experiences-section" className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-2 border-b border-brand-border/60">
             <div>
-              <h3 className="text-xl sm:text-2xl font-serif font-bold text-brand-espresso">
-                Customer Experiences
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-plum uppercase tracking-wider mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Verified Bakery Reputation</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-serif font-bold text-brand-espresso">
+                Customer Experiences &amp; Ratings
               </h3>
-              <p className="text-xs text-brand-muted mt-0.5">
-                Verified feedback from celebration orders
+              <p className="text-xs sm:text-sm text-brand-muted mt-0.5">
+                Real feedback from verified celebration orders deciding bakery rankings
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsFeedbackModalOpen(true)}
-              className="text-xs font-semibold gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Share Experience</span>
-            </Button>
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              {/* Slide forward / backward buttons */}
+              {feedbackList.length > 1 && (
+                <div className="flex items-center gap-1.5 mr-1">
+                  <button
+                    type="button"
+                    onClick={() => scrollReviews('left')}
+                    disabled={!canScrollLeft}
+                    className={`p-2 rounded-xl border border-brand-border/80 transition-all ${
+                      canScrollLeft
+                        ? 'bg-white hover:bg-brand-cream text-brand-espresso shadow-2xs cursor-pointer hover:border-brand-plum/40'
+                        : 'bg-brand-cream/40 text-brand-muted/40 cursor-not-allowed border-brand-border/40'
+                    }`}
+                    title="Slide backward to earlier reviews"
+                    aria-label="Slide backward"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollReviews('right')}
+                    disabled={!canScrollRight}
+                    className={`p-2 rounded-xl border border-brand-border/80 transition-all ${
+                      canScrollRight
+                        ? 'bg-white hover:bg-brand-cream text-brand-espresso shadow-2xs cursor-pointer hover:border-brand-plum/40'
+                        : 'bg-brand-cream/40 text-brand-muted/40 cursor-not-allowed border-brand-border/40'
+                    }`}
+                    title="Slide forward to more reviews"
+                    aria-label="Slide forward"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFeedbackModalOpen(true)}
+                className="text-xs font-semibold gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Share Experience</span>
+              </Button>
+            </div>
           </div>
+
+          {/* Average Rating Scorecard (Like Zomato, Google Maps, Swiggy) */}
+          <div className="bg-gradient-to-br from-white via-[#FAF7F2] to-brand-cream/30 rounded-3xl p-6 sm:p-8 border border-brand-border/80 shadow-soft">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 sm:gap-8 items-center">
+              {/* Column 1: Big Numeric Score & Stars */}
+              <div className="md:col-span-4 flex flex-col items-center md:items-start text-center md:text-left justify-center border-b md:border-b-0 md:border-r border-brand-border/60 pb-6 md:pb-0 md:pr-6 space-y-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-4xl sm:text-5xl font-serif font-black text-brand-espresso tracking-tight">
+                    {overallAvgRating.toFixed(1)}
+                  </span>
+                  <span className="text-xl sm:text-2xl font-serif text-brand-muted font-bold">/ 5.0</span>
+                </div>
+
+                {/* 5 Star Icons with accurate fractional/half-star rendering */}
+                {renderRatingStars(overallAvgRating, 'w-5 h-5')}
+
+                <p className="text-xs font-medium text-brand-espresso">
+                  Based on <strong>{totalFeedbackCount}</strong> verified celebration review{totalFeedbackCount === 1 ? '' : 's'}
+                </p>
+
+                {/* Top Ranking Badge */}
+                <div className="pt-1">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/80 text-amber-900 text-xs font-bold shadow-2xs">
+                    <Award className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Top-Rated Bakery in {shop.city || 'Area'}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Column 2: 5-to-1 Star Distribution Progress Bars */}
+              <div className="md:col-span-5 space-y-2 border-b md:border-b-0 md:border-r border-brand-border/60 pb-6 md:pb-0 md:pr-6">
+                {[5, 4, 3, 2, 1].map((stars) => {
+                  const count = starCounts[stars] || 0;
+                  const percent = totalFeedbackCount > 0 ? Math.round((count / totalFeedbackCount) * 100) : 0;
+                  return (
+                    <div key={stars} className="flex items-center gap-3 text-xs">
+                      <span className="w-9 font-bold text-brand-espresso flex items-center gap-1 shrink-0">
+                        <span>{stars}</span>
+                        <Star className="w-3 h-3 fill-amber-400 text-amber-500 inline" />
+                      </span>
+                      {/* Bar Track */}
+                      <div className="flex-1 h-2.5 bg-brand-cream-light rounded-full overflow-hidden border border-brand-border/40">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-500"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                      {/* Percent & Count */}
+                      <span className="w-16 text-right text-[11px] text-brand-muted shrink-0 tabular-nums">
+                        {percent}% ({count})
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Column 3: Trust & Ranking Highlights */}
+              <div className="md:col-span-3 space-y-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-brand-espresso block">{positivePercent}% Positive Ratings</span>
+                    <span className="text-[11px] text-brand-muted">Loved by celebration hosts</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-brand-blush text-brand-plum flex items-center justify-center shrink-0 mt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-brand-espresso block">Decides Top Bakery Ranking</span>
+                    <span className="text-[11px] text-brand-muted">Reviews determine position on top list</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <ThumbsUp className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-brand-espresso block">100% Verified Bakers</span>
+                    <span className="text-[11px] text-brand-muted">Replies &amp; kitchen hygiene verified</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer's Own Review Banner */}
+          {myFeedback && (
+            <div className="p-3.5 sm:p-4 bg-white rounded-2xl border border-brand-plum/30 shadow-soft flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-brand-blush text-brand-plum flex items-center justify-center font-bold text-sm shrink-0">
+                  ★
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-brand-espresso">You shared a celebration review with {shop.businessName}</p>
+                    <span className="text-[10px] font-bold text-brand-plum bg-brand-blush px-2 py-0.5 rounded-full border border-brand-plum/30">Your Review</span>
+                  </div>
+                  <p className="text-[11px] text-brand-muted line-clamp-1 mt-0.5">&ldquo;{myFeedback.comment}&rdquo;</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEditFeedback(myFeedback)}
+                  className="text-xs font-semibold gap-1.5 h-8 border-brand-plum/30 text-brand-plum hover:bg-brand-blush cursor-pointer"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit My Review</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeleteFeedback(myFeedback)}
+                  className="text-xs font-semibold gap-1.5 h-8 text-rose-600 hover:bg-rose-50 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </Button>
+              </div>
+            </div>
+          )}
 
           {loadingFeedback ? (
             <div className="py-6 text-center text-xs text-brand-muted">Loading feedback...</div>
@@ -522,89 +914,200 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {feedbackList.slice(0, 6).map((item) => (
-                <Card key={item.id} className="p-5 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    {/* Rating + Date row */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-3.5 h-3.5 ${
-                              i < (item.rating || 5)
-                                ? 'text-amber-500 fill-amber-500'
-                                : 'text-brand-border fill-transparent'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-[10px] text-brand-muted">
-                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recent'}
-                      </span>
-                    </div>
+            <div
+              className="relative py-2 -mx-4 sm:-mx-8 lg:-mx-12 px-4 sm:px-8 lg:px-12 group"
+              onMouseEnter={() => setIsAutoMoving(false)}
+              onMouseLeave={() => setIsAutoMoving(true)}
+              onTouchStart={() => pauseAutoMoveTemporarily(8000)}
+              onTouchEnd={() => pauseAutoMoveTemporarily(4000)}
+            >
+              {/* Left and Right Subtle Fade Gradients */}
+              <div className="absolute left-0 top-0 bottom-0 w-6 sm:w-12 bg-gradient-to-r from-brand-cream-light via-brand-cream-light/70 to-transparent z-10 pointer-events-none" />
+              <div className="absolute right-0 top-0 bottom-0 w-6 sm:w-12 bg-gradient-to-l from-brand-cream-light via-brand-cream-light/70 to-transparent z-10 pointer-events-none" />
 
-                    {/* Product name badge */}
-                    {(item.productName) && (
-                      <div className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-plum bg-brand-blush px-2 py-0.5 rounded-full border border-brand-blush-border">
-                        <ShoppingBag className="w-2.5 h-2.5" />
-                        <span>{item.productName}</span>
-                      </div>
-                    )}
+              {/* Floating Slide Backward Button */}
+              {feedbackList.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => scrollReviews('left')}
+                  disabled={!canScrollLeft}
+                  className={`absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full border shadow-lg flex items-center justify-center transition-all ${
+                    canScrollLeft
+                      ? 'bg-white/95 hover:bg-brand-plum text-brand-espresso hover:text-white border-brand-border/80 hover:border-brand-plum cursor-pointer opacity-90 hover:opacity-100 hover:scale-105'
+                      : 'bg-white/50 text-brand-muted/30 border-brand-border/30 cursor-not-allowed opacity-0 pointer-events-none'
+                  }`}
+                  aria-label="Slide backward"
+                  title="Slide backward to earlier reviews"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
 
-                    {/* Review comment */}
-                    <p className="text-xs text-brand-espresso leading-relaxed italic line-clamp-3">
-                      &ldquo;{item.comment || 'Delicious and fresh!'}&rdquo;
-                    </p>
+              {/* Floating Slide Forward Button */}
+              {feedbackList.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => scrollReviews('right')}
+                  disabled={!canScrollRight}
+                  className={`absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full border shadow-lg flex items-center justify-center transition-all ${
+                    canScrollRight
+                      ? 'bg-white/95 hover:bg-brand-plum text-brand-espresso hover:text-white border-brand-border/80 hover:border-brand-plum cursor-pointer opacity-90 hover:opacity-100 hover:scale-105'
+                      : 'bg-white/50 text-brand-muted/30 border-brand-border/30 cursor-not-allowed opacity-0 pointer-events-none'
+                  }`}
+                  aria-label="Slide forward"
+                  title="Slide forward to more reviews"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              )}
 
-                    {/* Recommendation text */}
-                    {item.recommendationText && (
-                      <div className="flex items-start gap-1.5 pt-1">
-                        <ThumbsUp className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-brand-muted leading-relaxed line-clamp-2">
-                          {item.recommendationText}
+              {/* Responsive, User-Controlled Smooth Carousel Track */}
+              <div
+                ref={reviewsTrackRef}
+                className="flex gap-4 overflow-x-auto scroll-smooth py-3 px-2 sm:px-4 no-scrollbar scrollbar-none snap-x snap-mandatory"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {feedbackList.map((item, idx) => {
+                  const isMine = reviewStorage.isCustomerReview(item.id, item.customerDisplayName, 'FEEDBACK');
+                  return (
+                    <Card
+                      key={`${item.id}-${idx}`}
+                      className={`w-[300px] sm:w-[350px] shrink-0 p-5 space-y-3 flex flex-col justify-between border shadow-soft hover:shadow-md transition-shadow select-none snap-start ${
+                        isMine
+                          ? 'border-brand-plum/40 bg-[#FAF7F2] ring-1 ring-brand-plum/20'
+                          : 'bg-white border-brand-border/80'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        {/* Rating + Date row */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-3.5 h-3.5 ${
+                                  i < (item.rating || 5)
+                                    ? 'text-amber-500 fill-amber-500'
+                                    : 'text-brand-border fill-transparent'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {isMine && (
+                              <span className="text-[10px] font-bold text-brand-plum bg-brand-blush px-2 py-0.5 rounded-full border border-brand-plum/30">
+                                Your Review
+                              </span>
+                            )}
+                            <span className="text-[10px] text-brand-muted">
+                              {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recent'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Product name badge */}
+                        {item.productName && (
+                          <div className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-plum bg-brand-blush px-2 py-0.5 rounded-full border border-brand-blush-border">
+                            <ShoppingBag className="w-2.5 h-2.5" />
+                            <span>{item.productName}</span>
+                          </div>
+                        )}
+
+                        {/* Review comment */}
+                        <p className="text-xs text-brand-espresso leading-relaxed italic line-clamp-3">
+                          &ldquo;{item.comment || 'Delicious and fresh!'}&rdquo;
                         </p>
-                      </div>
-                    )}
 
-                    {/* Cake photo */}
-                    {isValidMediaUrl(item.cakeImageUrl) && (
-                      <div className="mt-2 rounded-xl overflow-hidden border border-brand-border/60 aspect-video bg-brand-cream">
-                        <img
-                          src={item.cakeImageUrl}
-                          alt="Customer cake photo"
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                    )}
+                        {/* Recommendation text */}
+                        {item.recommendationText && (
+                          <div className="flex items-start gap-1.5 pt-1">
+                            <ThumbsUp className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
+                            <p className="text-[11px] text-brand-muted leading-relaxed line-clamp-2">
+                              {item.recommendationText}
+                            </p>
+                          </div>
+                        )}
 
-                    {/* Cake video */}
-                    {isValidMediaUrl(item.cakeVideoUrl) && (
-                      <div className="mt-2 rounded-xl overflow-hidden border border-brand-border/60 aspect-video bg-black">
-                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                        <video
-                          src={item.cakeVideoUrl}
-                          controls
-                          preload="metadata"
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                    )}
-                  </div>
+                        {/* Cake photo */}
+                        {isValidMediaUrl(item.cakeImageUrl) && (
+                          <div className="mt-2 rounded-xl overflow-hidden border border-brand-border/60 aspect-video bg-brand-cream">
+                            <img
+                              src={item.cakeImageUrl}
+                              alt="Customer cake photo"
+                              className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                              loading="lazy"
+                              onClick={() => window.open(item.cakeImageUrl, '_blank')}
+                            />
+                          </div>
+                        )}
 
-                  <div className="pt-2 border-t border-brand-border/40 flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-brand-espresso">
-                      {item.customerDisplayName || 'Verified Customer'}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Verified
-                    </span>
-                  </div>
-                </Card>
-              ))}
+                        {/* Cake video */}
+                        {isValidMediaUrl(item.cakeVideoUrl) && (
+                          <div className="mt-2 rounded-xl overflow-hidden border border-brand-border/60 aspect-video bg-black">
+                            <video
+                              src={item.cakeVideoUrl}
+                              controls
+                              preload="metadata"
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                        )}
+
+                        {/* Baker / Owner Reply */}
+                        {item.ownerReply && (
+                          <div className="mt-2.5 p-3 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-xs space-y-1.5">
+                            <div className="flex items-center gap-1.5 font-bold text-brand-plum">
+                              <ChefHat className="w-3.5 h-3.5 text-brand-plum shrink-0" />
+                              <span>Reply from {shop.businessName || 'Bakery'}:</span>
+                            </div>
+                            <p className="text-xs text-brand-espresso/90 italic leading-relaxed pl-3 border-l-2 border-brand-plum/30">
+                              &ldquo;{item.ownerReply}&rdquo;
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-brand-border/40 flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-brand-espresso">
+                          {item.customerDisplayName || 'Verified Customer'}
+                          {isMine && <span className="text-[10px] text-brand-plum font-bold ml-1">(You)</span>}
+                        </span>
+                        {isMine ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditFeedback(item);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-lg text-brand-plum bg-brand-blush hover:bg-brand-blush/80 transition-colors cursor-pointer"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteFeedback(item);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-lg text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Verified
+                          </span>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           )}
         </section>
@@ -615,10 +1118,26 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
         isOpen={isFeedbackModalOpen}
         onClose={handleCloseModal}
         maxWidth="lg"
-        title={`Review ${shop.businessName}`}
-        description="Share your honest experience to help future cake lovers celebrate better."
+        title={editingFeedbackId ? 'Edit Your Review' : `Review ${shop.businessName}`}
+        description={
+          editingFeedbackId
+            ? `Update your celebration rating and review for ${shop.businessName}`
+            : 'Share your honest experience to help future cake lovers celebrate better.'
+        }
       >
         <form onSubmit={handleSubmitFeedback} className="space-y-5 pt-1">
+          {/* Owner Reply Notice when editing */}
+          {editingFeedbackId && feedbackList.find((f) => f.id === editingFeedbackId)?.ownerReply && (
+            <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-brand-plum">
+                <ChefHat className="w-4 h-4 text-brand-plum shrink-0" />
+                <span>{shop.businessName} previously replied to your review:</span>
+              </div>
+              <p className="italic text-brand-espresso/90 pl-5 border-l-2 border-brand-plum/30 leading-relaxed">
+                &ldquo;{feedbackList.find((f) => f.id === editingFeedbackId)?.ownerReply}&rdquo;
+              </p>
+            </div>
+          )}
 
           {/* 1. Star Rating */}
           <div>
@@ -801,24 +1320,41 @@ export const StorefrontHomeTab: React.FC<StorefrontHomeTabProps> = ({
             onChange={(e) => setReviewerName(e.target.value)}
           />
 
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleCloseModal}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isProcessing}
-              isLoading={isProcessing}
-            >
-              {isUploading ? 'Uploading...' : isSubmittingFeedback ? 'Submitting...' : 'Submit Review'}
-            </Button>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            {editingFeedbackId ? (
+              <button
+                type="button"
+                onClick={() => handleDeleteFeedback({ id: editingFeedbackId })}
+                disabled={isProcessing || isDeletingFeedback}
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingFeedback ? 'Deleting...' : 'Delete Review'}</span>
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleCloseModal}
+                disabled={isProcessing || isDeletingFeedback}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isProcessing || isDeletingFeedback}
+                isLoading={isProcessing}
+                className="bg-[#5C1D2E] hover:bg-[#4a1525] text-white"
+              >
+                {isUploading ? 'Uploading...' : isSubmittingFeedback ? 'Saving...' : editingFeedbackId ? 'Update Review' : 'Submit Review'}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>

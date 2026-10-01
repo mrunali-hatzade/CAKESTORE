@@ -84,14 +84,14 @@ public class NotificationServiceTest {
     @Test
     @DisplayName("getUserNotifications - returns ordered notifications for user")
     void testGetUserNotifications() {
-        when(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(101L))
+        when(notificationRepository.findTop50ByRecipientIdOrderByCreatedAtDesc(101L))
                 .thenReturn(List.of(notif1));
 
         List<Notification> result = notificationService.getUserNotifications(101L);
 
         assertEquals(1, result.size());
         assertEquals("New Order Received!", result.get(0).getTitle());
-        verify(notificationRepository).findByRecipientIdOrderByCreatedAtDesc(101L);
+        verify(notificationRepository).findTop50ByRecipientIdOrderByCreatedAtDesc(101L);
     }
 
     @Test

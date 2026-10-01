@@ -28,6 +28,7 @@ import { Product } from '@/types/product';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/common/Toast';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -100,13 +101,34 @@ type UnifiedOwnerGalleryItem =
 
 export default function OwnerGalleryPage() {
   const { shop, registerRefreshHandler } = useOwner();
+  const toast = useToast();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [galleryViewMode, setGalleryViewMode] = useState<'ALL' | 'SHOWCASE' | 'PRODUCTS'>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  const [isSeeding, setIsSeeding] = useState(false);
+  const handleSeedGalleryExample = async () => {
+    setIsSeeding(true);
+    try {
+      await galleryApi.createGalleryItem({
+        title: 'Bespoke Anniversary Tier (Example)',
+        caption: 'Visible only to you. Beautiful fondant work.',
+        categoryName: 'Wedding',
+        imageUrl: 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=800&q=80',
+        isActive: false
+      });
+      toast.success('Example gallery photo generated!');
+      await fetchGalleryItems();
+    } catch (err: any) {
+      toast.error('Failed to generate example: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSeeding(false);
+    }
+  };
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
@@ -196,15 +218,16 @@ export default function OwnerGalleryPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be under 5MB');
+      toast.error('File size must be under 5MB');
       return;
     }
     setIsUploading(true);
     try {
       const res = await mediaApi.uploadImage(file, 'products');
       setImageUrl(res.url);
+      toast.success('Photo uploaded successfully');
     } catch (err: any) {
-      alert(err.message || 'Image upload failed. Please try again.');
+      toast.error(err.message || 'Image upload failed. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -241,8 +264,10 @@ export default function OwnerGalleryPage() {
     try {
       if (editingItem) {
         await galleryApi.updateGalleryItem(editingItem.id, payload);
+        toast.success('Showcase photo updated successfully!');
       } else {
         await galleryApi.createGalleryItem(payload);
+        toast.success('Photo added to gallery showcase!');
       }
       await fetchGalleryItems();
       setIsModalOpen(false);
@@ -264,8 +289,9 @@ export default function OwnerGalleryPage() {
       await galleryApi.deleteGalleryItem(id);
       setItems((prev) => prev.filter((i) => i.id !== id));
       setDeleteConfirmId(null);
+      toast.success('Photo removed from gallery showcase');
     } catch (err: any) {
-      alert(err.message || 'Failed to delete gallery item.');
+      toast.error(err.message || 'Failed to delete gallery item.');
     } finally {
       setIsDeleting(false);
     }
@@ -282,8 +308,9 @@ export default function OwnerGalleryPage() {
         isActive: !item.isActive,
       });
       setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      toast.success(updated.isActive ? 'Photo is now visible in public gallery' : 'Photo hidden from public gallery');
     } catch (err: any) {
-      alert(err.message || 'Failed to update visibility.');
+      toast.error(err.message || 'Failed to update visibility.');
     }
   };
 
@@ -408,7 +435,10 @@ export default function OwnerGalleryPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+          <Button onClick={handleSeedGalleryExample} isLoading={isSeeding} variant="outline" size="sm" className="text-brand-plum border-brand-plum/30 hover:bg-brand-cream hidden sm:flex shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Generate Example
+          </Button>
           {shop?.id && (
             <Link
               href={`/shop/${shop.id}?tab=gallery`}
@@ -581,19 +611,26 @@ export default function OwnerGalleryPage() {
           </div>
         )
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
           {filteredItems.map((item) => (
             <Card
               key={`${item.origin}-${item.id}`}
               className="group overflow-hidden flex flex-col justify-between border-owner-border hover:shadow-elevated transition-all duration-300"
             >
               {/* Image & Badges */}
-              <div className="relative aspect-square w-full bg-owner-canvas overflow-hidden">
+              <div 
+                className="relative aspect-square w-full bg-owner-canvas overflow-hidden cursor-pointer"
+                onClick={() => setPreviewImage(item.imageUrl)}
+              >
                 <img
                   src={item.imageUrl}
                   alt={item.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center text-white text-xs font-semibold gap-1.5">
+                  <Eye className="w-4 h-4" />
+                  <span>View Full Design</span>
+                </div>
                 {/* Category Badge */}
                 <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
                   <Badge variant="plum" className="bg-white/95 text-brand-plum backdrop-blur-xs shadow-xs text-[10px] font-bold">
@@ -992,6 +1029,32 @@ export default function OwnerGalleryPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Fullscreen Image Preview Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 sm:p-8 backdrop-blur-sm cursor-zoom-out transition-all duration-300"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewImage(null);
+            }}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <div className="relative w-full h-full max-w-5xl max-h-[85vh] flex items-center justify-center">
+            <img
+              src={previewImage}
+              alt="Design Preview"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl ring-1 ring-white/10"
+              onClick={(e) => e.stopPropagation()} // Prevent closing when clicking the image itself
+            />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -25,14 +25,17 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', c
   const getBadgeConfig = (st: string): { label: string; variant: BadgeProps['variant'] } => {
     switch (st.toUpperCase()) {
       case 'DELIVERED':
+      case 'COMPLETED':
       case 'ACTIVE':
       case 'IN_STOCK':
         return { label: st.replace(/_/g, ' '), variant: 'success' };
       case 'CONFIRMED':
+      case 'READY':
       case 'READY_FOR_PICKUP':
         return { label: st.replace(/_/g, ' '), variant: 'info' };
       case 'PREPARING':
       case 'OUT_FOR_DELIVERY':
+      case 'NEW':
       case 'PENDING':
         return { label: st.replace(/_/g, ' '), variant: 'warning' };
       case 'CANCELLED':

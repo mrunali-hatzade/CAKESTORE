@@ -1,7 +1,8 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useOwner } from '@/context/OwnerContext';
 import {
   Cake,
@@ -20,6 +21,7 @@ import {
   Percent,
   Layers,
   Image as ImageIcon,
+  Copy,
 } from 'lucide-react';
 import { productsApi } from '@/lib/api/products';
 import { mediaApi } from '@/lib/api/media';
@@ -40,6 +42,7 @@ import { Modal } from '@/components/ui/Modal';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CategoryManagerModal } from '@/components/owner/CategoryManagerModal';
+import { useToast } from '@/components/common/Toast';
 
 const FALLBACK_CAKE =
   'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80';
@@ -59,10 +62,16 @@ const WEIGHT_PRESETS = [
   { label: '2 kg', defaultMultiplier: 3.5 },
 ];
 
-export default function OwnerProductsPage() {
+function OwnerProductsContent() {
+  const searchParams = useSearchParams();
+  const toast = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Delete Modal State
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter & Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,7 +84,7 @@ export default function OwnerProductsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Media tab
-  const [imageTab, setImageTab] = useState<'url' | 'upload'>('url');
+  const [imageTab, setImageTab] = useState<'url' | 'upload'>('upload');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +95,51 @@ export default function OwnerProductsPage() {
   const altFileInputRef = useRef<HTMLInputElement>(null);
   const variantFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingVariant, setIsUploadingVariant] = useState(false);
+
+  // Example Seeding
+  const [isSeeding, setIsSeeding] = useState(false);
+  const handleSeedProductExample = async () => {
+    setIsSeeding(true);
+    try {
+      await productsApi.createProduct({
+        name: 'Artisan Truffle Cake (Example)',
+        description: 'A rich, multi-layered chocolate truffle cake. This is an example product visible only to you.',
+        ingredients: 'Premium Belgian Chocolate, Fresh Cream, Flour, Sugar, Butter, Cocoa Powder, Madagascar Vanilla',
+        allergens: 'Contains Dairy, Gluten. May contain traces of Nuts.',
+        price: 650,
+        originalPrice: 800,
+        isEggless: true,
+        allowEggChoice: true,
+        eggPreferenceDefault: 'EGGLESS',
+        egglessPriceDiff: 50,
+        preparationTimeHours: 24,
+        weightGrams: 500,
+          availability: false,
+        imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80',
+        images: [
+          { imageUrl: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=800&q=80', displayOrder: 1, altText: 'Side angle view' }
+        ],
+        variants: [
+          { name: '1/2 Kg', price: 650, originalPrice: 800, description: 'Serves 4-6 people', imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80' },
+          { name: '1 Kg', price: 1200, originalPrice: 1400, description: 'Serves 10-12 people', imageUrl: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?auto=format&fit=crop&w=400&q=80' }
+        ],
+        highlights: [
+          { highlightText: '100% Pure Veg', displayOrder: 1 },
+          { highlightText: 'Zero Artificial Colors', displayOrder: 2 }
+        ],
+        addons: [
+          { name: 'Sparkle Candles (Pack of 4)', price: 49 },
+          { name: 'Happy Birthday Topper', price: 99 }
+        ]
+      });
+      toast.success('Example cake generated successfully!');
+      await refreshAll();
+    } catch (err: any) {
+      toast.error('Failed to generate example: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   // Product Form fields
   const [name, setName] = useState('');
@@ -161,6 +215,18 @@ export default function OwnerProductsPage() {
     return unregister;
   }, [registerRefreshHandler, refreshAll]);
 
+  // Deep-linking from Global Search or external links
+  useEffect(() => {
+    if (!searchParams) return;
+    const s = searchParams.get('search');
+    const pId = searchParams.get('productId');
+    if (s) setSearchQuery(s);
+    if (pId && products.length > 0) {
+      const match = products.find((p) => String(p.id) === String(pId));
+      if (match) openEditModal(match);
+    }
+  }, [searchParams, products]);
+
   const openCreateModal = () => {
     setEditingProduct(null);
     setName('');
@@ -235,18 +301,26 @@ export default function OwnerProductsPage() {
     setIsModalOpen(true);
   };
 
+  const handleDuplicateProduct = (p: Product) => {
+    openEditModal(p);
+    setEditingProduct(null); // Clear editing to force create new
+    setName(`${p.name} (Copy)`);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be under 5MB');
+      toast.error('Image must be under 5MB');
       return;
     }
     setIsUploading(true);
     try {
       const result = await mediaApi.uploadImage(file, 'products');
       setImageUrl(result.url);
+      toast.success('Main photo uploaded!');
     } catch {
+      toast.error('Failed to upload image. Please try again.');
       setImageUrl(URL.createObjectURL(file));
     } finally {
       setIsUploading(false);
@@ -258,15 +332,16 @@ export default function OwnerProductsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (altImages.length >= 3) {
-      alert('Maximum 3 alternative images allowed.');
+      toast.info('Maximum 3 alternative images allowed.');
       return;
     }
     setIsUploadingAlt(true);
     try {
       const result = await mediaApi.uploadImage(file, 'products');
       setAltImages([...altImages, result.url]);
+      toast.success('Alternative photo uploaded!');
     } catch (err: any) {
-      alert(err?.message || 'Failed to upload photo');
+      toast.error(err?.message || 'Failed to upload photo');
     } finally {
       setIsUploadingAlt(false);
       if (altFileInputRef.current) altFileInputRef.current.value = '';
@@ -280,8 +355,9 @@ export default function OwnerProductsPage() {
     try {
       const result = await mediaApi.uploadImage(file, 'products');
       setNewVariantImageUrl(result.url);
+      toast.success('Variant photo uploaded!');
     } catch (err: any) {
-      alert(err?.message || 'Failed to upload variant photo');
+      toast.error(err?.message || 'Failed to upload variant photo');
     } finally {
       setIsUploadingVariant(false);
       if (variantFileInputRef.current) variantFileInputRef.current.value = '';
@@ -291,7 +367,7 @@ export default function OwnerProductsPage() {
   const handleAddAltImageUrl = () => {
     if (!altImageUrlInput.trim()) return;
     if (altImages.length >= 3) {
-      alert('Maximum 3 alternative images allowed.');
+      toast.info('Maximum 3 alternative images allowed.');
       return;
     }
     setAltImages([...altImages, altImageUrlInput.trim()]);
@@ -407,7 +483,7 @@ export default function OwnerProductsPage() {
     const comparePriceNum = originalPrice ? Number(originalPrice) : null;
 
     if (comparePriceNum !== null && comparePriceNum <= baseSellingPrice) {
-      alert('Original compare-at price must be greater than the selling price to show a discount.');
+      toast.error('Original compare-at price must be greater than the selling price to show a discount.');
       setIsSubmitting(false);
       return;
     }
@@ -448,25 +524,31 @@ export default function OwnerProductsPage() {
     try {
       if (editingProduct) {
         await productsApi.updateProduct(editingProduct.id, productPayload);
+        toast.success('Cake details updated successfully!');
       } else {
         await productsApi.createProduct(productPayload);
+        toast.success('New cake added to catalog!');
       }
       setIsModalOpen(false);
       await refreshAll();
     } catch (err: any) {
-      alert(err.message || 'Failed to save product');
+      toast.error(err.message || 'Failed to save product');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteProduct = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this cake from your storefront?')) return;
+    setIsDeleting(true);
     try {
       await productsApi.deleteProduct(id);
       await refreshAll();
+      toast.success('Cake removed from catalog');
+      setDeleteConfirmId(null);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete product');
+      toast.error(err.message || 'Failed to delete product');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -485,8 +567,9 @@ export default function OwnerProductsPage() {
         variants: p.variants,
       });
       setProducts(products.map((item) => (item.id === p.id ? { ...item, inStock: updatedStock } : item)));
+      toast.success(updatedStock ? 'Marked as In Stock' : 'Marked as Sold Out');
     } catch (err: any) {
-      alert(err.message || 'Failed to update stock status');
+      toast.error(err.message || 'Failed to update stock status');
     }
   };
 
@@ -530,7 +613,10 @@ export default function OwnerProductsPage() {
             Manage your artisanal celebration cakes, size variants, custom categories, and live availability
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button onClick={handleSeedProductExample} isLoading={isSeeding} size="sm" variant="outline" className="text-brand-plum border-brand-plum/30 hover:bg-brand-cream hidden sm:flex">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Generate Example
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -651,8 +737,13 @@ export default function OwnerProductsPage() {
                             <img
                               src={p.imageUrl || FALLBACK_CAKE}
                               alt={p.name}
-                              className="w-full h-full object-cover"
+                              className={`w-full h-full object-cover ${p.inStock === false ? 'grayscale opacity-50' : ''}`}
                             />
+                            {p.inStock === false && (
+                              <div className="absolute inset-0 bg-red-900/20 flex items-center justify-center backdrop-blur-[1px]">
+                                <X className="w-4 h-4 text-white drop-shadow" />
+                              </div>
+                            )}
                             {p.images && p.images.length > 0 && (
                               <span className="absolute bottom-0 right-0 bg-brand-plum text-white text-[9px] font-bold px-1 rounded-tl">
                                 +{p.images.length}
@@ -712,16 +803,29 @@ export default function OwnerProductsPage() {
                       {/* Pricing Column */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-baseline gap-1.5">
-                          <span className="font-bold text-owner-heading">₹{p.price}</span>
-                          {p.originalPrice && p.originalPrice > p.price && (
-                            <span className="line-through text-owner-muted text-[11px]">
-                              ₹{p.originalPrice}
-                            </span>
-                          )}
-                          {discountPercent && (
-                            <span className="text-[10px] font-bold text-emerald-600">
-                              {discountPercent}% off
-                            </span>
+                          {p.variants && p.variants.length > 0 ? (
+                            <div className="space-y-0.5">
+                              <span className="font-bold text-owner-heading">
+                                ₹{Math.min(...p.variants.map((v) => Number(v.price)))} – ₹{Math.max(...p.variants.map((v) => Number(v.price)))}
+                              </span>
+                              <span className="block text-[10px] text-brand-plum font-semibold">
+                                {p.variants.length} Sizes
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-bold text-owner-heading">₹{p.price}</span>
+                              {p.originalPrice && p.originalPrice > p.price && (
+                                <span className="line-through text-owner-muted text-[11px]">
+                                  ₹{p.originalPrice}
+                                </span>
+                              )}
+                              {discountPercent && (
+                                <span className="text-[10px] font-bold text-emerald-600">
+                                  {discountPercent}% off
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -753,7 +857,14 @@ export default function OwnerProductsPage() {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteProduct(p.id)}
+                            onClick={() => handleDuplicateProduct(p)}
+                            className="p-1.5 text-owner-muted hover:text-brand-plum hover:bg-brand-blush/40 rounded-lg transition-colors cursor-pointer"
+                            title="Duplicate Cake"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirmId(p.id)}
                             className="p-1.5 text-owner-muted hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                             title="Delete Cake"
                           >
@@ -1340,6 +1451,41 @@ export default function OwnerProductsPage() {
         </form>
       </Modal>
 
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId !== null && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeleteConfirmId(null)}
+          title="Delete Product?"
+        >
+          <div className="space-y-4 pt-2">
+            <p className="text-xs text-owner-muted leading-relaxed">
+              Are you sure you want to remove this cake from your storefront catalog? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-owner-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteConfirmId(null)}
+                disabled={isDeleting}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => handleDeleteProduct(deleteConfirmId)}
+                disabled={isDeleting}
+                className="text-xs font-bold"
+              >
+                {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Category Manager Modal */}
       <CategoryManagerModal
         isOpen={isCategoryModalOpen}
@@ -1348,5 +1494,13 @@ export default function OwnerProductsPage() {
         onCategoriesChanged={refreshAll}
       />
     </div>
+  );
+}
+
+export default function OwnerProductsPage() {
+  return (
+    <Suspense fallback={<LoadingState message="Loading artisanal cake catalog..." />}>
+      <OwnerProductsContent />
+    </Suspense>
   );
 }

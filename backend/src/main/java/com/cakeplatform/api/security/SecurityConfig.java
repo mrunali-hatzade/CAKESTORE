@@ -56,6 +56,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/health", "/actuator/health").permitAll()
                         .requestMatchers("/api/storefront/**").permitAll()
+                        .requestMatchers("/api/subscription-plans/**").permitAll()
                         .requestMatchers("/api/customer/storefront/**").permitAll()
                         .requestMatchers("/api/locations/**").permitAll()
                         .requestMatchers("/api/webhooks/**").permitAll()
@@ -105,7 +106,15 @@ public class SecurityConfig {
                 "Origin",
                 "X-Requested-With",
                 "Access-Control-Request-Method",
-                "Access-Control-Request-Headers"
+                "Access-Control-Request-Headers",
+                "X-Review-Token",
+                "x-review-token",
+                "X-Customer-Name",
+                "x-customer-name",
+                "X-Customer-Phone",
+                "x-customer-phone",
+                "X-Order-Reference",
+                "x-order-reference"
         ));
         config.setExposedHeaders(List.of("Retry-After", "Content-Disposition"));
         config.setAllowCredentials(true);

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, Clock, Truck, Package, ArrowLeft, Store, Download, MessageCircle, AlertCircle, ShoppingBag, ShieldCheck, Star } from 'lucide-react';
+import { CheckCircle2, Clock, Truck, Package, ArrowLeft, Store, Download, MessageCircle, AlertCircle, ShoppingBag, ShieldCheck, Star, Pencil, Trash2 } from 'lucide-react';
 import { ordersApi } from '@/lib/api/orders';
 import { storefrontApi } from '@/lib/api/storefront';
 import { reviewsApi, OrderItemEligibility } from '@/lib/api/reviews';
@@ -32,6 +32,13 @@ export default function OrderTrackingPage() {
   // Review states
   const [eligibilityMap, setEligibilityMap] = useState<Record<number, OrderItemEligibility>>({});
   const [selectedItemForReview, setSelectedItemForReview] = useState<OrderItem | null>(null);
+  const [editingReview, setEditingReview] = useState<{
+    id: number;
+    rating: number;
+    reviewText?: string;
+    cakeImageUrl?: string;
+    cakeVideoUrl?: string;
+  } | null>(null);
 
   const fetchEligibility = async (currentOrder: Order) => {
     if (!currentOrder?.shopId || !currentOrder?.orderNumber) return;
@@ -48,6 +55,43 @@ export default function OrderTrackingPage() {
       setEligibilityMap(map);
     } catch {
       // Non-blocking if review check fails
+    }
+  };
+
+  const handleOpenReview = (item: OrderItem) => {
+    setEditingReview(null);
+    setSelectedItemForReview(item);
+  };
+
+  const handleOpenEditReview = (item: OrderItem, eligibility?: OrderItemEligibility) => {
+    if (!eligibility?.existingReviewId) return;
+    setEditingReview({
+      id: eligibility.existingReviewId,
+      rating: eligibility.existingRating ?? 5,
+      reviewText: eligibility.existingReviewText,
+      cakeImageUrl: eligibility.existingCakeImageUrl,
+      cakeVideoUrl: eligibility.existingCakeVideoUrl,
+    });
+    setSelectedItemForReview(item);
+  };
+
+  const handleDirectDeleteReview = async (item: OrderItem, eligibility?: OrderItemEligibility) => {
+    if (!order?.shopId || !eligibility?.existingReviewId) return;
+    if (!window.confirm('Are you sure you want to delete your review? This will remove your rating and feedback from the bakery.')) {
+      return;
+    }
+    try {
+      await reviewsApi.deleteProductReview(
+        order.shopId,
+        item.productId || 0,
+        eligibility.existingReviewId,
+        order.orderNumber,
+        order.customerPhone || ''
+      );
+      toast.success('Your review has been deleted.');
+      fetchEligibility(order);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete review.');
     }
   };
 
@@ -292,14 +336,34 @@ export default function OrderTrackingPage() {
                         {isDelivered && (
                           <div className="mt-2">
                             {eligibility?.hasReviewed ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Reviewed ({eligibility.existingRating}★)</span>
-                              </span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Reviewed ({eligibility.existingRating}★)</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditReview(item, eligibility)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-plum hover:text-brand-plum-dark px-2 py-0.5 rounded-lg bg-brand-blush/60 hover:bg-brand-blush border border-brand-blush-border transition-colors cursor-pointer"
+                                  title="Edit your review, rating or media"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDirectDeleteReview(item, eligibility)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200 transition-colors cursor-pointer"
+                                  title="Delete your review"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
                             ) : eligibility?.isEligible ? (
                               <button
                                 type="button"
-                                onClick={() => setSelectedItemForReview(item)}
+                                onClick={() => handleOpenReview(item)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-brand-blush text-brand-plum text-xs font-bold hover:bg-brand-plum hover:text-white transition-all cursor-pointer border border-brand-blush-border shadow-2xs"
                               >
                                 <Star className="w-3.5 h-3.5 fill-current" />
@@ -389,14 +453,21 @@ export default function OrderTrackingPage() {
       {selectedItemForReview && order.shopId && (
         <ProductReviewSubmissionModal
           isOpen={Boolean(selectedItemForReview)}
-          onClose={() => setSelectedItemForReview(null)}
+          onClose={() => {
+            setSelectedItemForReview(null);
+            setEditingReview(null);
+          }}
           shopId={order.shopId}
           productId={selectedItemForReview.productId || 0}
           productName={selectedItemForReview.productName || selectedItemForReview.productNameSnapshot || 'Artisan Cake'}
           orderNumber={order.orderNumber}
           customerPhone={order.customerPhone || ''}
           orderItemId={selectedItemForReview.id ?? 0}
+          initialReview={editingReview}
           onSuccess={() => {
+            fetchEligibility(order);
+          }}
+          onDelete={() => {
             fetchEligibility(order);
           }}
         />
