@@ -68,6 +68,22 @@ public class OwnerInteractionController {
         return ResponseEntity.ok(ownerInteractionService.replyToEnquiry(userDetails.getId(), id, request));
     }
 
+    @PatchMapping("/enquiries/{id}/status")
+    public ResponseEntity<Enquiry> updateEnquiryStatus(
+            @PathVariable Long id,
+            @RequestParam String status,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(ownerInteractionService.updateEnquiryStatus(userDetails.getId(), id, status));
+    }
+
+    @DeleteMapping("/enquiries/{id}")
+    public ResponseEntity<?> deleteEnquiry(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        ownerInteractionService.deleteEnquiry(userDetails.getId(), id);
+        return ResponseEntity.ok(Map.of("message", "Enquiry deleted successfully"));
+    }
+
     // --- Custom Cake Requests ---
     @GetMapping("/custom-cakes")
     public ResponseEntity<List<CustomCakeRequest>> getMyCustomCakeRequests(@AuthenticationPrincipal CustomUserDetails userDetails) {

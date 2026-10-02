@@ -74,3 +74,18 @@ mail:
   from-address: ${MAIL_FROM_ADDRESS:onboarding@resend.dev}
   resend:
     api-key: ${RESEND_API_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true

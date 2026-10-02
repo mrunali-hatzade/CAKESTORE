@@ -182,6 +182,23 @@ public class OwnerInteractionService {
         return saved;
     }
 
+    @Transactional
+    public void deleteEnquiry(Long ownerId, Long enquiryId) {
+        Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
+        Enquiry enquiry = enquiryRepository.findByIdAndShopId(enquiryId, shop.getId())
+                .orElseThrow(() -> new RuntimeException("Enquiry not found"));
+        enquiryRepository.delete(enquiry);
+    }
+
+    @Transactional
+    public Enquiry updateEnquiryStatus(Long ownerId, Long enquiryId, String status) {
+        Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
+        Enquiry enquiry = enquiryRepository.findByIdAndShopId(enquiryId, shop.getId())
+                .orElseThrow(() -> new RuntimeException("Enquiry not found"));
+        enquiry.setStatus(status);
+        return enquiryRepository.save(enquiry);
+    }
+
     public List<CustomCakeRequest> getMyCustomCakeRequests(Long ownerId) {
         Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
         return customCakeRequestRepository.findByShopIdOrderByCreatedAtDesc(shop.getId());

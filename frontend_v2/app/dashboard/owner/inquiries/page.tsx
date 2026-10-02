@@ -14,6 +14,7 @@ import {
   Send,
   Sparkles,
   Inbox,
+  Trash2,
 } from 'lucide-react';
 import { ownerApi } from '@/lib/api/owner';
 import { notificationsApi } from '@/lib/api/notifications';
@@ -45,6 +46,9 @@ function OwnerStoreInquiriesContent() {
   const [submitting, setSubmitting] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteConfirmInquiry, setDeleteConfirmInquiry] = useState<GeneralEnquiry | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
 
   const fetchData = useCallback(async (isManualRefresh = false) => {
     if (!isManualRefresh) setLoading(true);
@@ -175,6 +179,32 @@ function OwnerStoreInquiriesContent() {
   const newCount = generalEnquiries.filter((g) => g.status === 'NEW').length;
   const repliedCount = generalEnquiries.filter((g) => g.status === 'REPLIED').length;
   const responseRate = totalCount > 0 ? Math.round((repliedCount / totalCount) * 100) : 100;
+
+  const handleUpdateStatus = async (id: number, status: string) => {
+    setUpdatingStatusId(id);
+    try {
+      await ownerApi.updateGeneralEnquiryStatus(id, status);
+      await fetchData(true);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update status');
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmInquiry) return;
+    setDeletingId(deleteConfirmInquiry.id);
+    try {
+      await ownerApi.deleteGeneralEnquiry(deleteConfirmInquiry.id);
+      await fetchData(true);
+      setDeleteConfirmInquiry(null);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete inquiry');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleOpenGeneralModal = (gen: GeneralEnquiry) => {
     setSelectedGeneral(gen);
@@ -472,6 +502,30 @@ function OwnerStoreInquiriesContent() {
                     >
                       {gen.ownerReply ? 'Edit Reply' : 'Reply'}
                     </Button>
+
+                    {gen.status === 'NEW' && (
+                      <Button
+                        onClick={() => handleUpdateStatus(gen.id, 'RESOLVED')}
+                        size="sm"
+                        variant="outline"
+                        className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-2"
+                        isLoading={updatingStatusId === gen.id}
+                        title="Mark as Resolved"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    <Button
+                      onClick={() => setDeleteConfirmInquiry(gen)}
+                      size="sm"
+                      variant="outline"
+                      className="text-xs text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 px-2"
+                      isLoading={deletingId === gen.id}
+                      title="Delete Inquiry"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
 
@@ -592,6 +646,43 @@ function OwnerStoreInquiriesContent() {
             </form>
           );
         })()}
+      </Modal>
+      {/* Modal: Confirm Delete */}
+      <Modal
+        isOpen={!!deleteConfirmInquiry}
+        onClose={() => setDeleteConfirmInquiry(null)}
+        title="Delete Customer Inquiry?"
+        maxWidth="sm"
+      >
+        {deleteConfirmInquiry && (
+          <div className="space-y-4">
+            <p className="text-xs text-owner-muted leading-relaxed">
+              Are you sure you want to permanently delete the inquiry from{' '}
+              <strong className="text-owner-heading">{deleteConfirmInquiry.customerName}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-owner-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteConfirmInquiry(null)}
+                disabled={deletingId !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                onClick={handleConfirmDelete}
+                isLoading={deletingId !== null}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                Delete Inquiry
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

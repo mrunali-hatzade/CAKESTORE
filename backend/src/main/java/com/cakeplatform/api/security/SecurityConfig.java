@@ -53,7 +53,7 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/actuator/**").permitAll()
                         .requestMatchers("/api/health", "/actuator/health").permitAll()
                         .requestMatchers("/api/storefront/**").permitAll()
                         .requestMatchers("/api/subscription-plans/**").permitAll()
@@ -124,3 +124,4 @@ public class SecurityConfig {
         return source;
     }
 }
+

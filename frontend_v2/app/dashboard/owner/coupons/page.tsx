@@ -237,6 +237,10 @@ function OwnerCouponsContent() {
       setFormError('Percentage discount cannot exceed 100%.');
       return;
     }
+    if (discountType === 'FLAT' && minOrderValue !== '' && Number(discountValue) > Number(minOrderValue)) {
+      setFormError('Flat discount amount cannot be greater than the minimum order value.');
+      return;
+    }
 
     setSubmitting(true);
     setFormError(null);

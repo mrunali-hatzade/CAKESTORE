@@ -24,6 +24,10 @@ USER spring:spring
 # Expose port
 EXPOSE 8080
 
+# Docker Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- http://localhost:8080/actuator/health/liveness || exit 1
+
 # Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
+
 

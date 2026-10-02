@@ -93,6 +93,14 @@ export const ownerApi = {
     return apiClient.post<GeneralEnquiry>(`/api/owner/enquiries/${id}/reply`, { reply: reply.trim() });
   },
 
+  updateGeneralEnquiryStatus: async (id: number, status: string): Promise<GeneralEnquiry> => {
+    return apiClient.patch<GeneralEnquiry>(`/api/owner/enquiries/${id}/status?status=${encodeURIComponent(status)}`);
+  },
+
+  deleteGeneralEnquiry: async (id: number): Promise<{ message: string }> => {
+    return apiClient.delete<{ message: string }>(`/api/owner/enquiries/${id}`);
+  },
+
   // Custom Cakes
   getCustomCakeRequests: async (): Promise<CustomCakeRequest[]> => {
     return apiClient.get<CustomCakeRequest[]>('/api/owner/custom-cakes');

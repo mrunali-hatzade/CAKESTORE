@@ -416,6 +416,131 @@ export default function OwnerGalleryPage() {
     return <LoadingState message="Loading your bakery gallery showcase..." />;
   }
 
+  const renderGalleryCard = (item: UnifiedOwnerGalleryItem) => (
+    <Card
+      key={`${item.origin}-${item.id}`}
+      className="group overflow-hidden flex flex-col justify-between border-owner-border hover:shadow-elevated transition-all duration-300"
+    >
+      {/* Image & Badges */}
+      <div 
+        className="relative aspect-square w-full bg-owner-canvas overflow-hidden cursor-pointer"
+        onClick={() => setPreviewImage(item.imageUrl)}
+      >
+        <img
+          src={item.imageUrl}
+          alt={item.title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        />
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center text-white text-xs font-semibold gap-1.5">
+          <Eye className="w-4 h-4" />
+          <span>View Full Design</span>
+        </div>
+        {/* Category Badge */}
+        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
+          <Badge variant="plum" className="bg-white/95 text-brand-plum backdrop-blur-xs shadow-xs text-[10px] font-bold">
+            {item.categoryName || 'Bespoke'}
+          </Badge>
+          {item.origin === 'product' && (
+            <span className="inline-flex items-center gap-1 bg-brand-plum/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
+              <ShoppingBag className="w-2.5 h-2.5" />
+              <span>Live Menu Cake</span>
+            </span>
+          )}
+        </div>
+
+        {/* Visibility Status Badge */}
+        <div className="absolute top-2.5 right-2.5">
+          {item.origin === 'showcase' ? (
+            <button
+              onClick={() => handleToggleActive(item.rawItem)}
+              title={item.isActive ? 'Visible in public gallery (click to hide)' : 'Hidden from public gallery (click to show)'}
+              className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs transition-colors backdrop-blur-xs cursor-pointer ${
+                item.isActive
+                  ? 'bg-emerald-500/90 text-white hover:bg-emerald-600'
+                  : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-900'
+              }`}
+            >
+              {item.isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              <span>{item.isActive ? 'Active' : 'Hidden'}</span>
+            </button>
+          ) : (
+            <span
+              className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs backdrop-blur-xs ${
+                item.isActive
+                  ? 'bg-emerald-500/90 text-white'
+                  : 'bg-zinc-800/80 text-zinc-300'
+              }`}
+            >
+              <Eye className="w-3 h-3" />
+              <span>{item.isActive ? 'In Catalog' : 'Out of Stock'}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="p-3 flex-1 flex flex-col justify-between space-y-2.5">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-owner-heading line-clamp-1 group-hover:text-brand-plum transition-colors">
+              {item.title}
+            </h3>
+            {item.origin === 'product' && (
+              <span className="text-xs font-bold text-brand-espresso shrink-0">
+                ₹{item.price}
+              </span>
+            )}
+          </div>
+          {item.caption ? (
+            <p className="text-xs text-owner-muted line-clamp-2 leading-relaxed">
+              {item.caption}
+            </p>
+          ) : (
+            <p className="text-xs text-zinc-400 italic">No caption provided</p>
+          )}
+        </div>
+
+        {/* Footer Controls */}
+        <div className="pt-3 border-t border-owner-border/70 flex items-center justify-between">
+          <span className="text-[11px] text-owner-muted font-medium">
+            {item.origin === 'showcase' ? `Order #${item.displayOrder ?? 0}` : 'Catalog Item'}
+          </span>
+
+          {item.origin === 'showcase' ? (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => openEditModal(item.rawItem)}
+                className="p-1.5 h-auto text-owner-muted hover:text-brand-plum rounded-lg"
+                title="Edit photo details"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteConfirmId(item.id)}
+                className="p-1.5 h-auto text-owner-muted hover:text-rose-600 rounded-lg"
+                title="Delete photo"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <Link
+              href="/dashboard/owner/products"
+              className="text-[11px] font-bold text-brand-plum hover:underline inline-flex items-center gap-1"
+            >
+              <span>Edit in Products</span>
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -470,7 +595,7 @@ export default function OwnerGalleryPage() {
               Why do items from Products and Showcase appear on Storefront Gallery?
             </h4>
             <p className="text-[11px] text-amber-800 leading-relaxed mt-0.5">
-              Your public storefront automatically merges your <strong>Bespoke Showcase creations</strong> ({totalShowcaseCount} photos uploaded here) and your <strong>Live Menu Cake products</strong> ({totalProductsCount} cakes managed in Products). Customers can browse your entire artistry and order directly!
+              Your public storefront automatically merges your <strong>Bespoke Showcase creations</strong> ({totalShowcaseCount} photos uploaded here) and your <strong>Live Menu Cakes</strong> ({totalProductsCount} photos pulled from Products). Customers can browse your entire artistry and order directly!
             </p>
           </div>
         </div>
@@ -535,7 +660,7 @@ export default function OwnerGalleryPage() {
                   : 'text-owner-muted hover:text-owner-heading'
               }`}
             >
-              Menu Cakes ({totalProductsCount})
+              Menu Cake Photos ({totalProductsCount})
             </button>
           </div>
 
@@ -611,130 +736,14 @@ export default function OwnerGalleryPage() {
           </div>
         )
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
+        <div className="flex flex-wrap gap-4 sm:gap-6 justify-start">
           {filteredItems.map((item) => (
-            <Card
-              key={`${item.origin}-${item.id}`}
-              className="group overflow-hidden flex flex-col justify-between border-owner-border hover:shadow-elevated transition-all duration-300"
+            <div 
+              key={`${item.origin}-${item.id}`} 
+              className="w-[calc(50%-8px)] sm:w-[180px] lg:w-[200px] xl:w-[220px] shrink-0"
             >
-              {/* Image & Badges */}
-              <div 
-                className="relative aspect-square w-full bg-owner-canvas overflow-hidden cursor-pointer"
-                onClick={() => setPreviewImage(item.imageUrl)}
-              >
-                <img
-                  src={item.imageUrl}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center text-white text-xs font-semibold gap-1.5">
-                  <Eye className="w-4 h-4" />
-                  <span>View Full Design</span>
-                </div>
-                {/* Category Badge */}
-                <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
-                  <Badge variant="plum" className="bg-white/95 text-brand-plum backdrop-blur-xs shadow-xs text-[10px] font-bold">
-                    {item.categoryName || 'Bespoke'}
-                  </Badge>
-                  {item.origin === 'product' && (
-                    <span className="inline-flex items-center gap-1 bg-brand-plum/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
-                      <ShoppingBag className="w-2.5 h-2.5" />
-                      <span>Live Menu Cake</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* Visibility Status Badge */}
-                <div className="absolute top-2.5 right-2.5">
-                  {item.origin === 'showcase' ? (
-                    <button
-                      onClick={() => handleToggleActive(item.rawItem)}
-                      title={item.isActive ? 'Visible in public gallery (click to hide)' : 'Hidden from public gallery (click to show)'}
-                      className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs transition-colors backdrop-blur-xs cursor-pointer ${
-                        item.isActive
-                          ? 'bg-emerald-500/90 text-white hover:bg-emerald-600'
-                          : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-900'
-                      }`}
-                    >
-                      {item.isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                      <span>{item.isActive ? 'Active' : 'Hidden'}</span>
-                    </button>
-                  ) : (
-                    <span
-                      className={`px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-xs backdrop-blur-xs ${
-                        item.isActive
-                          ? 'bg-emerald-500/90 text-white'
-                          : 'bg-zinc-800/80 text-zinc-300'
-                      }`}
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>{item.isActive ? 'In Catalog' : 'Out of Stock'}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Card Body */}
-              <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-bold text-owner-heading line-clamp-1 group-hover:text-brand-plum transition-colors">
-                      {item.title}
-                    </h3>
-                    {item.origin === 'product' && (
-                      <span className="text-xs font-bold text-brand-espresso shrink-0">
-                        ₹{item.price}
-                      </span>
-                    )}
-                  </div>
-                  {item.caption ? (
-                    <p className="text-xs text-owner-muted line-clamp-2 leading-relaxed">
-                      {item.caption}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-zinc-400 italic">No caption provided</p>
-                  )}
-                </div>
-
-                {/* Footer Controls */}
-                <div className="pt-3 border-t border-owner-border/70 flex items-center justify-between">
-                  <span className="text-[11px] text-owner-muted font-medium">
-                    {item.origin === 'showcase' ? `Order #${item.displayOrder ?? 0}` : 'Catalog Item'}
-                  </span>
-
-                  {item.origin === 'showcase' ? (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditModal(item.rawItem)}
-                        className="p-1.5 h-auto text-owner-muted hover:text-brand-plum rounded-lg"
-                        title="Edit photo details"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDeleteConfirmId(item.id)}
-                        className="p-1.5 h-auto text-owner-muted hover:text-rose-600 rounded-lg"
-                        title="Delete photo"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Link
-                      href="/dashboard/owner/products"
-                      className="text-[11px] font-bold text-brand-plum hover:underline inline-flex items-center gap-1"
-                    >
-                      <span>Edit in Products</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </Card>
+              {renderGalleryCard(item)}
+            </div>
           ))}
         </div>
       )}

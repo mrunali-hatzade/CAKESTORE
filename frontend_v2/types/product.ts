@@ -73,6 +73,7 @@ export interface Product {
   variants?: ProductVariant[];
   addons?: ProductAddon[];
   rating?: number;
+  averageRating?: number;
   reviewCount?: number;
   totalReviews?: number;
 }

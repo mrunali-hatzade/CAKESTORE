@@ -56,7 +56,7 @@ export default function OwnerOverviewPage() {
       // Parallel fetch of all operational data without duplicate shop profile calls
       const [statsRes, ordersRes, analyticsRes, slotsRes, customCakesRes] = await Promise.allSettled([
         ownerApi.getDashboardStats(),
-        ordersApi.getOwnerOrders(),
+        ordersApi.getOwnerOrders(undefined, 0, 1000),
         ownerApi.getAnalytics(),
         deliverySlotsApi.getOwnerSlots(),
         ownerApi.getCustomCakeRequests(),
@@ -122,101 +122,76 @@ export default function OwnerOverviewPage() {
     }
   };
 
-  if (isLoading) return <LoadingState message="Loading bakery operational command center..." />;
 
-  // Real KPI Metrics
-  const totalProducts = stats?.totalProducts ?? 0;
-  const activeProducts = stats?.activeProducts ?? 0;
-  const pendingOrders = stats?.pendingOrders ?? orders.filter(o => {
-    const s = String(o.orderStatus || o.status || '').toUpperCase();
-    return s === 'PENDING' || s === 'CONFIRMED' || s === 'NEW';
-  }).length;
-  const totalOrders = stats?.totalOrders ?? orders.length;
+    // Memoized KPI Metrics to prevent lag on render
+  const { totalProducts, activeProducts, pendingOrders, totalOrders } = React.useMemo(() => ({
+    totalProducts: stats?.totalProducts ?? 0,
+    activeProducts: stats?.activeProducts ?? 0,
+    pendingOrders: stats?.pendingOrders ?? 0,
+    totalOrders: stats?.totalOrders ?? 0,
+  }), [stats]);
 
-  // Realized Revenue: Authoritative from stats API, dynamically synchronized with loaded orders
-  const realizedOrdersRevenue = orders
-    .filter((o) => {
-      const pStatus = (o.paymentStatus || '').toUpperCase();
-      const oStatus = (o.orderStatus || o.status || '').toUpperCase();
-      return (
-        oStatus !== 'CANCELLED' &&
-        (pStatus === 'PAID' || pStatus === 'COMPLETED' || oStatus === 'COMPLETED' || oStatus === 'DELIVERED') &&
-        pStatus !== 'REFUNDED' &&
-        pStatus !== 'FAILED'
-      );
-    })
-    .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+  const totalRevenue = Number(stats?.totalRevenue || 0);
 
-  const totalRevenue = Math.max(Number(stats?.totalRevenue || 0), realizedOrdersRevenue);
-
-  // Today's Revenue
-  const todayRevenue = orders
-    .filter((o) => {
-      const createdDate = new Date(o.createdAt).toLocaleDateString('en-CA');
-      const today = new Date().toLocaleDateString('en-CA');
-      const pStatus = (o.paymentStatus || '').toUpperCase();
-      const oStatus = (o.orderStatus || o.status || '').toUpperCase();
-      return (
-        createdDate === today &&
-        oStatus !== 'CANCELLED' &&
-        pStatus !== 'REFUNDED' &&
-        pStatus !== 'FAILED' &&
-        (pStatus === 'PAID' || (o.paymentMethod || '').toUpperCase() === 'COD')
-      );
-    })
-    .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+  // Today's Revenue (Server Authoritative)
+  const todayRevenue = Number(stats?.todayRevenue || 0);
 
   // Real Phase 6A 7-Day Sales Velocity
-  const rawSales = analytics?.salesByDay || {};
-  const dayEntries = Object.entries(rawSales);
-  const dayValues = dayEntries.map(([, v]) => Number(v) || 0);
-  const maxSale = Math.max(...dayValues, 100);
+  const { maxSale, dayValues, dayEntries } = React.useMemo(() => {
+    const rawSales = analytics?.salesByDay || {};
+    const entries = Object.entries(rawSales);
+    const values = entries.map(([, v]) => Number(v) || 0);
+    return {
+      dayEntries: entries,
+      dayValues: values,
+      maxSale: Math.max(...values, 10),
+    };
+  }, [analytics]);
 
-  // Real Top Selling Products from Phase 6A
-  const topProductsList = Object.entries(analytics?.topSellingProducts || {}).slice(0, 5);
+    // Real Top Selling Products from Phase 6A
+  const topProductsList = React.useMemo(() => {
+    return Object.entries(analytics?.topSellingProducts || {})
+      .map(([name, qty]) => [name, Number(qty)] as [string, number])
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [analytics]);
 
-  // Operational Today's Deliveries Filter
-  const todayDateStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-  const todayDeliveries = orders.filter((o) => {
-    const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
-    const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
-    if (!isCod && !isPaid) return false;
-    const orderDeliveryDate = o.deliveryDate ? o.deliveryDate.split('T')[0] : '';
-    const s = String(o.orderStatus || o.status || '').toUpperCase();
-    return orderDeliveryDate === todayDateStr && s !== 'CANCELLED';
-  });
+    // Operational Today's Deliveries Filter (For displaying the list)
+  const todayDateStr = React.useMemo(() => new Date().toLocaleDateString('en-CA'), []); // YYYY-MM-DD
+  const todayDeliveries = React.useMemo(() => {
+    return orders.filter((o) => {
+      const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
+      const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
+      if (!isCod && !isPaid) return false;
+      const orderDeliveryDate = o.deliveryDate ? o.deliveryDate.split('T')[0] : '';
+      const s = String(o.orderStatus || o.status || '').toUpperCase();
+      return orderDeliveryDate === todayDateStr && s !== 'CANCELLED';
+    });
+  }, [orders, todayDateStr]);
 
-  // Actionable Attention Counters
-  const pendingConfirmationOrders = orders.filter(o => {
-    const s = String(o.orderStatus || o.status || '').toUpperCase();
-    const isCod = (o.paymentMethod || '').toUpperCase() === 'COD' || (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
-    const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
-    return (s === 'NEW' || s === 'PENDING') && (isCod || isPaid);
-  }).length;
-  const unscheduledTodayDeliveries = todayDeliveries.filter(o => !o.deliverySlotId).length;
-  const pendingCustomEnquiries = customCakeRequests.filter(r => r.status === 'PENDING').length;
+  // Actionable Attention Counters (Server Authoritative fallback to local if undefined)
+  const pendingConfirmationOrders = stats?.pendingConfirmationOrders ?? 0;
+  const unscheduledTodayDeliveries = stats?.unscheduledTodayDeliveries ?? 0;
+  const pendingCustomEnquiries = stats?.pendingCustomEnquiries ?? 0;
   const inactiveCatalogCakes = Math.max(0, totalProducts - activeProducts);
-  const pendingCodOrders = orders.filter(o => {
-    const method = (o.paymentMethod || '').toUpperCase();
-    const status = (o.paymentStatus || '').toUpperCase();
-    const orderStatus = (o.orderStatus || o.status || '').toUpperCase();
-    return method === 'COD' && status !== 'PAID' && orderStatus !== 'CANCELLED';
-  });
-  const pendingCodAmount = pendingCodOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-  const totalActionItems = pendingConfirmationOrders + unscheduledTodayDeliveries + pendingCustomEnquiries + inactiveCatalogCakes + pendingCodOrders.length;
+  
+  const pendingCodOrders = stats?.pendingCodOrders ?? 0;
+  const pendingCodAmount = stats?.pendingCodAmount ?? 0;
+  const totalActionItems = stats?.totalActionItems ?? 0;
 
   // Status Badge Helper
-  const renderStatusBadge = (statusStr?: string) => {
+  const renderStatusBadge = React.useCallback((statusStr?: string) => {
     const s = (statusStr || 'PENDING').toUpperCase();
     if (s === 'COMPLETED' || s === 'DELIVERED') return <Badge variant="success" size="sm">{s}</Badge>;
     if (s === 'CANCELLED') return <Badge variant="error" size="sm">{s}</Badge>;
     if (s === 'PREPARING' || s === 'READY' || s === 'OUT_FOR_DELIVERY') return <Badge variant="default" size="sm">{s.replace(/_/g, ' ')}</Badge>;
     return <Badge variant="warning" size="sm">{s}</Badge>;
-  };
+  }, []);
 
   const isPending = shop?.status === 'PENDING';
   const isExpired = shop?.status === 'EXPIRED';
 
+  if (isLoading) return <LoadingState message="Loading bakery operational command center..." />;
 
   return (
     <div className="space-y-6">
@@ -295,7 +270,7 @@ export default function OwnerOverviewPage() {
       {!isPending && !isExpired && (
         <>
           {/* Pending COD Alert Banner */}
-          {pendingCodOrders.length > 0 && (
+          {pendingCodOrders > 0 && (
             <div className="p-4 sm:p-5 rounded-3xl bg-amber-50/90 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
               <div className="flex items-center gap-3.5">
                 <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300">
@@ -307,7 +282,7 @@ export default function OwnerOverviewPage() {
                       Cash on Delivery (COD) Pending Orders
                     </h4>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
-                      {pendingCodOrders.length} {pendingCodOrders.length === 1 ? 'order' : 'orders'}
+                      {pendingCodOrders} {pendingCodOrders === 1 ? 'order' : 'orders'}
                     </span>
                   </div>
                   <p className="text-xs text-amber-900/80 mt-0.5">
@@ -826,7 +801,7 @@ export default function OwnerOverviewPage() {
                   </Link>
                 )}
 
-                {pendingCodOrders.length > 0 && (
+                {pendingCodOrders > 0 && (
                   <Link
                     href="/dashboard/owner/orders?payment=COD_PENDING"
                     className="p-3 rounded-2xl border border-amber-300 bg-amber-50/80 hover:bg-amber-100/60 transition-colors flex items-center justify-between text-xs group"
@@ -835,7 +810,7 @@ export default function OwnerOverviewPage() {
                       <Banknote className="w-4 h-4 text-amber-700 shrink-0" />
                       <div className="truncate">
                         <span className="font-semibold text-owner-heading block truncate">
-                          {pendingCodOrders.length} COD {pendingCodOrders.length === 1 ? 'order' : 'orders'} pending payment
+                          {pendingCodOrders} COD {pendingCodOrders === 1 ? 'order' : 'orders'} pending payment
                         </span>
                         <span className="text-[10px] text-amber-800 font-medium">
                           ₹{pendingCodAmount.toLocaleString('en-IN')} pending
@@ -917,3 +892,8 @@ export default function OwnerOverviewPage() {
     </div>
   );
 }
+
+
+
+
+

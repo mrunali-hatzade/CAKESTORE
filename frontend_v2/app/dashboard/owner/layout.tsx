@@ -17,7 +17,7 @@ import { getSubscriptionHeaderInfo } from '@/lib/utils/subscription';
 import NotificationBell from '@/components/owner/NotificationBell';
 import OwnerFeedbackModal from '@/components/owner/OwnerFeedbackModal';
 import { OwnerCommandPalette } from '@/components/owner/OwnerCommandPalette';
-import { MessageCircle, Sparkles } from 'lucide-react';
+import { MessageCircle, Sparkles, ShieldCheck } from 'lucide-react';
 
 function OwnerLayoutContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -155,9 +155,16 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
             >
               {shop?.businessName || 'My Bakery'}
             </span>
-            <span className="text-[10px] text-owner-sidebar-text uppercase tracking-widest font-medium block">
-              Owner Portal
-            </span>
+            {shop?.verificationStatus === 'VERIFIED' ? (
+              <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-sm border border-emerald-400/30 bg-emerald-400/10 text-[9px] font-bold text-emerald-400 uppercase tracking-widest">
+                <ShieldCheck className="w-2.5 h-2.5" />
+                <span>Verified</span>
+              </div>
+            ) : (
+              <span className="text-[10px] text-owner-sidebar-text uppercase tracking-widest font-medium block mt-0.5">
+                Owner Portal
+              </span>
+            )}
           </div>
         </Link>
         {isMobile && (

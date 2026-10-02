@@ -36,33 +36,101 @@ public class OwnerDashboardService {
     private final CustomCakeRequestRepository customCakeRequestRepository;
     private final com.cakeplatform.api.modules.security.ShopAccessValidator shopAccessValidator;
 
-    public OwnerDashboardStatsResponse getDashboardStats(Long ownerId) {
+        public OwnerDashboardStatsResponse getDashboardStats(Long ownerId) {
         Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
+        Long shopId = shop.getId();
 
         OwnerDashboardStatsResponse stats = new OwnerDashboardStatsResponse();
         
         // Products
-        stats.setTotalProducts(productRepository.countByShopId(shop.getId()));
-        stats.setActiveProducts(productRepository.countByShopIdAndStatusAndAvailability(shop.getId(), "ACTIVE", true));
+        stats.setTotalProducts(productRepository.countByShopId(shopId));
+        stats.setActiveProducts(productRepository.countByShopIdAndStatusAndAvailability(shopId, "ACTIVE", true));
         
         // Orders
-        stats.setTotalOrders(orderRepository.countVisibleOrdersByShopId(shop.getId()));
-        stats.setPendingOrders(orderRepository.countPendingOrdersByShopId(shop.getId()));
+        stats.setTotalOrders(orderRepository.countVisibleOrdersByShopId(shopId));
+        stats.setPendingOrders(orderRepository.countPendingOrdersByShopId(shopId));
         
         // Revenue
-        BigDecimal revenue = orderRepository.sumRevenueByShopId(shop.getId());
+        BigDecimal revenue = orderRepository.sumRevenueByShopId(shopId);
         stats.setTotalRevenue(revenue != null ? revenue : BigDecimal.ZERO);
         
         // Status
         stats.setShopStatus(shop.getStatus().name());
         
         // Subscription Status
-        List<Subscription> subscriptions = subscriptionRepository.findByShopId(shop.getId());
+        List<Subscription> subscriptions = subscriptionRepository.findByShopId(shopId);
         if (!subscriptions.isEmpty()) {
             stats.setSubscriptionStatus(subscriptions.get(0).getStatus().name());
         } else {
             stats.setSubscriptionStatus("NONE");
         }
+
+        // Action Items & Server Authoritative Logic
+        List<Order> activeOrders = orderRepository.findVisibleOrdersByShopId(shopId);
+        String todayStr = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        long todayDeliveries = 0;
+        long unscheduledDeliveries = 0;
+        long pendingConfOrders = 0;
+        long pendingCodOrders = 0;
+        BigDecimal pendingCodAmount = BigDecimal.ZERO;
+        BigDecimal todayRevenue = BigDecimal.ZERO;
+
+        for (Order o : activeOrders) {
+            String pStatus = o.getPaymentStatus() != null ? o.getPaymentStatus().toUpperCase() : "";
+            String oStatus = o.getOrderStatus() != null ? o.getOrderStatus().toUpperCase() : "";
+            String pMethod = o.getPaymentMethod() != null ? o.getPaymentMethod().toUpperCase() : "";
+            
+            boolean isCod = pMethod.equals("COD") || pMethod.equals("CASH_ON_DELIVERY");
+            boolean isPaid = pStatus.equals("PAID") || pStatus.equals("COMPLETED");
+            boolean isCancelled = oStatus.equals("CANCELLED");
+            
+            // Pending Confirmations
+            if ((oStatus.equals("NEW") || oStatus.equals("PENDING")) && (isCod || isPaid)) {
+                pendingConfOrders++;
+            }
+            
+            // COD Pending
+            if (isCod && !pStatus.equals("PAID") && !pStatus.equals("COMPLETED") && !isCancelled) {
+                pendingCodOrders++;
+                if (o.getTotalAmount() != null) {
+                    pendingCodAmount = pendingCodAmount.add(o.getTotalAmount());
+                }
+            }
+            
+            // Today Revenue
+            String createdDate = o.getCreatedAt() != null ? o.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : "";
+            if (createdDate.equals(todayStr) && !isCancelled && !pStatus.equals("REFUNDED") && !pStatus.equals("FAILED") && (isPaid || isCod)) {
+                if (o.getTotalAmount() != null) {
+                    todayRevenue = todayRevenue.add(o.getTotalAmount());
+                }
+            }
+            
+            // Today Deliveries
+            if ((isCod || isPaid) && !isCancelled) {
+                String orderDeliveryDate = o.getDeliveryDate() != null ? o.getDeliveryDate().toString() : "";
+                if (orderDeliveryDate.startsWith(todayStr)) {
+                    todayDeliveries++;
+                    if (o.getDeliverySlot() == null) {
+                        unscheduledDeliveries++;
+                    }
+                }
+            }
+        }
+        
+        long pendingCustomEnquiries = customCakeRequestRepository.searchCustomCakesByShopId(shopId, "", org.springframework.data.domain.PageRequest.of(0, 1000))
+                .stream().filter(c -> "PENDING".equalsIgnoreCase(c.getStatus())).count();
+                
+        long inactiveCatalogCakes = Math.max(0, stats.getTotalProducts() - stats.getActiveProducts());
+
+        stats.setTodayRevenue(todayRevenue);
+        stats.setTodayDeliveries(todayDeliveries);
+        stats.setPendingConfirmationOrders(pendingConfOrders);
+        stats.setPendingCodOrders(pendingCodOrders);
+        stats.setPendingCodAmount(pendingCodAmount);
+        stats.setUnscheduledTodayDeliveries(unscheduledDeliveries);
+        stats.setPendingCustomEnquiries(pendingCustomEnquiries);
+        stats.setTotalActionItems(pendingConfOrders + unscheduledDeliveries + pendingCustomEnquiries + inactiveCatalogCakes + pendingCodOrders);
 
         return stats;
     }
@@ -157,3 +225,5 @@ public class OwnerDashboardService {
                 .build();
     }
 }
+
+

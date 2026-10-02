@@ -377,6 +377,14 @@ export interface OwnerDashboardStats {
   totalRevenue: number;
   shopStatus: string;
   subscriptionStatus: string;
+  todayRevenue?: number;
+  todayDeliveries?: number;
+  pendingConfirmationOrders?: number;
+  pendingCodOrders?: number;
+  pendingCodAmount?: number;
+  unscheduledTodayDeliveries?: number;
+  pendingCustomEnquiries?: number;
+  totalActionItems?: number;
 }
 
 export interface ShopPayoutDetails {

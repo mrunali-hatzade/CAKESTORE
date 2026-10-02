@@ -42,8 +42,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
-
-const FALLBACK_CAKE = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80';
+import { ReviewDetailsModal } from '@/components/owner/ReviewDetailsModal';
 
 export interface UnifiedReview {
   id: number;
@@ -86,10 +85,6 @@ export default function OwnerReviewsPage() {
 
   // Reply Modal State
   const [selectedReview, setSelectedReview] = useState<UnifiedReview | null>(null);
-  const [replyText, setReplyText] = useState('');
-  const [submittingReply, setSubmittingReply] = useState(false);
-  const [replySuccess, setReplySuccess] = useState<string | null>(null);
-  const [replyError, setReplyError] = useState<string | null>(null);
 
   // Moderation / Action State
   const [actionInProgressId, setActionInProgressId] = useState<number | null>(null);
@@ -292,56 +287,33 @@ export default function OwnerReviewsPage() {
 
   const handleOpenReplyModal = (review: UnifiedReview) => {
     setSelectedReview(review);
-    setReplyText(review.ownerReply || '');
-    setReplySuccess(null);
-    setReplyError(null);
   };
 
-  const handleSubmitReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedReview || !replyText.trim() || isAdminWithoutShop) return;
-
-    setSubmittingReply(true);
-    setReplyError(null);
-    setReplySuccess(null);
-
-    try {
-      if (selectedReview.backendSource === 'PRODUCT_REVIEW') {
-        const updated = await reviewsApi.replyToProductReview(selectedReview.id, replyText.trim());
-        setReviews((prev) =>
-          prev.map((r) =>
-            r.id === updated.id && r.backendSource === 'PRODUCT_REVIEW'
-              ? {
-                  ...r,
-                  ownerReply: updated.ownerReply,
-                  ownerRepliedAt: updated.ownerRepliedAt,
-                }
-              : r
-          )
-        );
-      } else {
-        const updated = await ownerApi.replyToReview(selectedReview.id, replyText.trim());
-        setReviews((prev) =>
-          prev.map((r) =>
-            r.id === updated.id && r.backendSource === 'FEEDBACK'
-              ? {
-                  ...r,
-                  ownerReply: updated.ownerReply,
-                  ownerRepliedAt: updated.updatedAt,
-                }
-              : r
-          )
-        );
-      }
-
-      setReplySuccess('Bakery response published successfully!');
-      setTimeout(() => {
-        setSelectedReview(null);
-      }, 1200);
-    } catch (err: any) {
-      setReplyError(err?.message || 'Failed to post reply');
-    } finally {
-      setSubmittingReply(false);
+  const handleReplySuccess = (updated: any, backendSource: 'PRODUCT_REVIEW' | 'FEEDBACK') => {
+    if (backendSource === 'PRODUCT_REVIEW') {
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === updated.id && r.backendSource === 'PRODUCT_REVIEW'
+            ? {
+                ...r,
+                ownerReply: updated.ownerReply,
+                ownerRepliedAt: updated.ownerRepliedAt,
+              }
+            : r
+        )
+      );
+    } else {
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === updated.id && r.backendSource === 'FEEDBACK'
+            ? {
+                ...r,
+                ownerReply: updated.ownerReply,
+                ownerRepliedAt: updated.updatedAt,
+              }
+            : r
+        )
+      );
     }
   };
 
@@ -708,12 +680,16 @@ export default function OwnerReviewsPage() {
             <Card key={`${review.sourceType}-${review.id}`} className="p-5 sm:p-6 hover:shadow-card transition-all">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-owner-border/70">
                 <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="w-12 h-12 rounded-2xl overflow-hidden bg-brand-cream border border-owner-border/80 shrink-0">
-                    <img
-                      src={review.productImage || FALLBACK_CAKE}
-                      alt={review.productName || 'Cake'}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden bg-brand-cream border border-owner-border/80 shrink-0 flex items-center justify-center">
+                    {review.productImage ? (
+                      <img
+                        src={review.productImage}
+                        alt={review.productName || 'Product'}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Cake className="w-6 h-6 text-owner-muted/40" />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -924,73 +900,13 @@ export default function OwnerReviewsPage() {
       )}
 
       {/* Reply Modal */}
-      <Modal
+      <ReviewDetailsModal
         isOpen={!!selectedReview}
+        review={selectedReview}
         onClose={() => setSelectedReview(null)}
-        title={`Reply to ${selectedReview?.customerName}`}
-      >
-        {selectedReview && (
-          <form onSubmit={handleSubmitReply} className="space-y-4">
-            <div className="p-3.5 rounded-2xl bg-owner-canvas border border-owner-border text-xs space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-owner-heading">{selectedReview.customerName}</span>
-                  <span className="text-owner-muted ml-1.5 font-normal">
-                    on {selectedReview.productName || 'Bakery Experience'}
-                  </span>
-                  <span
-                    className="text-owner-muted ml-1.5 font-normal text-[11px]"
-                    title={`Submitted on ${formatFullDateTime(selectedReview.createdAt)}`}
-                  >
-                    • {formatReviewDateTime(selectedReview.createdAt)}
-                  </span>
-                </div>
-                {renderStars(selectedReview.rating)}
-              </div>
-              <p className="text-owner-muted leading-relaxed italic">
-                “{selectedReview.reviewText || `${selectedReview.rating}-Star rating`}”
-              </p>
-            </div>
-
-            <div className="space-y-1">
-              <Textarea
-                label="Official Bakery Response (Visible on Public Storefront)"
-                rows={4}
-                placeholder="Thank the customer for their review and celebration..."
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                maxLength={500}
-                required
-              />
-              <p className="text-[11px] text-owner-muted text-right">
-                {replyText.length} / 500 characters
-              </p>
-            </div>
-
-            {replySuccess && (
-              <p className="text-xs font-semibold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
-                {replySuccess}
-              </p>
-            )}
-
-            {replyError && (
-              <p className="text-xs font-semibold text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                {replyError}
-              </p>
-            )}
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setSelectedReview(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" isLoading={submittingReply}>
-                <Send className="w-3.5 h-3.5 mr-1.5" />
-                Publish Response
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
+        onReplySuccess={handleReplySuccess}
+        isAdminWithoutShop={isAdminWithoutShop}
+      />
 
       {/* Delete Confirmation Modal */}
       <Modal
