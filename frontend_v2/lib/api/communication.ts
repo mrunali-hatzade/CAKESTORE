@@ -1,4 +1,6 @@
+import { PaginatedResponse } from '@/types/order';
 import { apiClient } from './client';
+import { PaginatedResponse } from '@/types/order';
 import {
   PlatformFeedback,
   CreatePlatformFeedbackPayload,
@@ -26,12 +28,12 @@ export const communicationApi = {
   /**
    * Super Admin: Fetch platform feedback submissions.
    */
-  async getPlatformFeedback(params?: { isRead?: boolean; search?: string }): Promise<PlatformFeedback[]> {
+  async getPlatformFeedback(params?: { isRead?: boolean; search?: string; page?: number; size?: number }): Promise<PaginatedResponse<PlatformFeedback>> {
     try {
-      return await apiClient.get<PlatformFeedback[]>('/api/admin/feedback', { params });
+      return await apiClient.get<PaginatedResponse<PlatformFeedback>>('/api/admin/feedback', { params });
     } catch (err: any) {
       if (err?.status === 404 || err?.status === 500) {
-        return [];
+        return { content: [], totalPages: 0, totalElements: 0, size: 20, number: 0 };
       }
       throw err;
     }
@@ -67,12 +69,12 @@ export const communicationApi = {
   /**
    * Super Admin: Fetch visitor contact enquiries.
    */
-  async getContactEnquiries(params?: { isRead?: boolean; search?: string }): Promise<ContactEnquiry[]> {
+  async getContactEnquiries(params?: { isRead?: boolean; search?: string; page?: number; size?: number }): Promise<PaginatedResponse<ContactEnquiry>> {
     try {
-      return await apiClient.get<ContactEnquiry[]>('/api/admin/enquiries', { params });
+      return await apiClient.get<PaginatedResponse<ContactEnquiry>>('/api/admin/enquiries', { params });
     } catch (err: any) {
       if (err?.status === 404 || err?.status === 500) {
-        return [];
+        return { content: [], totalPages: 0, totalElements: 0, size: 20, number: 0 };
       }
       throw err;
     }

@@ -83,8 +83,8 @@ public class ContactEnquiryService {
      * Retrieve contact enquiries with optional read/unread filter and text search.
      */
     @Transactional(readOnly = true)
-    public List<ContactEnquiry> getEnquiries(Boolean isRead, String search) {
-        return enquiryRepository.findWithFilters(isRead, search);
+    public org.springframework.data.domain.Page<ContactEnquiry> getEnquiries(Boolean isRead, String search, org.springframework.data.domain.Pageable pageable) {
+        return enquiryRepository.findWithFilters(isRead, search, pageable);
     }
 
     /**

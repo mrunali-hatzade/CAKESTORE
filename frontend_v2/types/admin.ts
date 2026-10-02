@@ -9,8 +9,10 @@ export interface DashboardStats {
   activeSubscriptions: number;
   expiredSubscriptions: number;
   todayPayments: number;
-  monthlyRevenue: number;
-  totalRevenue: number;
+  monthlyPlatformRevenue: number;
+  totalPlatformRevenue: number;
+  monthlyGmv: number;
+  totalGmv: number;
 }
 
 export interface BusinessDocumentItem {

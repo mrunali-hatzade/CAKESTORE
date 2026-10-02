@@ -32,11 +32,13 @@ public class AdminDashboardController {
     @GetMapping("/shops")
     public ResponseEntity<org.springframework.data.domain.Page<AdminShopSummaryResponse>> getAllShops(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status) {
         if (size > 50) {
             size = 50;
         }
-        return ResponseEntity.ok(adminDashboardService.getAllShops(org.springframework.data.domain.PageRequest.of(page, size)));
+        return ResponseEntity.ok(adminDashboardService.getAllShops(org.springframework.data.domain.PageRequest.of(page, size), search, status));
     }
 
     @GetMapping("/shops/{shopId}")

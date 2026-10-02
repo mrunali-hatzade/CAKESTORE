@@ -24,6 +24,7 @@ public class AdminSubscriptionPlanController {
 
     @PostMapping
     public ResponseEntity<SubscriptionPlan> createPlan(@RequestBody SubscriptionPlan plan) {
+        validatePlan(plan);
         return ResponseEntity.ok(planRepository.save(plan));
     }
 
@@ -39,7 +40,23 @@ public class AdminSubscriptionPlanController {
         if (planUpdates.getDurationDays() != null) plan.setDurationDays(planUpdates.getDurationDays());
         if (planUpdates.getFeatures() != null) plan.setFeatures(planUpdates.getFeatures());
         
+        validatePlan(plan);
         return ResponseEntity.ok(planRepository.save(plan));
+    }
+
+    private void validatePlan(SubscriptionPlan plan) {
+        if (plan.getName() == null || plan.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Plan name cannot be empty");
+        }
+        if (plan.getPrice() == null || plan.getPrice().compareTo(java.math.BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Plan price cannot be negative");
+        }
+        if (plan.getDurationDays() == null || plan.getDurationDays() <= 0) {
+            throw new IllegalArgumentException("Duration days must be greater than zero");
+        }
+        if (plan.getBillingCycle() == null || (!plan.getBillingCycle().equalsIgnoreCase("monthly") && !plan.getBillingCycle().equalsIgnoreCase("yearly"))) {
+            throw new IllegalArgumentException("Billing cycle must be 'monthly' or 'yearly'");
+        }
     }
 
     @PatchMapping("/{id}/status")

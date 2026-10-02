@@ -127,8 +127,10 @@ public class CustomerStorefrontService {
     private Shop getActiveShop(Long shopId) {
         Shop shop = shopRepository.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
-        if (shop.getStatus() != ShopStatus.ACTIVE && shop.getStatus() != ShopStatus.EXPIRED) {
-            throw new RuntimeException("Shop is currently unavailable");
+        // Only brand new PENDING shops are hidden from the public internet.
+        // ACTIVE, INACTIVE, SUSPENDED, and EXPIRED remain online so customers can see them.
+        if (shop.getStatus() == ShopStatus.PENDING) {
+            throw new RuntimeException("Shop is currently unavailable or pending approval");
         }
         return shop;
     }

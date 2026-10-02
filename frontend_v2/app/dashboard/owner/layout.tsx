@@ -417,8 +417,29 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
         )}
 
         <main className="flex-1 min-h-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          <div className="max-w-7xl mx-auto w-full">
-            {children}
+          <div className="max-w-7xl mx-auto w-full relative">
+            {shop && ['EXPIRED', 'INACTIVE', 'SUSPENDED', 'PENDING'].includes(shop.status || '') && !pathname.includes('/subscription') && !pathname.includes('/settings') && (
+              <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center rounded-2xl border border-slate-200/60 shadow-2xl p-8 text-center min-h-[60vh] mt-4">
+                <div className="w-20 h-20 bg-rose-50 text-rose-600 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
+                  <ShieldCheck className="w-10 h-10" />
+                </div>
+                <h2 className="text-3xl font-bold font-serif text-slate-900 mb-3">Dashboard Restricted</h2>
+                <p className="text-slate-600 max-w-lg mb-8 text-sm leading-relaxed">
+                  {shop.status === 'SUSPENDED' 
+                    ? "Your bakery account has been suspended by administration. Please contact platform support to resolve this issue."
+                    : "Your subscription is inactive or has expired. Please process your payment to restore full access and manage your active storefront."}
+                </p>
+                <Link href="/dashboard/owner/subscription">
+                  <Button size="lg" className="bg-brand-plum hover:bg-brand-plum-dark text-white shadow-lg font-medium px-8 h-12">
+                    Proceed to Billing & Subscription
+                  </Button>
+                </Link>
+              </div>
+            )}
+            
+            <div className={shop && ['EXPIRED', 'INACTIVE', 'SUSPENDED', 'PENDING'].includes(shop.status || '') && !pathname.includes('/subscription') && !pathname.includes('/settings') ? 'opacity-20 pointer-events-none blur-[4px] select-none transition-all duration-500' : ''}>
+              {children}
+            </div>
           </div>
         </main>
       </div>

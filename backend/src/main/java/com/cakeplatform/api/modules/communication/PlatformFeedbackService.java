@@ -108,8 +108,8 @@ public class PlatformFeedbackService {
      * Retrieve platform feedback with optional read/unread filter and text search.
      */
     @Transactional(readOnly = true)
-    public List<PlatformFeedback> getFeedback(Boolean isRead, String search) {
-        return feedbackRepository.findWithFilters(isRead, search);
+    public org.springframework.data.domain.Page<PlatformFeedback> getFeedback(Boolean isRead, String search, org.springframework.data.domain.Pageable pageable) {
+        return feedbackRepository.findWithFilters(isRead, search, pageable);
     }
 
     /**

@@ -15,8 +15,8 @@ import {
   Filter,
   RefreshCw,
 } from 'lucide-react';
-import { getAllShops, updateShopStatus } from '@/lib/api/admin';
-import { AdminShopSummary } from '@/types/admin';
+import { getAllShops, updateShopStatus, getPlatformStats } from '@/lib/api/admin';
+import { AdminShopSummary, DashboardStats } from '@/types/admin';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -32,9 +32,12 @@ export default function AdminShopsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [mutatingId, setMutatingId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   // Pagination state
   const [page, setPage] = useState(0);
@@ -43,13 +46,31 @@ export default function AdminShopsPage() {
 
   const toast = useToast();
 
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(0); // Reset page on new search
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset page on tab change
+  useEffect(() => {
+    setPage(0);
+  }, [activeTab]);
+
   const fetchShops = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setIsLoading(true);
 
     try {
       setError('');
-      const response = await getAllShops(page, 20);
+      // Fetch stats for the tab counts
+      const statsRes = await getPlatformStats();
+      setStats(statsRes);
+
+      const response = await getAllShops(page, 20, debouncedSearch, activeTab);
       setShops(response.content || []);
       setTotalPages(response.totalPages || 0);
       setTotalElements(response.totalElements || 0);
@@ -61,7 +82,7 @@ export default function AdminShopsPage() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [page, toast]);
+  }, [page, debouncedSearch, activeTab, toast]);
 
   useEffect(() => {
     fetchShops();
@@ -82,31 +103,6 @@ export default function AdminShopsPage() {
       setMutatingId(null);
     }
   };
-
-  // Filtered & searched bakeries
-  const filteredShops = useMemo(() => {
-    return shops.filter((s) => {
-      const matchesSearch =
-        s.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.ownerName && s.ownerName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (s.ownerEmail && s.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      if (!matchesSearch) return false;
-
-      if (activeTab === 'ALL') return true;
-      if (activeTab === 'PENDING') return s.shopStatus === 'PENDING' || s.shopStatus === 'PENDING_APPROVAL';
-      return s.shopStatus === activeTab;
-    });
-  }, [shops, searchQuery, activeTab]);
-
-  const counts = useMemo(() => {
-    return {
-      all: shops.length,
-      pending: shops.filter((s) => s.shopStatus === 'PENDING' || s.shopStatus === 'PENDING_APPROVAL').length,
-      active: shops.filter((s) => s.shopStatus === 'ACTIVE').length,
-      suspended: shops.filter((s) => s.shopStatus === 'SUSPENDED').length,
-    };
-  }, [shops]);
 
   const getStatusBadge = (status: string) => {
     const s = status.toUpperCase();
@@ -162,7 +158,7 @@ export default function AdminShopsPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            All ({counts.all})
+            All ({(stats?.totalShops || 0)})
           </button>
           <button
             onClick={() => setActiveTab('PENDING')}
@@ -173,9 +169,9 @@ export default function AdminShopsPage() {
             }`}
           >
             <span>Pending Approval</span>
-            {counts.pending > 0 && (
+            {(stats?.pendingShops || 0) > 0 && (
               <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">
-                {counts.pending}
+                {(stats?.pendingShops || 0)}
               </span>
             )}
           </button>
@@ -187,7 +183,7 @@ export default function AdminShopsPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Active ({counts.active})
+            Active ({(stats?.activeShops || 0)})
           </button>
           <button
             onClick={() => setActiveTab('SUSPENDED')}
@@ -197,7 +193,7 @@ export default function AdminShopsPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Suspended ({counts.suspended})
+            Suspended ({(stats?.suspendedShops || 0)})
           </button>
         </div>
 
@@ -214,7 +210,7 @@ export default function AdminShopsPage() {
       </Card>
 
       {/* Bakeries Table */}
-      {filteredShops.length === 0 ? (
+      {shops.length === 0 ? (
         <EmptyState
           icon={<Store className="w-8 h-8 text-slate-400" />}
           title="No Bakeries Found"
@@ -238,7 +234,7 @@ export default function AdminShopsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredShops.map((shop) => {
+                {shops.map((shop) => {
                   const isMutating = mutatingId === shop.shopId;
 
                   return (

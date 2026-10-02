@@ -16,9 +16,8 @@ public interface PlatformFeedbackRepository extends JpaRepository<PlatformFeedba
            "       LOWER(f.message) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "       LOWER(o.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "       LOWER(o.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "       LOWER(s.businessName) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-           "ORDER BY f.createdAt DESC")
-    List<PlatformFeedback> findWithFilters(@Param("isRead") Boolean isRead, @Param("search") String search);
+           "       LOWER(s.businessName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    org.springframework.data.domain.Page<PlatformFeedback> findWithFilters(@Param("isRead") Boolean isRead, @Param("search") String search, org.springframework.data.domain.Pageable pageable);
 
     long countByIsReadFalse();
 

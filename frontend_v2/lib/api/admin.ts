@@ -22,15 +22,15 @@ export async function getPlatformStats(): Promise<DashboardStats> {
 /**
  * Fetch all registered bakery shops across the platform.
  */
-export async function getAllShops(page: number = 0, size: number = 20): Promise<PaginatedResponse<AdminShopSummary>> {
+export async function getAllShops(page: number = 0, size: number = 20, search?: string, status?: string): Promise<PaginatedResponse<AdminShopSummary>> {
   return apiClient.get<PaginatedResponse<AdminShopSummary>>('/api/admin/shops', {
-    params: { page, size }
+    params: { page, size, ...(search && { search }), ...(status && status !== "ALL" && { status }) }
   });
 }
 
-export async function getAllAdminShops(page: number = 0, size: number = 20): Promise<PaginatedResponse<AdminShopSummary>> {
+export async function getAllAdminShops(page: number = 0, size: number = 20, search?: string, status?: string): Promise<PaginatedResponse<AdminShopSummary>> {
   return apiClient.get<PaginatedResponse<AdminShopSummary>>('/api/admin/shops', {
-    params: { page, size }
+    params: { page, size, ...(search && { search }), ...(status && status !== "ALL" && { status }) }
   });
 }
 

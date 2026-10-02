@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
   MessageCircle,
@@ -23,6 +23,7 @@ import { communicationApi } from '@/lib/api/communication';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/common/Toast';
 import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function AdminOverviewPage() {
@@ -30,8 +31,9 @@ export default function AdminOverviewPage() {
   const [recentShops, setRecentShops] = useState<AdminShopSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const toast = useToast();
 
-  const loadData = async (isManual = false) => {
+  const loadData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setIsLoading(true);
 
@@ -44,15 +46,16 @@ export default function AdminOverviewPage() {
       setRecentShops(shopsData.content || []);
     } catch (err: any) {
       console.warn('Failed to load admin stats:', err);
+      toast.error(err.message || 'Failed to load dashboard data. Please try again.');
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   if (isLoading) {
     return <LoadingState message="Loading platform intelligence..." />;
@@ -195,23 +198,37 @@ export default function AdminOverviewPage() {
           </div>
         </Card>
 
-        {/* Platform Revenue / GMV */}
+        {/* Financials: Platform Revenue & Network GMV */}
         <Card className="p-6 border-slate-200/80 shadow-soft hover:shadow-card transition-shadow">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Monthly Realized
+              Financials
             </span>
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-3xl font-bold font-serif text-slate-900 mt-3">
-            {formatCurrency(stats?.monthlyRevenue)}
-          </p>
-          <div className="flex items-center gap-2 mt-2 text-xs">
-            <span className="text-amber-700 font-medium">
-              {formatCurrency(stats?.totalRevenue)} cumulative GMV
-            </span>
+          
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold tracking-wide">PLATFORM REVENUE (SAAS)</p>
+              <p className="text-2xl font-bold font-serif text-emerald-700">
+                {formatCurrency(stats?.monthlyPlatformRevenue)}
+              </p>
+              <p className="text-[11px] text-emerald-600/80 font-medium mt-0.5">
+                {formatCurrency(stats?.totalPlatformRevenue)} lifetime
+              </p>
+            </div>
+            
+            <div className="pt-3 border-t border-slate-100">
+              <p className="text-[10px] text-slate-400 font-bold tracking-wide">NETWORK GMV (CAKE SALES)</p>
+              <p className="text-xl font-bold font-serif text-slate-700">
+                {formatCurrency(stats?.monthlyGmv)}
+              </p>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                {formatCurrency(stats?.totalGmv)} lifetime processed
+              </p>
+            </div>
           </div>
         </Card>
       </div>

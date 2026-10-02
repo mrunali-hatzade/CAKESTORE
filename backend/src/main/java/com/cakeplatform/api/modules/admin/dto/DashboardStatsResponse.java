@@ -15,6 +15,8 @@ public class DashboardStatsResponse {
     private long activeSubscriptions;
     private long expiredSubscriptions;
     private long todayPayments;
-    private BigDecimal monthlyRevenue;
-    private BigDecimal totalRevenue;
+    private BigDecimal monthlyPlatformRevenue;
+    private BigDecimal totalPlatformRevenue;
+    private BigDecimal monthlyGmv;
+    private BigDecimal totalGmv;
 }

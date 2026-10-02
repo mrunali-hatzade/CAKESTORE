@@ -115,26 +115,40 @@ public class AdminDashboardService {
         stats.setExpiredSubscriptions(subscriptionRepository.countByStatus(SubscriptionStatus.EXPIRED));
         stats.setTodayPayments(paymentRepository.countTodayCompletedPayments(startOfDay));
 
-        // Canonical Realized Revenue (Phase 6A unified rule across platform)
-        BigDecimal monthlyRev = orderRepository.sumMonthlyRealizedRevenue(startOfMonth);
-        if (monthlyRev == null || monthlyRev.compareTo(BigDecimal.ZERO) == 0) {
-            BigDecimal subRev = paymentRepository.getMonthlyRevenue(startOfMonth);
-            if (subRev != null && subRev.compareTo(BigDecimal.ZERO) > 0) {
-                monthlyRev = subRev;
-            } else if (monthlyRev == null) {
-                monthlyRev = BigDecimal.ZERO;
-            }
-        }
-        stats.setMonthlyRevenue(monthlyRev);
+        // Platform SaaS Revenue (Subscriptions)
+        BigDecimal monthlySubRev = paymentRepository.getMonthlyRevenue(startOfMonth);
+        stats.setMonthlyPlatformRevenue(monthlySubRev != null ? monthlySubRev : BigDecimal.ZERO);
 
-        BigDecimal revenue = paymentRepository.getTotalRevenue();
-        stats.setTotalRevenue(revenue != null ? revenue : BigDecimal.ZERO);
+        BigDecimal totalSubRev = paymentRepository.getTotalRevenue();
+        stats.setTotalPlatformRevenue(totalSubRev != null ? totalSubRev : BigDecimal.ZERO);
+
+        // Platform Network GMV (Cake Sales processed)
+        BigDecimal monthlyGmv = orderRepository.sumMonthlyRealizedRevenue(startOfMonth);
+        stats.setMonthlyGmv(monthlyGmv != null ? monthlyGmv : BigDecimal.ZERO);
+
+        BigDecimal totalGmv = orderRepository.sumTotalRealizedRevenue();
+        stats.setTotalGmv(totalGmv != null ? totalGmv : BigDecimal.ZERO);
 
         return stats;
     }
 
-    public org.springframework.data.domain.Page<AdminShopSummaryResponse> getAllShops(org.springframework.data.domain.Pageable pageable) {
-        return shopRepository.findAll(pageable).map(shop -> {
+    public org.springframework.data.domain.Page<AdminShopSummaryResponse> getAllShops(
+            org.springframework.data.domain.Pageable pageable, 
+            String search, 
+            String status) {
+        
+        ShopStatus shopStatus = null;
+        if (status != null && !status.trim().isEmpty() && !status.equalsIgnoreCase("ALL")) {
+            try {
+                shopStatus = ShopStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid status
+            }
+        }
+        
+        String searchQuery = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+
+        return shopRepository.searchAndFilterAllShops(shopStatus, searchQuery, pageable).map(shop -> {
             AdminShopSummaryResponse summary = new AdminShopSummaryResponse();
             summary.setShopId(shop.getId());
             summary.setBusinessName(shop.getBusinessName());

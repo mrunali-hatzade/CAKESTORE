@@ -16,9 +16,8 @@ public interface ContactEnquiryRepository extends JpaRepository<ContactEnquiry, 
            "       LOWER(e.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "       LOWER(e.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "       LOWER(e.subject) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "       LOWER(e.message) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-           "ORDER BY e.createdAt DESC")
-    List<ContactEnquiry> findWithFilters(@Param("isRead") Boolean isRead, @Param("search") String search);
+           "       LOWER(e.message) LIKE LOWER(CONCAT('%', :search, '%')))")
+    org.springframework.data.domain.Page<ContactEnquiry> findWithFilters(@Param("isRead") Boolean isRead, @Param("search") String search, org.springframework.data.domain.Pageable pageable);
 
     long countByIsReadFalse();
 }

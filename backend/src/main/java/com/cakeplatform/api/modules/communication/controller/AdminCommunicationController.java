@@ -24,12 +24,14 @@ public class AdminCommunicationController {
     private final ContactEnquiryService enquiryService;
 
     @GetMapping("/feedback")
-    public ResponseEntity<List<PlatformFeedback>> getPlatformFeedback(
+    public ResponseEntity<org.springframework.data.domain.Page<PlatformFeedback>> getPlatformFeedback(
             @RequestParam(required = false) Boolean isRead,
-            @RequestParam(required = false) String search) {
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
-        log.info("Admin fetching platform feedback (isRead={}, search={})", isRead, search);
-        return ResponseEntity.ok(feedbackService.getFeedback(isRead, search));
+        log.info("Admin fetching platform feedback (isRead={}, search={}, page={}, size={})", isRead, search, page, size);
+        return ResponseEntity.ok(feedbackService.getFeedback(isRead, search, org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending())));
     }
 
     @PatchMapping("/feedback/{id}/read")
@@ -40,12 +42,14 @@ public class AdminCommunicationController {
     }
 
     @GetMapping("/enquiries")
-    public ResponseEntity<List<ContactEnquiry>> getContactEnquiries(
+    public ResponseEntity<org.springframework.data.domain.Page<ContactEnquiry>> getContactEnquiries(
             @RequestParam(required = false) Boolean isRead,
-            @RequestParam(required = false) String search) {
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
-        log.info("Admin fetching contact enquiries (isRead={}, search={})", isRead, search);
-        return ResponseEntity.ok(enquiryService.getEnquiries(isRead, search));
+        log.info("Admin fetching contact enquiries (isRead={}, search={}, page={}, size={})", isRead, search, page, size);
+        return ResponseEntity.ok(enquiryService.getEnquiries(isRead, search, org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending())));
     }
 
     @PatchMapping("/enquiries/{id}/read")

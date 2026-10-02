@@ -16,6 +16,13 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
     long countByStatus(ShopStatus status);
     List<Shop> findByStatus(ShopStatus status);
     
+    @Query("SELECT s FROM Shop s WHERE " +
+           "(:status IS NULL OR s.status = :status) AND " +
+           "(:search IS NULL OR LOWER(s.businessName) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(s.owner.fullName) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(s.owner.email) LIKE LOWER(CONCAT('%', :search, '%')))")
+    org.springframework.data.domain.Page<Shop> searchAndFilterAllShops(@Param("status") ShopStatus status, @Param("search") String search, org.springframework.data.domain.Pageable pageable);
+
     @Query("SELECT s FROM Shop s WHERE s.status = :status AND (" +
            "LOWER(s.city) LIKE LOWER(CONCAT('%', :location, '%')) OR " +
            "LOWER(COALESCE(s.district, '')) LIKE LOWER(CONCAT('%', :location, '%')) OR " +

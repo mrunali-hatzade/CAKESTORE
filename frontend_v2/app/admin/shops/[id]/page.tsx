@@ -36,6 +36,9 @@ import { Textarea } from '@/components/ui/Textarea';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useToast } from '@/components/common/Toast';
 
+import { AdminSuspensionModal } from '@/components/admin/shops/AdminSuspensionModal';
+import { AdminKycRejectionModal } from '@/components/admin/shops/AdminKycRejectionModal';
+
 export default function AdminShopDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -48,13 +51,9 @@ export default function AdminShopDetailPage() {
 
   // Suspension Modal State (B2)
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
-  const [suspensionReason, setSuspensionReason] = useState('');
-  const [suspensionError, setSuspensionError] = useState<string | null>(null);
 
   // KYC Rejection Modal State (B3)
   const [isRejectKycModalOpen, setIsRejectKycModalOpen] = useState(false);
-  const [kycRejectionReason, setKycRejectionReason] = useState('');
-  const [kycRejectionError, setKycRejectionError] = useState<string | null>(null);
 
   const toast = useToast();
 
@@ -72,7 +71,7 @@ export default function AdminShopDetailPage() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [shopId]);
+  }, [shopId, toast]);
 
   useEffect(() => {
     loadShop();
@@ -81,7 +80,7 @@ export default function AdminShopDetailPage() {
   const handleStatusUpdate = async (newStatus: string, reason?: string) => {
     if (!shopId) return;
     if (newStatus === 'SUSPENDED' && (!reason || !reason.trim())) {
-      setSuspensionError('Suspension reason is mandatory and cannot be blank.');
+      toast.error('Suspension reason is mandatory and cannot be blank.');
       return;
     }
 
@@ -90,8 +89,6 @@ export default function AdminShopDetailPage() {
       await updateShopStatus(shopId, newStatus, reason?.trim());
       toast.success(`Bakery #${shopId} status changed to ${newStatus}`);
       setIsSuspendModalOpen(false);
-      setSuspensionReason('');
-      setSuspensionError(null);
 
       // Optimistic update
       if (details) {
@@ -124,7 +121,7 @@ export default function AdminShopDetailPage() {
   const handleVerificationReview = async (action: 'APPROVE' | 'REJECT', reason?: string) => {
     if (!shopId) return;
     if (action === 'REJECT' && (!reason || !reason.trim())) {
-      setKycRejectionError('Rejection reason is mandatory and cannot be blank.');
+      toast.error('Rejection reason is mandatory and cannot be blank.');
       return;
     }
 
@@ -134,8 +131,6 @@ export default function AdminShopDetailPage() {
       const newStatus = action === 'APPROVE' ? 'VERIFIED' : 'REJECTED';
       toast.success(`Bakery #${shopId} verification status marked as ${newStatus}`);
       setIsRejectKycModalOpen(false);
-      setKycRejectionReason('');
-      setKycRejectionError(null);
 
       // Optimistic update
       if (details) {
@@ -682,126 +677,20 @@ export default function AdminShopDetailPage() {
       </div>
 
       {/* B2: Suspension Confirmation Modal */}
-      <Modal
+      <AdminSuspensionModal
         isOpen={isSuspendModalOpen}
-        onClose={() => {
-          setIsSuspendModalOpen(false);
-          setSuspensionReason('');
-          setSuspensionError(null);
-        }}
-        title="Suspend Bakery Storefront"
-        description="Immediately revoke public storefront access and suspend operational permissions."
-      >
-        <div className="space-y-4">
-          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>Impact Notice:</strong> Suspending this shop will immediately hide its products from the marketplace, prevent customer checkout, and block the owner from kitchen operations.
-            </p>
-          </div>
-
-          <Textarea
-            label="Suspension Reason"
-            required
-            rows={4}
-            placeholder="e.g. Non-compliance with hygiene regulations or repeated order cancellations..."
-            value={suspensionReason}
-            onChange={(e) => {
-              setSuspensionReason(e.target.value);
-              if (suspensionError) setSuspensionError(null);
-            }}
-            error={suspensionError || undefined}
-            helperText="A mandatory, non-blank reason is required for administrative accountability."
-          />
-
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isMutating}
-              onClick={() => {
-                setIsSuspendModalOpen(false);
-                setSuspensionReason('');
-                setSuspensionError(null);
-              }}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={!suspensionReason.trim() || isMutating}
-              isLoading={isMutating}
-              onClick={() => handleStatusUpdate('SUSPENDED', suspensionReason)}
-            >
-              <Ban className="w-4 h-4 mr-1.5" />
-              <span>Confirm Suspension</span>
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setIsSuspendModalOpen(false)}
+        onConfirm={(reason) => handleStatusUpdate('SUSPENDED', reason)}
+        isMutating={isMutating}
+      />
 
       {/* B3: KYC Rejection Modal */}
-      <Modal
+      <AdminKycRejectionModal
         isOpen={isRejectKycModalOpen}
-        onClose={() => {
-          setIsRejectKycModalOpen(false);
-          setKycRejectionReason('');
-          setKycRejectionError(null);
-        }}
-        title="Reject Verification Documents"
-        description="Notify the bakery owner why their verification requires correction."
-      >
-        <div className="space-y-4">
-          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>Owner Feedback:</strong> The reason you provide will be sent directly to the bakery owner via in-app notifications and displayed in their compliance settings.
-            </p>
-          </div>
-
-          <Textarea
-            label="Rejection Reason & Next Steps"
-            required
-            rows={4}
-            placeholder="e.g. Uploaded FSSAI certificate is expired or illegible. Please provide valid license matching registered address..."
-            value={kycRejectionReason}
-            onChange={(e) => {
-              setKycRejectionReason(e.target.value);
-              if (kycRejectionError) setKycRejectionError(null);
-            }}
-            error={kycRejectionError || undefined}
-            helperText="A clear, actionable explanation helps the baker resolve the issue quickly."
-          />
-
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isMutating}
-              onClick={() => {
-                setIsRejectKycModalOpen(false);
-                setKycRejectionReason('');
-                setKycRejectionError(null);
-              }}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={!kycRejectionReason.trim() || isMutating}
-              isLoading={isMutating}
-              onClick={() => handleVerificationReview('REJECT', kycRejectionReason)}
-            >
-              <XCircle className="w-4 h-4 mr-1.5" />
-              <span>Reject Verification</span>
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setIsRejectKycModalOpen(false)}
+        onConfirm={(reason) => handleVerificationReview('REJECT', reason)}
+        isMutating={isMutating}
+      />
     </div>
   );
 }

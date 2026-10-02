@@ -8,46 +8,27 @@ import {
   Edit2,
   Power,
   RefreshCw,
-  Clock,
-  Sparkles,
-  ShieldCheck,
 } from 'lucide-react';
 import {
   getAllPlans,
-  createPlan,
-  updatePlan,
   togglePlanStatus,
 } from '@/lib/api/admin';
 import { AdminPlan } from '@/types/admin';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/common/Toast';
+import { AdminPlanModal } from '@/components/admin/plans/AdminPlanModal';
 
 export default function AdminPlansPage() {
   const [plans, setPlans] = useState<AdminPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingPlan, setEditingPlan] = useState<AdminPlan | null>(null);
   const toast = useToast();
-
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    billingCycle: 'monthly',
-    price: 999,
-    currency: 'INR',
-    durationDays: 30,
-    features: '',
-    isActive: true,
-  });
 
   const loadPlans = React.useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -70,60 +51,12 @@ export default function AdminPlansPage() {
 
   const openCreateModal = () => {
     setEditingPlan(null);
-    setForm({
-      name: '',
-      description: '',
-      billingCycle: 'monthly',
-      price: 999,
-      currency: 'INR',
-      durationDays: 30,
-      features: 'Up to 50 Products, WhatsApp Ordering, Custom Branding, Analytics',
-      isActive: true,
-    });
     setIsModalOpen(true);
   };
 
   const openEditModal = (plan: AdminPlan) => {
     setEditingPlan(plan);
-    setForm({
-      name: plan.name,
-      description: plan.description || '',
-      billingCycle: plan.billingCycle || 'monthly',
-      price: plan.price,
-      currency: plan.currency || 'INR',
-      durationDays: plan.durationDays || 30,
-      features: plan.features || '',
-      isActive: plan.isActive,
-    });
     setIsModalOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error('Please enter a valid plan name');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      if (editingPlan) {
-        const updated = await updatePlan(editingPlan.id, form);
-        setPlans((prev) =>
-          prev.map((p) => (p.id === editingPlan.id ? { ...p, ...updated } : p))
-        );
-        toast.success(`Plan "${form.name}" updated successfully`);
-      } else {
-        const created = await createPlan(form);
-        setPlans((prev) => [...prev, created]);
-        toast.success(`Plan "${form.name}" created successfully`);
-      }
-      setIsModalOpen(false);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save subscription plan');
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleToggleStatus = async (plan: AdminPlan) => {
@@ -342,116 +275,12 @@ export default function AdminPlansPage() {
       )}
 
       {/* Plan Modal (Create / Edit) */}
-      <Modal
+      <AdminPlanModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingPlan ? `Edit Tier: ${editingPlan.name}` : 'Create Subscription Plan'}
-        description="Configure pricing, billing cycle duration, and feature access for bakery owners."
-      >
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          <Input
-            label="Plan Name"
-            required
-            placeholder="e.g. Master Patisserie Pro"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-
-          <Textarea
-            label="Description"
-            rows={2}
-            placeholder="Short overview of the tier target audience..."
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Billing Cycle</label>
-            <select
-              value={form.billingCycle}
-              onChange={(e) => {
-                const cycle = e.target.value;
-                setForm({
-                  ...form,
-                  billingCycle: cycle,
-                  durationDays: cycle === 'yearly' ? 365 : 30,
-                });
-              }}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
-            >
-              <option value="monthly">Monthly (30 days)</option>
-              <option value="yearly">Yearly (365 days)</option>
-            </select>
-            <p className="text-[11px] text-slate-400 mt-1">Controls how this plan appears on the pricing page toggle.</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Price (₹)"
-              type="number"
-              min={0}
-              required
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
-            />
-
-            <Input
-              label="Duration (Days)"
-              type="number"
-              min={1}
-              required
-              value={form.durationDays}
-              onChange={(e) => setForm({ ...form, durationDays: Number(e.target.value) })}
-            />
-          </div>
-
-          <Textarea
-            label="Features (comma-separated)"
-            rows={3}
-            placeholder="Unlimited Products, Custom Domain, WhatsApp Bot, 0% Commission"
-            value={form.features}
-            onChange={(e) => setForm({ ...form, features: e.target.value })}
-            helperText="Separate features with a comma to render them as bullet checklist items."
-          />
-
-          <div className="flex items-center gap-2 pt-2">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={form.isActive}
-              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-              className="rounded text-indigo-600 focus:ring-indigo-500"
-            />
-            <label htmlFor="isActive" className="text-xs font-semibold text-slate-700 cursor-pointer">
-              Active plan (available for bakery owners to select)
-            </label>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={isSubmitting}
-              className="bg-indigo-600 hover:bg-indigo-700 border-indigo-700"
-            >
-              {isSubmitting
-                ? 'Saving...'
-                : editingPlan
-                ? 'Save Changes'
-                : 'Create Plan'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        editingPlan={editingPlan}
+        onSaveSuccess={() => loadPlans(false)}
+      />
     </div>
   );
 }
