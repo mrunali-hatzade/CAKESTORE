@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await authApi.login(credentials);
     setStoredToken(res.token);
     const authUser: AuthUser = {
+      id: res.id,
       email: res.email,
       role: res.role,
       shopId: res.shopId,

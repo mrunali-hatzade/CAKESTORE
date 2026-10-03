@@ -62,6 +62,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/webhooks/**").permitAll()
                         .requestMatchers("/api/contact/enquiries").permitAll()
                         .requestMatchers("/uploads/**").permitAll()   // static media — no JWT needed
+                        .requestMatchers("/ws-endpoint/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )

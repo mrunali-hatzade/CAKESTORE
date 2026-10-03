@@ -19,7 +19,7 @@ public class AdminSubscriptionPlanController {
 
     @GetMapping
     public ResponseEntity<List<SubscriptionPlan>> getAllPlans() {
-        return ResponseEntity.ok(planRepository.findAll());
+        return ResponseEntity.ok(planRepository.findAllByOrderByDisplayOrderAsc());
     }
 
     @PostMapping
@@ -64,5 +64,18 @@ public class AdminSubscriptionPlanController {
         SubscriptionPlan plan = planRepository.findById(id).orElseThrow();
         plan.setIsActive(isActive);
         return ResponseEntity.ok(planRepository.save(plan));
+    }
+
+    @PutMapping("/reorder")
+    public ResponseEntity<Void> reorderPlans(@RequestBody List<Long> planIds) {
+        for (int i = 0; i < planIds.size(); i++) {
+            Long id = planIds.get(i);
+            SubscriptionPlan plan = planRepository.findById(id).orElse(null);
+            if (plan != null) {
+                plan.setDisplayOrder(i);
+                planRepository.save(plan);
+            }
+        }
+        return ResponseEntity.ok().build();
     }
 }

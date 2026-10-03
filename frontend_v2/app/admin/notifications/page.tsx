@@ -24,6 +24,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { useToast } from '@/components/common/Toast';
 import { adminNotificationsApi } from '@/lib/api/adminNotifications';
 import {
   AdminNotification,
@@ -124,25 +125,66 @@ function getNotificationIcon(type: AdminNotificationType) {
 
 export default function AdminNotificationCenterPage() {
   const router = useRouter();
+  const toast = useToast();
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<AdminNotificationCategory>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [selectedCategory, debouncedSearch]);
 
   const fetchNotifications = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await adminNotificationsApi.getNotifications();
-      setNotifications(data || []);
+      const params: any = { page, size: 20 };
+      if (selectedCategory === 'UNREAD') {
+        params.isRead = false;
+      } else if (selectedCategory !== 'ALL') {
+        params.category = selectedCategory;
+      }
+      if (debouncedSearch.trim()) {
+        params.search = debouncedSearch;
+      }
+      const data = await adminNotificationsApi.getNotifications(params);
+      setNotifications(data?.content || []);
+      setTotalPages(data?.totalPages || 0);
+
+      if (selectedCategory === 'UNREAD' && !debouncedSearch.trim()) {
+        setUnreadCount(data?.totalElements || 0);
+      } else {
+        const unreadData = await adminNotificationsApi.getNotifications({ isRead: false, page: 0, size: 1 });
+        setUnreadCount(unreadData?.totalElements || 0);
+      }
     } catch {
       setNotifications([]);
+      setTotalPages(0);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page, selectedCategory, debouncedSearch]);
 
   useEffect(() => {
     fetchNotifications();
+
+    const handleRefresh = () => {
+      fetchNotifications();
+    };
+    window.addEventListener('adminGlobalRefresh', handleRefresh);
+    return () => {
+      window.removeEventListener('adminGlobalRefresh', handleRefresh);
+    };
   }, [fetchNotifications]);
 
   const handleMarkRead = async (id: string) => {
@@ -150,37 +192,23 @@ export default function AdminNotificationCenterPage() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
   const handleMarkAllRead = async () => {
-    await adminNotificationsApi.markAllAsRead();
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setIsMarkingAllRead(true);
+    try {
+      await adminNotificationsApi.markAllAsRead();
+      toast.success('All notifications marked as read');
+      // Reset to first page and refetch
+      setPage(0);
+      await fetchNotifications();
+    } catch (err) {
+      toast.error('Failed to mark all as read');
+    } finally {
+      setIsMarkingAllRead(false);
+    }
   };
-
-  const filteredNotifications = useMemo(() => {
-    return notifications.filter((n) => {
-      // Category filter
-      if (selectedCategory === 'UNREAD' && n.isRead) return false;
-      if (selectedCategory !== 'ALL' && selectedCategory !== 'UNREAD') {
-        const cat = getCategoryFromType(n.type);
-        if (cat !== selectedCategory) return false;
-      }
-
-      // Search filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = n.title.toLowerCase().includes(q);
-        const matchesMessage = n.message.toLowerCase().includes(q);
-        if (!matchesTitle && !matchesMessage) return false;
-      }
-
-      return true;
-    });
-  }, [notifications, selectedCategory, searchQuery]);
-
-  const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.isRead).length;
-  }, [notifications]);
 
   return (
     <div className="space-y-6">
@@ -208,21 +236,14 @@ export default function AdminNotificationCenterPage() {
               variant="outline"
               size="sm"
               onClick={handleMarkAllRead}
+              isLoading={isMarkingAllRead}
+              disabled={isMarkingAllRead}
               className="text-xs gap-1.5"
             >
               <CheckCheck className="w-3.5 h-3.5" />
               <span>Mark All as Read</span>
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchNotifications}
-            className="text-xs gap-1.5"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh</span>
-          </Button>
         </div>
       </div>
 
@@ -269,7 +290,7 @@ export default function AdminNotificationCenterPage() {
       {/* Notification List */}
       {isLoading ? (
         <LoadingState message="Loading platform notifications..." />
-      ) : filteredNotifications.length === 0 ? (
+      ) : notifications.length === 0 ? (
         <Card className="p-12 text-center border-slate-200">
           <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
             <Inbox className="w-6 h-6" />
@@ -283,7 +304,7 @@ export default function AdminNotificationCenterPage() {
         </Card>
       ) : (
         <div className="space-y-2.5">
-          {filteredNotifications.map((n) => {
+          {notifications.map((n) => {
             const conf = getNotificationIcon(n.type);
             const Icon = conf.icon;
             const dest = getNotificationDestination(n);
@@ -356,6 +377,30 @@ export default function AdminNotificationCenterPage() {
               </Card>
             );
           })}
+          
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+              >
+                Previous
+              </Button>
+              <span className="text-xs text-slate-500">
+                Page {page + 1} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

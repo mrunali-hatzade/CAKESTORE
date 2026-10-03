@@ -4,21 +4,16 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Mail,
   Search,
-  Filter,
   Check,
   User,
   Phone,
   Calendar,
   Inbox,
   RefreshCw,
-  Eye,
   Reply,
-  ExternalLink,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { communicationApi } from '@/lib/api/communication';
 import { ContactEnquiry } from '@/types/communication';
@@ -27,23 +22,62 @@ export default function AdminContactEnquiriesPage() {
   const [enquiries, setEnquiries] = useState<ContactEnquiry[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'UNREAD' | 'READ'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [activeModalEnquiry, setActiveModalEnquiry] = useState<ContactEnquiry | null>(null);
+  const [selectedEnquiry, setSelectedEnquiry] = useState<ContactEnquiry | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const [replyText, setReplyText] = useState('');
+  const [isReplying, setIsReplying] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [selectedFilter, debouncedSearch]);
 
   const fetchEnquiries = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await communicationApi.getContactEnquiries();
-      setEnquiries(data || []);
+      const params: any = { page, size: 20 };
+      if (selectedFilter === 'UNREAD') params.isRead = false;
+      if (selectedFilter === 'READ') params.isRead = true;
+      if (debouncedSearch.trim()) params.search = debouncedSearch;
+
+      const data = await communicationApi.getContactEnquiries(params);
+      setEnquiries(data?.content || []);
+      setTotalPages(data?.totalPages || 0);
+
+      if (selectedFilter === 'UNREAD' && !debouncedSearch.trim()) {
+        setUnreadCount(data?.totalElements || 0);
+      } else {
+        const unreadData = await communicationApi.getContactEnquiries({ isRead: false, page: 0, size: 1 });
+        setUnreadCount(unreadData?.totalElements || 0);
+      }
     } catch {
       setEnquiries([]);
+      setTotalPages(0);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page, selectedFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchEnquiries();
+
+    const handleRefresh = () => {
+      fetchEnquiries();
+    };
+    window.addEventListener('adminGlobalRefresh', handleRefresh);
+    return () => {
+      window.removeEventListener('adminGlobalRefresh', handleRefresh);
+    };
   }, [fetchEnquiries]);
 
   const handleMarkRead = async (id: string | number) => {
@@ -51,24 +85,25 @@ export default function AdminContactEnquiriesPage() {
     setEnquiries((prev) =>
       prev.map((item) => (item.id === id ? { ...item, isRead: true } : item))
     );
-    if (activeModalEnquiry?.id === id) {
-      setActiveModalEnquiry((prev) => (prev ? { ...prev, isRead: true } : null));
+    if (selectedEnquiry?.id === id) {
+      setSelectedEnquiry((prev) => (prev ? { ...prev, isRead: true } : null));
     }
+    setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
-  const formatDate = (dateVal?: string | Date | null) => {
-    if (!dateVal) return 'N/A';
+  const handleSendReply = async () => {
+    if (!selectedEnquiry || !replyText.trim()) return;
+    setIsSending(true);
     try {
-      const d = new Date(dateVal);
-      return isNaN(d.getTime())
-        ? 'N/A'
-        : d.toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          });
-    } catch {
-      return 'N/A';
+      await communicationApi.replyToEnquiry(selectedEnquiry.id, replyText);
+      alert('Reply sent successfully');
+      setReplyText('');
+      setIsReplying(false);
+      fetchEnquiries();
+    } catch (err) {
+      alert('Failed to send reply');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -87,274 +122,250 @@ export default function AdminContactEnquiriesPage() {
     }
   };
 
-  const filteredEnquiries = useMemo(() => {
-    return enquiries.filter((item) => {
-      if (selectedFilter === 'UNREAD' && item.isRead) return false;
-      if (selectedFilter === 'READ' && !item.isRead) return false;
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = (item.name || '').toLowerCase().includes(q);
-        const matchesEmail = (item.email || '').toLowerCase().includes(q);
-        const matchesSubj = (item.subject || '').toLowerCase().includes(q);
-        const matchesMsg = (item.message || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesEmail && !matchesSubj && !matchesMsg) return false;
-      }
-      return true;
-    });
-  }, [enquiries, selectedFilter, searchQuery]);
-
-  const unreadCount = useMemo(() => {
-    return enquiries.filter((e) => !e.isRead).length;
-  }, [enquiries]);
-
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="font-serif font-bold text-2xl text-slate-900">
-              Contact Enquiries
-            </h1>
-            {unreadCount > 0 && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
-                {unreadCount} Unread
-              </span>
-            )}
+    <div className="flex flex-col lg:flex-row gap-6 min-h-[600px] h-[calc(100vh-200px)]">
+      {/* Left Column (List Pane) */}
+      <div className="w-full lg:w-[380px] flex flex-col gap-4 h-full border-r border-slate-200 pr-0 lg:pr-6">
+        {/* Header */}
+        <div className="flex flex-col gap-3 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="font-serif font-bold text-xl text-slate-900">
+                Enquiries
+              </h1>
+              {unreadCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                  {unreadCount} Unread
+                </span>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Customer inquiries, partnerships, and visitor support messages from the public Contact Us page
-          </p>
-        </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchEnquiries}
-          className="text-xs gap-1.5 self-start sm:self-auto"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Refresh</span>
-        </Button>
-      </div>
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search enquiries..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
+          </div>
 
-      {/* Filter and Search Toolbar */}
-      <Card className="p-4 border-slate-200">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100/50 rounded-xl">
             <button
               onClick={() => setSelectedFilter('ALL')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 selectedFilter === 'ALL'
-                  ? 'bg-indigo-600 text-white font-semibold shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All ({enquiries.length})
+              All
             </button>
             <button
               onClick={() => setSelectedFilter('UNREAD')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
                 selectedFilter === 'UNREAD'
-                  ? 'bg-indigo-600 text-white font-semibold shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span>Unread</span>
+              Unread
               {unreadCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-bold">
-                  {unreadCount}
-                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
               )}
             </button>
             <button
               onClick={() => setSelectedFilter('READ')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 selectedFilter === 'READ'
-                  ? 'bg-indigo-600 text-white font-semibold shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Read
             </button>
           </div>
-
-          <div className="relative w-full md:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or subject..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
         </div>
-      </Card>
 
-      {/* Enquiries List Table / Cards */}
-      {isLoading ? (
-        <LoadingState message="Loading contact enquiries..." />
-      ) : filteredEnquiries.length === 0 ? (
-        <Card className="p-12 text-center border-slate-200">
-          <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
-            <Inbox className="w-6 h-6" />
-          </div>
-          <h3 className="font-bold text-slate-800 text-sm">No Contact Enquiries</h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-            {searchQuery
-              ? 'No enquiries match your search criteria.'
-              : 'Messages submitted via the public Contact Us page will appear here.'}
-          </p>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {filteredEnquiries.map((e) => (
-            <Card
-              key={e.id}
-              className={`p-5 border transition-all ${
-                !e.isRead
-                  ? 'border-indigo-200 bg-indigo-50/15 shadow-xs'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-              }`}
+        {/* List */}
+        <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+          {isLoading ? (
+            <LoadingState message="Loading..." />
+          ) : enquiries.length === 0 ? (
+            <div className="text-center py-10">
+              <Inbox className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs text-slate-500">No enquiries found.</p>
+            </div>
+          ) : (
+            enquiries.map((e) => (
+              <div
+                key={e.id}
+                onClick={() => {
+                  setSelectedEnquiry(e);
+                  setIsReplying(false);
+                  setReplyText('');
+                  if (!e.isRead) handleMarkRead(e.id);
+                }}
+                className={`p-3 rounded-xl cursor-pointer border transition-all ${
+                  selectedEnquiry?.id === e.id
+                    ? 'border-indigo-500 bg-indigo-50/50'
+                    : !e.isRead
+                    ? 'border-indigo-100 bg-indigo-50/20 hover:border-indigo-300'
+                    : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className={`text-xs truncate mr-2 ${!e.isRead ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'}`}>
+                    {e.name}
+                  </span>
+                  <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">
+                    {formatDateTime(e.createdAt).split(',')[0]}
+                  </span>
+                </div>
+                <div className="text-xs font-medium text-slate-800 truncate mb-1">
+                  {e.subject}
+                </div>
+                <div className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                  {e.message}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center pt-3 border-t border-slate-100 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="text-xs h-8"
             >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    <span className="font-bold text-sm text-slate-900">{e.subject}</span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        e.isRead
-                          ? 'bg-slate-100 text-slate-500'
-                          : 'bg-indigo-100 text-indigo-700'
-                      }`}
-                    >
-                      {e.isRead ? 'Read' : 'Unread'}
-                    </span>
+              Prev
+            </Button>
+            <span className="text-[10px] text-slate-500">
+              Page {page + 1} of {totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              className="text-xs h-8"
+            >
+              Next
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Right Column (Reading Pane) */}
+      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm h-full">
+        {!selectedEnquiry ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8">
+            <Mail className="w-12 h-12 mb-4 opacity-20" />
+            <p className="text-sm font-medium">Select a message to read</p>
+          </div>
+        ) : (
+          <div className="flex flex-col h-full">
+            {/* Reading Pane Header */}
+            <div className="p-5 border-b border-slate-100 shrink-0 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 mb-3 break-words">
+                  {selectedEnquiry.subject}
+                </h2>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">
+                    {selectedEnquiry.name.charAt(0).toUpperCase()}
                   </div>
-
-                  <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed mb-3">
-                    {e.message}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400">
-                    <span className="flex items-center gap-1 font-semibold text-slate-700">
-                      <User className="w-3.5 h-3.5" />
-                      {e.name}
-                    </span>
-                    <span className="flex items-center gap-1 text-slate-500">
-                      <Mail className="w-3.5 h-3.5" />
-                      {e.email}
-                    </span>
-                    {e.phone && (
-                      <span className="flex items-center gap-1 text-slate-500">
-                        <Phone className="w-3.5 h-3.5" />
-                        {e.phone}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-slate-900 truncate">
+                        {selectedEnquiry.name}
                       </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {formatDate(e.createdAt)}
-                    </span>
+                      <span className="text-xs text-slate-500 truncate">
+                        &lt;{selectedEnquiry.email}&gt;
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-0.5">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {formatDateTime(selectedEnquiry.createdAt)}
+                      </span>
+                      {selectedEnquiry.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {selectedEnquiry.phone}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                  {!e.isRead && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleMarkRead(e.id)}
-                      className="text-xs text-slate-600 hover:text-slate-900"
-                    >
-                      <Check className="w-3.5 h-3.5 mr-1" />
-                      Mark Read
-                    </Button>
-                  )}
-                  <a
-                    href={`mailto:${e.email}?subject=Re: ${encodeURIComponent(e.subject)}`}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <Reply className="w-3.5 h-3.5" />
-                    <span>Reply via Email</span>
-                  </a>
+              </div>
+              
+              <div className="flex items-center gap-2 shrink-0">
+                {!selectedEnquiry.isRead && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      setActiveModalEnquiry(e);
-                      if (!e.isRead) handleMarkRead(e.id);
-                    }}
-                    className="text-xs gap-1"
+                    onClick={() => handleMarkRead(selectedEnquiry.id)}
+                    className="text-xs gap-1.5 h-8"
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>View</span>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Mark Read</span>
                   </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Details Modal */}
-      {activeModalEnquiry && (
-        <Modal
-          isOpen={!!activeModalEnquiry}
-          onClose={() => setActiveModalEnquiry(null)}
-          title="Contact Enquiry"
-        >
-          <div className="space-y-4 pt-1">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">
-                {activeModalEnquiry.subject}
-              </h3>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">{activeModalEnquiry.name}</span>
-                <span>•</span>
-                <span className="text-indigo-600">{activeModalEnquiry.email}</span>
-                {activeModalEnquiry.phone && (
-                  <>
-                    <span>•</span>
-                    <span>{activeModalEnquiry.phone}</span>
-                  </>
                 )}
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-              <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">
-                {activeModalEnquiry.message}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-[11px] text-slate-400">
-                Received: {formatDateTime(activeModalEnquiry.createdAt)}
-              </span>
-              <div className="flex items-center gap-2">
-                <a
-                  href={`mailto:${activeModalEnquiry.email}?subject=Re: ${encodeURIComponent(
-                    activeModalEnquiry.subject
-                  )}`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                <button
+                  onClick={() => setIsReplying(!isReplying)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors h-8"
                 >
                   <Reply className="w-3.5 h-3.5" />
-                  <span>Reply via Email</span>
-                </a>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveModalEnquiry(null)}
-                >
-                  Close
-                </Button>
+                  <span>Reply</span>
+                </button>
               </div>
             </div>
+
+            {/* Reading Pane Body */}
+            <div className="p-6 flex-1 overflow-y-auto">
+              <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap leading-relaxed text-[13px]">
+                {selectedEnquiry.message}
+              </div>
+              
+              {isReplying && (
+                <div className="mt-6 border-t border-slate-100 pt-4">
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Type your reply here..."
+                    className="w-full min-h-[120px] p-3 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y mb-3"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setIsReplying(false); setReplyText(''); }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSendReply}
+                      disabled={isSending || !replyText.trim()}
+                    >
+                      {isSending ? 'Sending...' : 'Send Reply'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </Modal>
-      )}
+        )}
+      </div>
     </div>
   );
 }
+

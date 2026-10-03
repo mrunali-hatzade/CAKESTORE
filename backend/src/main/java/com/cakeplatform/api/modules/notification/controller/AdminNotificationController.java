@@ -23,17 +23,19 @@ public class AdminNotificationController {
     private final AdminNotificationService adminNotificationService;
 
     @GetMapping
-    public ResponseEntity<List<AdminNotification>> getNotifications(
+    public ResponseEntity<org.springframework.data.domain.Page<AdminNotification>> getNotifications(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) Boolean isRead,
-            @RequestParam(required = false) String search) {
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
         log.info("Admin ID {} fetching notifications (category={}, isRead={}, search={})",
                 userDetails.getId(), category, isRead, search);
 
-        List<AdminNotification> notifications = adminNotificationService.getNotificationsForAdmin(
-                userDetails.getId(), category, isRead, search);
+        org.springframework.data.domain.Page<AdminNotification> notifications = adminNotificationService.getNotificationsForAdmin(
+                userDetails.getId(), category, isRead, search, org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending()));
 
         return ResponseEntity.ok(notifications);
     }

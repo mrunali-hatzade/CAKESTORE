@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.cakeplatform.api.modules.communication.dto.AdminReplyRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,20 @@ public class AdminCommunicationController {
         log.info("Admin marking contact enquiry ID {} as read", id);
         enquiryService.markAsRead(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "Enquiry marked as read"));
+    }
+
+    @PostMapping("/feedback/{id}/reply")
+    public ResponseEntity<Map<String, Object>> replyToFeedback(@PathVariable Long id, @RequestBody AdminReplyRequest request) {
+        log.info("Admin replying to platform feedback ID {}", id);
+        feedbackService.replyToFeedback(id, request.getMessage());
+        return ResponseEntity.ok(Map.of("message", "Reply sent successfully", "id", id));
+    }
+
+    @PostMapping("/enquiries/{id}/reply")
+    public ResponseEntity<Map<String, Object>> replyToEnquiry(@PathVariable Long id, @RequestBody AdminReplyRequest request) {
+        log.info("Admin replying to contact enquiry ID {}", id);
+        enquiryService.replyToEnquiry(id, request.getMessage());
+        return ResponseEntity.ok(Map.of("message", "Reply sent successfully", "id", id));
     }
 
     @GetMapping("/communication/summary")

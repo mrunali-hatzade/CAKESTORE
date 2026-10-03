@@ -95,39 +95,86 @@ public class AdminDashboardService {
         }
     }
 
-    public DashboardStatsResponse getPlatformStats() {
+    /**
+     * Lightweight method that returns ONLY shop status counts.
+     * Runs 3 simple COUNT(*) queries instead of the full analytical aggregation.
+     */
+    public java.util.Map<String, Long> getShopStatusCounts() {
+        long total = shopRepository.count();
+        long active = shopRepository.countByStatus(com.cakeplatform.api.modules.shop.ShopStatus.ACTIVE);
+        long pending = shopRepository.countByStatus(com.cakeplatform.api.modules.shop.ShopStatus.PENDING);
+        long suspended = shopRepository.countByStatus(com.cakeplatform.api.modules.shop.ShopStatus.SUSPENDED);
+        return java.util.Map.of(
+            "total", total,
+            "active", active,
+            "pending", pending,
+            "suspended", suspended
+        );
+    }
+
+    public DashboardStatsResponse getPlatformStats(LocalDate startDate, LocalDate endDate) {
         DashboardStatsResponse stats = new DashboardStatsResponse();
-        stats.setTotalShops(shopRepository.count());
-        stats.setActiveShops(shopRepository.countByStatus(ShopStatus.ACTIVE));
-        stats.setSuspendedShops(shopRepository.countByStatus(ShopStatus.SUSPENDED));
-        stats.setInactiveShops(shopRepository.countByStatus(ShopStatus.INACTIVE));
-        stats.setPendingShops(shopRepository.countByStatus(ShopStatus.PENDING));
-        stats.setTotalUsers(userRepository.count());
-
-        // Timezone-bounded metrics using configured business timezone
+        
         ZoneId zone = getOperationalZone();
-        LocalDate today = LocalDate.now(zone);
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime startOfMonth = today.withDayOfMonth(1).atStartOfDay();
+        LocalDateTime startOfDay = LocalDate.now(zone).atStartOfDay();
+        LocalDateTime startOfMonth = LocalDate.now(zone).withDayOfMonth(1).atStartOfDay();
 
-        stats.setTodayRegistrations(userRepository.countByCreatedAtGreaterThanEqual(startOfDay));
-        stats.setActiveSubscriptions(subscriptionRepository.countByStatus(SubscriptionStatus.ACTIVE));
-        stats.setExpiredSubscriptions(subscriptionRepository.countByStatus(SubscriptionStatus.EXPIRED));
-        stats.setTodayPayments(paymentRepository.countTodayCompletedPayments(startOfDay));
+        stats.setStartDate(startDate);
+        stats.setEndDate(endDate);
 
-        // Platform SaaS Revenue (Subscriptions)
-        BigDecimal monthlySubRev = paymentRepository.getMonthlyRevenue(startOfMonth);
-        stats.setMonthlyPlatformRevenue(monthlySubRev != null ? monthlySubRev : BigDecimal.ZERO);
+        if (startDate != null && endDate != null) {
+            LocalDateTime start = startDate.atStartOfDay(zone).toLocalDateTime();
+            LocalDateTime end = endDate.atTime(23, 59, 59, 999999999).atZone(zone).toLocalDateTime();
 
-        BigDecimal totalSubRev = paymentRepository.getTotalRevenue();
-        stats.setTotalPlatformRevenue(totalSubRev != null ? totalSubRev : BigDecimal.ZERO);
+            stats.setTotalShops(shopRepository.countByCreatedAtBetween(start, end));
+            stats.setActiveShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.ACTIVE, start, end));
+            stats.setSuspendedShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.SUSPENDED, start, end));
+            stats.setInactiveShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.INACTIVE, start, end));
+            stats.setPendingShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.PENDING, start, end));
+            stats.setTotalUsers(userRepository.countByCreatedAtBetween(start, end));
 
-        // Platform Network GMV (Cake Sales processed)
-        BigDecimal monthlyGmv = orderRepository.sumMonthlyRealizedRevenue(startOfMonth);
-        stats.setMonthlyGmv(monthlyGmv != null ? monthlyGmv : BigDecimal.ZERO);
+            stats.setTodayRegistrations(userRepository.countByCreatedAtBetween(startOfDay, startOfDay.plusDays(1).minusNanos(1)));
+            stats.setActiveSubscriptions(subscriptionRepository.countByStatusAndCreatedAtBetween(SubscriptionStatus.ACTIVE, start, end));
+            stats.setExpiredSubscriptions(subscriptionRepository.countByStatusAndCreatedAtBetween(SubscriptionStatus.EXPIRED, start, end));
+            stats.setTodayPayments(paymentRepository.countCompletedPaymentsBetween(startOfDay, startOfDay.plusDays(1).minusNanos(1)));
 
-        BigDecimal totalGmv = orderRepository.sumTotalRealizedRevenue();
-        stats.setTotalGmv(totalGmv != null ? totalGmv : BigDecimal.ZERO);
+            BigDecimal monthlySubRev = paymentRepository.getRevenueBetween(startOfMonth, startOfMonth.plusMonths(1).minusNanos(1));
+            stats.setMonthlyPlatformRevenue(monthlySubRev != null ? monthlySubRev : BigDecimal.ZERO);
+
+            BigDecimal totalSubRev = paymentRepository.getRevenueBetween(start, end);
+            stats.setTotalPlatformRevenue(totalSubRev != null ? totalSubRev : BigDecimal.ZERO);
+
+            BigDecimal monthlyGmv = orderRepository.sumRealizedRevenueBetween(startOfMonth, startOfMonth.plusMonths(1).minusNanos(1));
+            stats.setMonthlyGmv(monthlyGmv != null ? monthlyGmv : BigDecimal.ZERO);
+
+            BigDecimal totalGmv = orderRepository.sumRealizedRevenueBetween(start, end);
+            stats.setTotalGmv(totalGmv != null ? totalGmv : BigDecimal.ZERO);
+
+        } else {
+            stats.setTotalShops(shopRepository.count());
+            stats.setActiveShops(shopRepository.countByStatus(ShopStatus.ACTIVE));
+            stats.setSuspendedShops(shopRepository.countByStatus(ShopStatus.SUSPENDED));
+            stats.setInactiveShops(shopRepository.countByStatus(ShopStatus.INACTIVE));
+            stats.setPendingShops(shopRepository.countByStatus(ShopStatus.PENDING));
+            stats.setTotalUsers(userRepository.count());
+
+            stats.setTodayRegistrations(userRepository.countByCreatedAtGreaterThanEqual(startOfDay));
+            stats.setActiveSubscriptions(subscriptionRepository.countByStatus(SubscriptionStatus.ACTIVE));
+            stats.setExpiredSubscriptions(subscriptionRepository.countByStatus(SubscriptionStatus.EXPIRED));
+            stats.setTodayPayments(paymentRepository.countTodayCompletedPayments(startOfDay));
+
+            BigDecimal monthlySubRev = paymentRepository.getMonthlyRevenue(startOfMonth);
+            stats.setMonthlyPlatformRevenue(monthlySubRev != null ? monthlySubRev : BigDecimal.ZERO);
+
+            BigDecimal totalSubRev = paymentRepository.getTotalRevenue();
+            stats.setTotalPlatformRevenue(totalSubRev != null ? totalSubRev : BigDecimal.ZERO);
+
+            BigDecimal monthlyGmv = orderRepository.sumMonthlyRealizedRevenue(startOfMonth);
+            stats.setMonthlyGmv(monthlyGmv != null ? monthlyGmv : BigDecimal.ZERO);
+
+            BigDecimal totalGmv = orderRepository.sumTotalRealizedRevenue();
+            stats.setTotalGmv(totalGmv != null ? totalGmv : BigDecimal.ZERO);
+        }
 
         return stats;
     }
@@ -146,7 +193,7 @@ public class AdminDashboardService {
             }
         }
         
-        String searchQuery = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchQuery = (search != null && !search.trim().isEmpty()) ? search.trim() : "";
 
         return shopRepository.searchAndFilterAllShops(shopStatus, searchQuery, pageable).map(shop -> {
             AdminShopSummaryResponse summary = new AdminShopSummaryResponse();
@@ -172,7 +219,7 @@ public class AdminDashboardService {
         details.setShop(shop);
         details.setSubscriptions(subscriptionRepository.findByShopId(shopId));
         details.setPayments(paymentRepository.findByShopId(shopId));
-        details.setActivityLogs(activityLogRepository.findByShopIdOrderByTimestampDesc(shopId));
+        details.setActivityLogs(activityLogRepository.findByShopIdAndEntityTypeInOrderByTimestampDesc(shopId, java.util.List.of("SHOP", "SUBSCRIPTION", "PAYMENT")));
         details.setBusinessDocuments(businessDocumentRepository.findByShopId(shopId));
         details.setTotalProducts(productRepository.countByShopId(shopId));
         details.setTotalOrders(orderRepository.countByShopId(shopId));
@@ -287,10 +334,10 @@ public class AdminDashboardService {
                 notificationService.createNotification(
                         shop.getOwner(),
                         NotificationType.DOCUMENT_VERIFICATION,
-                        "KYC Verification Approved",
+                        "Bakery Verified",
                         "Congratulations! Your bakery verification has been approved. Your storefront is now verified on CakeStore.",
                         shop.getId().toString(),
-                        false
+                        true
                 );
             }
         } else {
@@ -321,10 +368,10 @@ public class AdminDashboardService {
                 notificationService.createNotification(
                         shop.getOwner(),
                         NotificationType.DOCUMENT_VERIFICATION,
-                        "KYC Verification Action Required",
+                        "Verification Rejected",
                         "Your bakery KYC verification was rejected. Reason: " + trimmedReason + ". Please upload updated documents in your compliance settings.",
                         shop.getId().toString(),
-                        false
+                        true
                 );
             }
         }

@@ -93,7 +93,7 @@ public class ProductService {
         if (storefrontCacheService != null) {
             storefrontCacheService.evictShopProducts(shop.getId());
         }
-        activityLogger.logActivity(userId, shop.getId(), "PRODUCT_UPDATED", "PRODUCT", updated.getId(), null);
+        activityLogger.logActivity(userId, shop.getId(), "PRODUCT_UPDATED", "PRODUCT", updated.getId(), "Name: " + updated.getName());
         return updated;
     }
 
@@ -193,6 +193,6 @@ public class ProductService {
         if (storefrontCacheService != null) {
             storefrontCacheService.evictShopProducts(shop.getId());
         }
-        activityLogger.logActivity(userId, shop.getId(), "PRODUCT_DELETED", "PRODUCT", productId, null);
+        activityLogger.logActivity(userId, shop.getId(), "PRODUCT_DELETED", "PRODUCT", productId, "Name: " + product.getName());
     }
 }

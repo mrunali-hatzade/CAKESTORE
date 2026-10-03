@@ -108,7 +108,7 @@ class StageBAdminOperationsTest {
     }
 
     // =========================================================================
-    // B1 — ADMIN DASHBOARD INTELLIGENCE TESTS
+    // B1 Ã¢â‚¬â€ ADMIN DASHBOARD INTELLIGENCE TESTS
     // =========================================================================
 
     @Test
@@ -127,7 +127,7 @@ class StageBAdminOperationsTest {
         when(orderRepository.sumMonthlyRealizedRevenue(any(LocalDateTime.class))).thenReturn(new BigDecimal("45000.00"));
         when(paymentRepository.getTotalRevenue()).thenReturn(new BigDecimal("120000.00"));
 
-        DashboardStatsResponse stats = adminDashboardService.getPlatformStats();
+        DashboardStatsResponse stats = adminDashboardService.getPlatformStats(null, null);
 
         assertNotNull(stats);
         assertEquals(20L, stats.getTotalShops());
@@ -140,8 +140,8 @@ class StageBAdminOperationsTest {
         assertEquals(12L, stats.getActiveSubscriptions());
         assertEquals(4L, stats.getExpiredSubscriptions());
         assertEquals(3L, stats.getTodayPayments());
-        assertEquals(new BigDecimal("45000.00"), stats.getMonthlyRevenue());
-        assertEquals(new BigDecimal("120000.00"), stats.getTotalRevenue());
+        assertEquals(new BigDecimal("45000.00"), stats.getMonthlyPlatformRevenue());
+        assertEquals(new BigDecimal("120000.00"), stats.getTotalPlatformRevenue());
     }
 
     @Test
@@ -150,7 +150,7 @@ class StageBAdminOperationsTest {
         when(shopRepository.countByStatus(ShopStatus.INACTIVE)).thenReturn(7L);
         when(shopRepository.countByStatus(ShopStatus.SUSPENDED)).thenReturn(2L);
 
-        DashboardStatsResponse stats = adminDashboardService.getPlatformStats();
+        DashboardStatsResponse stats = adminDashboardService.getPlatformStats(null, null);
 
         assertEquals(7L, stats.getInactiveShops());
         assertEquals(2L, stats.getSuspendedShops());
@@ -164,7 +164,7 @@ class StageBAdminOperationsTest {
         ArgumentCaptor<LocalDateTime> startOfDayCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         when(userRepository.countByCreatedAtGreaterThanEqual(startOfDayCaptor.capture())).thenReturn(8L);
 
-        adminDashboardService.getPlatformStats();
+        adminDashboardService.getPlatformStats(null, null);
 
         LocalDateTime captured = startOfDayCaptor.getValue();
         assertNotNull(captured);
@@ -181,9 +181,9 @@ class StageBAdminOperationsTest {
         when(orderRepository.sumMonthlyRealizedRevenue(startOfMonthCaptor.capture()))
                 .thenReturn(new BigDecimal("82500.00"));
 
-        DashboardStatsResponse stats = adminDashboardService.getPlatformStats();
+        DashboardStatsResponse stats = adminDashboardService.getPlatformStats(null, null);
 
-        assertEquals(new BigDecimal("82500.00"), stats.getMonthlyRevenue());
+        assertEquals(new BigDecimal("82500.00"), stats.getMonthlyPlatformRevenue());
         LocalDateTime captured = startOfMonthCaptor.getValue();
         assertNotNull(captured);
         assertEquals(1, captured.getDayOfMonth());
@@ -192,7 +192,7 @@ class StageBAdminOperationsTest {
     }
 
     // =========================================================================
-    // B2 — SHOP SUSPENSION REASON WORKFLOW TESTS
+    // B2 Ã¢â‚¬â€ SHOP SUSPENSION REASON WORKFLOW TESTS
     // =========================================================================
 
     @Test
@@ -247,7 +247,7 @@ class StageBAdminOperationsTest {
     }
 
     // =========================================================================
-    // B3 — KYC / DOCUMENT VERIFICATION WORKFLOW TESTS
+    // B3 Ã¢â‚¬â€ KYC / DOCUMENT VERIFICATION WORKFLOW TESTS
     // =========================================================================
 
     @Test

@@ -68,7 +68,7 @@ public class PhaseGCommunicationTest {
 
     @BeforeEach
     void setUp() {
-        adminNotificationService = new AdminNotificationService(adminNotificationRepository, userRepository);
+        adminNotificationService = new AdminNotificationService(adminNotificationRepository, userRepository, mock(org.springframework.messaging.simp.SimpMessagingTemplate.class));
         feedbackService = new PlatformFeedbackService(
                 feedbackRepository, enquiryRepository, userRepository, shopRepository,
                 adminNotificationService, emailService
@@ -532,15 +532,15 @@ public class PhaseGCommunicationTest {
                 .isRead(false)
                 .build();
 
-        when(adminNotificationRepository.findWithFilters(eq(1L), eq("BAKERY"), eq(AdminNotificationCategory.BAKERY), eq(false), isNull()))
-                .thenReturn(List.of(n1));
+        when(adminNotificationRepository.findWithFilters(eq(1L), eq("BAKERY"), eq(AdminNotificationCategory.BAKERY), eq(false), isNull(), org.springframework.data.domain.PageRequest.of(0, 20)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(n1)));
 
-        ResponseEntity<List<AdminNotification>> response = adminNotificationController.getNotifications(
-                adminUserDetails, "BAKERY", false, null);
+        ResponseEntity<org.springframework.data.domain.Page<AdminNotification>> response = adminNotificationController.getNotifications(
+                adminUserDetails, "BAKERY", false, null, 0, 20);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(1, response.getBody().size());
-        assertEquals("1001", response.getBody().get(0).getIdAsString());
+        assertEquals(1, response.getBody().getContent().size());
+        assertEquals("1001", response.getBody().getContent().get(0).getIdAsString());
     }
 
     @Test
@@ -716,7 +716,7 @@ public class PhaseGCommunicationTest {
         AdminNotificationService mockAdminNotifService = mock(AdminNotificationService.class);
 
         com.cakeplatform.api.modules.shop.ShopStatusManager statusMgr =
-                new com.cakeplatform.api.modules.shop.ShopStatusManager(shopRepository, actLogger, mockAdminNotifService);
+                new com.cakeplatform.api.modules.shop.ShopStatusManager(shopRepository, actLogger, mockAdminNotifService, mock(com.cakeplatform.api.modules.notification.NotificationService.class), mock(com.cakeplatform.api.modules.user.UserRepository.class));
 
         when(shopRepository.findById(100L)).thenReturn(Optional.of(testShop));
 

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,6 +20,7 @@ public class AdminNotificationService {
 
     private final AdminNotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /**
      * Broadcasts an administrative platform notification to all active administrators.
@@ -92,8 +94,12 @@ public class AdminNotificationService {
 
         // 2. Database-level idempotency protection
         try {
-            notificationRepository.save(notification);
+            AdminNotification saved = notificationRepository.save(notification);
             log.info("Created admin notification [{}]: {} for recipient ID: {}", type, title, recipientId);
+            
+            if (recipient != null) {
+                messagingTemplate.convertAndSend("/queue/admin-notifications-" + recipient.getId(), saved);
+            }
         } catch (DataIntegrityViolationException dive) {
             // Caught database unique constraint violation (concurrent race condition duplicate)
             log.warn("Database idempotency caught concurrent duplicate admin notification: type={}, refId={}, recipientId={}",
@@ -105,11 +111,12 @@ public class AdminNotificationService {
      * Retrieve notifications for a specific administrator with category, read status, and search filters.
      */
     @Transactional(readOnly = true)
-    public List<AdminNotification> getNotificationsForAdmin(
+    public org.springframework.data.domain.Page<AdminNotification> getNotificationsForAdmin(
             Long adminId,
             String categoryStr,
             Boolean isRead,
-            String search) {
+            String search,
+            org.springframework.data.domain.Pageable pageable) {
 
         AdminNotificationCategory categoryEnum = null;
         if (categoryStr != null && !categoryStr.trim().isEmpty() && !"ALL".equalsIgnoreCase(categoryStr)) {
@@ -125,7 +132,7 @@ public class AdminNotificationService {
                 categoryStr != null ? categoryStr.trim().toUpperCase() : null,
                 categoryEnum,
                 isRead,
-                search != null ? search.trim() : null
+                search != null ? search.trim() : null, pageable
         );
     }
 

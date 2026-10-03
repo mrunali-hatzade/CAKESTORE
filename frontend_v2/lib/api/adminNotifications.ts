@@ -3,6 +3,7 @@ import {
   AdminNotification,
   AdminNotificationCategory,
 } from '@/types/adminNotifications';
+import { PaginatedResponse } from '@/types/order';
 
 export const adminNotificationsApi = {
   /**
@@ -12,12 +13,26 @@ export const adminNotificationsApi = {
     category?: AdminNotificationCategory;
     isRead?: boolean;
     search?: string;
-  }): Promise<AdminNotification[]> {
+    page?: number;
+    size?: number;
+  }): Promise<PaginatedResponse<AdminNotification>> {
     try {
-      return await apiClient.get<AdminNotification[]>('/api/admin/notifications', { params });
+      return await apiClient.get<PaginatedResponse<AdminNotification>>('/api/admin/notifications', { params });
     } catch (err: any) {
       if (err?.status === 404 || err?.status === 500) {
-        return [];
+        return { 
+          content: [], 
+          totalElements: 0, 
+          totalPages: 0, 
+          size: 20, 
+          number: 0,
+          pageable: null,
+          last: true,
+          sort: null,
+          numberOfElements: 0,
+          first: true,
+          empty: true
+        };
       }
       throw err;
     }

@@ -15,6 +15,8 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
     boolean existsByOwnerId(Long ownerId);
     long countByStatus(ShopStatus status);
     List<Shop> findByStatus(ShopStatus status);
+    long countByStatusAndCreatedAtBetween(ShopStatus status, java.time.LocalDateTime start, java.time.LocalDateTime end);
+    long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end);
     
     @Query("SELECT s FROM Shop s WHERE " +
            "(:status IS NULL OR s.status = :status) AND " +

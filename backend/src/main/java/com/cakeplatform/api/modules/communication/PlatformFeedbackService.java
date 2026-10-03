@@ -109,13 +109,36 @@ public class PlatformFeedbackService {
      */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<PlatformFeedback> getFeedback(Boolean isRead, String search, org.springframework.data.domain.Pageable pageable) {
-        return feedbackRepository.findWithFilters(isRead, search, pageable);
+        return feedbackRepository.findWithFilters(isRead, search != null ? search.trim() : "", pageable);
     }
 
     /**
      * Mark platform feedback as read.
      */
     @Transactional
+    
+    public void replyToFeedback(Long id, String replyMessage) {
+        PlatformFeedback feedback = feedbackRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Feedback not found with ID: " + id));
+        
+        if (feedback.getOwnerEmail() != null) {
+            emailService.sendEmail(feedback.getOwnerEmail(), "Re: [CakeStore Feedback] " + String.valueOf(feedback.getCategory()), replyMessage);
+        } else if (feedback.getShopId() != null) {
+            // Find owner via shop... but let's assume getOwnerEmail is populated by submitFeedback
+            log.warn("Feedback {} has no ownerEmail attached, attempting to find it...", id);
+            Shop shop = shopRepository.findById(feedback.getShopId()).orElse(null);
+            if (shop != null && shop.getOwner() != null) {
+                emailService.sendEmail(shop.getOwner().getEmail(), "Re: [CakeStore Feedback] " + String.valueOf(feedback.getCategory()), replyMessage);
+            }
+        }
+        
+        feedback.setAdminReply(replyMessage);
+        feedback.setRepliedAt(java.time.LocalDateTime.now());
+        feedback.setIsRead(true);
+        feedbackRepository.save(feedback);
+        log.info("Sent reply to feedback ID {}", id);
+    }
+
     public void markAsRead(Long id) {
         PlatformFeedback feedback = feedbackRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Feedback not found with ID: " + id));

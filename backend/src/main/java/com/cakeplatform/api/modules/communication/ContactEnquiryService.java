@@ -84,13 +84,27 @@ public class ContactEnquiryService {
      */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<ContactEnquiry> getEnquiries(Boolean isRead, String search, org.springframework.data.domain.Pageable pageable) {
-        return enquiryRepository.findWithFilters(isRead, search, pageable);
+        return enquiryRepository.findWithFilters(isRead, search != null ? search.trim() : "", pageable);
     }
 
     /**
      * Mark a contact enquiry as read.
      */
     @Transactional
+    
+    public void replyToEnquiry(Long id, String replyMessage) {
+        ContactEnquiry enquiry = enquiryRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Enquiry not found with ID: " + id));
+        
+        emailService.sendEmail(enquiry.getEmail(), "Re: [CakeStore] " + enquiry.getSubject(), replyMessage);
+        
+        enquiry.setAdminReply(replyMessage);
+        enquiry.setRepliedAt(java.time.LocalDateTime.now());
+        enquiry.setIsRead(true);
+        enquiryRepository.save(enquiry);
+        log.info("Sent reply to enquiry ID {}", id);
+    }
+
     public void markAsRead(Long id) {
         ContactEnquiry enquiry = enquiryRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Enquiry not found with ID: " + id));

@@ -15,8 +15,14 @@ import {
 /**
  * Fetch top-level platform statistics for Admin Dashboard.
  */
-export async function getPlatformStats(): Promise<DashboardStats> {
-  return apiClient.get<DashboardStats>('/api/admin/dashboard/stats');
+export async function getPlatformStats(startDate?: string, endDate?: string): Promise<DashboardStats> {
+  return apiClient.get<DashboardStats>('/api/admin/dashboard/stats', {
+    params: { startDate, endDate }
+  });
+}
+
+export async function getShopCounts(): Promise<{ total: number; active: number; pending: number; suspended: number }> {
+  return apiClient.get<{ total: number; active: number; pending: number; suspended: number }>('/api/admin/shops/counts');
 }
 
 /**
@@ -102,8 +108,16 @@ export async function togglePlanStatus(id: number, isActive: boolean): Promise<A
 /**
  * Broadcast an announcement message to all or specific bakery owners.
  */
+export async function getAdminBroadcastHistory(): Promise<any[]> {
+  return apiClient.get<any[]>('/api/admin/messages/history');
+}
+
 export async function sendAdminMessage(payload: AdminMessagePayload): Promise<string> {
   return apiClient.post<string>('/api/admin/messages', payload);
+}
+
+export async function reorderPlans(planIds: number[]): Promise<any> {
+  return apiClient.put('/api/admin/plans/reorder', planIds);
 }
 
 export const adminApi = {
@@ -119,5 +133,7 @@ export const adminApi = {
   createPlan,
   updatePlan,
   togglePlanStatus,
+  reorderPlans,
   sendAdminMessage,
+  getAdminBroadcastHistory,
 };

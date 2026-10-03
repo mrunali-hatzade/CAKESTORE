@@ -20,7 +20,7 @@ public class PublicSubscriptionPlanController {
 
     @GetMapping
     public ResponseEntity<List<SubscriptionPlanResponse>> getActivePlans() {
-        List<SubscriptionPlanResponse> plans = subscriptionPlanRepository.findByIsActiveTrue()
+        List<SubscriptionPlanResponse> plans = subscriptionPlanRepository.findByIsActiveTrueOrderByDisplayOrderAsc()
                 .stream()
                 .map(SubscriptionPlanResponse::fromEntity)
                 .collect(Collectors.toList());

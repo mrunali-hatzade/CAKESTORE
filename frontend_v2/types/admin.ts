@@ -71,7 +71,8 @@ export interface AdminShopDetails {
     action: string;
     details?: string;
     metadata?: string;
-    createdAt: string;
+    createdAt?: string;
+    timestamp?: string;
   }[];
   businessDocuments?: BusinessDocumentItem[];
   totalProducts: number;
@@ -81,6 +82,7 @@ export interface AdminShopDetails {
   weeklyRevenue?: number;
   completedOrders?: number;
   cancelledOrders?: number;
+  avgOrderValue?: number;
 }
 
 export interface AdminPlan {
@@ -108,7 +110,8 @@ export interface SentBroadcastRecord {
   id: string;
   title: string;
   message: string;
-  target: string;
+  targetType: string;
+  targetOwnerId?: number;
   sentAt: string;
   recipientCount: number;
 }

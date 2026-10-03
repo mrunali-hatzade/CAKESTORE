@@ -16,37 +16,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminMessageController {
 
-    private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final BroadcastService broadcastService;
 
     @PostMapping
     public ResponseEntity<String> sendAdminMessage(@RequestBody AdminMessageRequest request) {
-        
-        if (request.getSpecificOwnerId() != null) {
-            User owner = userRepository.findById(request.getSpecificOwnerId())
-                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
-            notificationService.createNotification(
-                    owner, 
-                    NotificationType.ADMIN_MESSAGE, 
-                    request.getTitle(), 
-                    request.getMessage(), 
-                    null, 
-                    request.isSendEmail()
-            );
-            return ResponseEntity.ok("Message sent to specific owner.");
-        } else {
-            List<User> allOwners = userRepository.findByRole(UserRole.SHOP_OWNER);
-            for (User owner : allOwners) {
-                notificationService.createNotification(
-                        owner, 
-                        NotificationType.ADMIN_MESSAGE, 
-                        request.getTitle(), 
-                        request.getMessage(), 
-                        null, 
-                        request.isSendEmail()
-                );
-            }
-            return ResponseEntity.ok("Message broadcast to all " + allOwners.size() + " owners.");
-        }
+        // Fire and forget: delegates to @Async service
+        broadcastService.sendAndRecordBroadcast(request);
+        return ResponseEntity.ok("Broadcast dispatched successfully. Processing in background.");
+    }
+    
+    @GetMapping("/history")
+    public ResponseEntity<List<BroadcastHistory>> getBroadcastHistory() {
+        return ResponseEntity.ok(broadcastService.getHistory());
     }
 }

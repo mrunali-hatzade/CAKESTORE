@@ -13,5 +13,6 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
     Optional<Subscription> findFirstByShopIdAndStatusOrderByCreatedAtDesc(Long shopId, SubscriptionStatus status);
     List<Subscription> findByStatus(SubscriptionStatus status);
     long countByStatus(SubscriptionStatus status);
+    long countByStatusAndCreatedAtBetween(SubscriptionStatus status, java.time.LocalDateTime start, java.time.LocalDateTime end);
     void deleteByShopId(Long shopId);
 }

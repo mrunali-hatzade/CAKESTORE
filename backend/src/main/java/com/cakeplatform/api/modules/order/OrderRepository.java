@@ -207,6 +207,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "  AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED')")
     BigDecimal sumTotalRealizedRevenue();
 
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+           "WHERE o.createdAt >= :startDate AND o.createdAt <= :endDate " +
+           "  AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "  AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') OR UPPER(COALESCE(o.orderStatus, '')) IN ('COMPLETED', 'DELIVERED')) " +
+           "  AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED')")
+    BigDecimal sumRealizedRevenueBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
     @Query("SELECT COALESCE(SUM(o.discountAmount), 0) FROM Order o WHERE o.shop.id = :shopId AND o.orderStatus != 'CANCELLED'")
     BigDecimal sumTotalDiscountByShopId(@Param("shopId") Long shopId);
 

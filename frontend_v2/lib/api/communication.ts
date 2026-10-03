@@ -1,6 +1,5 @@
 import { PaginatedResponse } from '@/types/order';
 import { apiClient } from './client';
-import { PaginatedResponse } from '@/types/order';
 import {
   PlatformFeedback,
   CreatePlatformFeedbackPayload,
@@ -33,7 +32,7 @@ export const communicationApi = {
       return await apiClient.get<PaginatedResponse<PlatformFeedback>>('/api/admin/feedback', { params });
     } catch (err: any) {
       if (err?.status === 404 || err?.status === 500) {
-        return { content: [], totalPages: 0, totalElements: 0, size: 20, number: 0 };
+        return { content: [], totalPages: 0, totalElements: 0, size: 20, number: 0 } as any;
       }
       throw err;
     }
@@ -74,7 +73,7 @@ export const communicationApi = {
       return await apiClient.get<PaginatedResponse<ContactEnquiry>>('/api/admin/enquiries', { params });
     } catch (err: any) {
       if (err?.status === 404 || err?.status === 500) {
-        return { content: [], totalPages: 0, totalElements: 0, size: 20, number: 0 };
+        return { content: [], totalPages: 0, totalElements: 0, size: 20, number: 0 } as any;
       }
       throw err;
     }
@@ -101,6 +100,34 @@ export const communicationApi = {
       return await apiClient.get<CommunicationSummary>('/api/admin/communication/summary');
     } catch (err: any) {
       return { unreadFeedbackCount: 0, unreadEnquiriesCount: 0 };
+    }
+  },
+
+  /**
+   * Super Admin: Reply to a contact enquiry.
+   */
+  async replyToEnquiry(id: string | number, message: string): Promise<void> {
+    try {
+      await apiClient.post(`/api/admin/enquiries/${id}/reply`, { message });
+    } catch (err: any) {
+      if (err?.status !== 404 && err?.status !== 500) {
+        throw err;
+      }
+      console.warn('Backend enquiry reply unavailable:', err);
+    }
+  },
+
+  /**
+   * Super Admin: Reply to feedback.
+   */
+  async replyToFeedback(id: string | number, message: string): Promise<void> {
+    try {
+      await apiClient.post(`/api/admin/feedback/${id}/reply`, { message });
+    } catch (err: any) {
+      if (err?.status !== 404 && err?.status !== 500) {
+        throw err;
+      }
+      console.warn('Backend feedback reply unavailable:', err);
     }
   },
 };

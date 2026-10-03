@@ -92,7 +92,7 @@ public class StageCPaymentAndSubscriptionTest {
 
     @BeforeEach
     void setUp() {
-        razorpayService = spy(new RazorpayService(TEST_KEY_ID, TEST_KEY_SECRET, TEST_WEBHOOK_SECRET));
+        razorpayService = spy(new RazorpayService(TEST_KEY_ID, TEST_KEY_SECRET, TEST_WEBHOOK_SECRET, org.mockito.Mockito.mock(com.cakeplatform.api.modules.settings.GlobalSettingsService.class)));
 
         com.cakeplatform.api.modules.payment.WebhookEventRepository webhookEventRepo = org.mockito.Mockito.mock(com.cakeplatform.api.modules.payment.WebhookEventRepository.class);
         webhookController = new WebhookController(

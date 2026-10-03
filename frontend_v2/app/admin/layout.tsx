@@ -17,15 +17,32 @@ import {
   X,
   ExternalLink,
   ChefHat,
+  RefreshCw,
+  Landmark,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import AdminNotificationBell from '@/components/admin/AdminNotificationBell';
+import { AdminCommandPalette } from '@/components/admin/AdminCommandPalette';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, isAuthenticated, isLoading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global Ctrl+K / Cmd+K listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const isAdmin = user?.role === 'ROLE_ADMIN' || (user?.role as unknown as string) === 'ADMIN';
 
@@ -64,6 +81,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   const systemNavItems = [
     { label: 'Notifications', href: '/admin/notifications', icon: Bell },
+    { label: 'Global Settings', href: '/admin/settings', icon: ShieldAlert },
   ];
 
   const handleLogout = () => {
@@ -239,11 +257,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         {/* Super Admin Profile & Sign Out */}
         <div className="p-5 border-t border-slate-800/80 bg-slate-950/50 shrink-0 mt-auto">
           <div className="mb-3 px-1">
-            <p className="text-sm text-white font-semibold truncate">
-              {user?.email || 'admin@cakeplatform.com'}
+            <p className="text-sm text-white font-semibold truncate" title={user?.fullName || 'Admin User'}>
+              {user?.fullName || 'Super Admin'}
             </p>
-            <p className="text-[11px] text-indigo-400 font-semibold tracking-wider uppercase mt-0.5">
-              Super Administrator
+            <p className="text-[11px] text-indigo-400 font-semibold tracking-wider uppercase mt-0.5 truncate" title={user?.email || ''}>
+              {user?.email || 'admin@cakestore.com'}
             </p>
           </div>
           <button
@@ -270,29 +288,57 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <h2 className="font-serif font-bold text-base sm:text-lg text-slate-900">
                 Platform Governance
               </h2>
-              <span className="hidden sm:inline-block text-[10px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+              <span className="hidden xl:inline-block text-[10px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                 Multi-Tenant
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* Global Search Bar (Command Palette Trigger) */}
+          <div className="flex-1 max-w-md mx-2 sm:mx-8 hidden sm:block">
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="w-full flex items-center justify-between gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/50 border border-slate-200 text-sm text-slate-500 hover:text-slate-900 transition-all shadow-sm cursor-pointer group"
+              title="Search database or navigate (Ctrl+K)"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Search className="w-4 h-4 text-slate-400 shrink-0 group-hover:scale-110 group-hover:text-indigo-500 transition-transform" />
+                <span className="truncate hidden sm:inline">Search bakeries, navigate to settings...</span>
+                <span className="truncate sm:hidden">Search...</span>
+              </div>
+              <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-white border border-slate-200 rounded text-slate-400 shadow-sm shrink-0">
+                <span className="text-[10px]">⌘</span>K
+              </kbd>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               API Live (Port 8080)
             </span>
+
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('adminGlobalRefresh'))}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors bg-white border border-slate-200 shadow-sm"
+              title="Refresh Data"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
 
             {/* Admin Global Notification Bell */}
             <AdminNotificationBell />
           </div>
         </header>
 
-        <main className="flex-1 min-h-0 p-4 sm:p-8 overflow-y-auto">
-          <div className="max-w-7xl mx-auto w-full">
+        <main className="flex-1 min-h-0 overflow-y-auto">
+          <div className="max-w-7xl mx-auto w-full p-4 sm:p-8">
             {children}
           </div>
         </main>
       </div>
+
+      <AdminCommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

@@ -1,0 +1,1 @@
+ALTER TABLE subscription_plans ADD COLUMN display_order INT DEFAULT 0;

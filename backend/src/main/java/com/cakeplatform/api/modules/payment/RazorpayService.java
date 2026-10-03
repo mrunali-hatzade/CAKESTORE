@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import com.cakeplatform.api.modules.settings.GlobalSettingsService;
 
 import com.razorpay.RazorpayClient;
 import com.razorpay.RazorpayException;
@@ -27,13 +28,35 @@ public class RazorpayService {
     private final String keySecret;
     private final String webhookSecret;
 
+    private final GlobalSettingsService settingsService;
+
     public RazorpayService(
             @Value("${razorpay.key-id:rzp_test_placeholder}") String keyId,
             @Value("${razorpay.key-secret:secret_placeholder}") String keySecret,
-            @Value("${razorpay.webhook-secret:webhook_secret_placeholder}") String webhookSecret) {
+            @Value("${razorpay.webhook-secret:webhook_secret_placeholder}") String webhookSecret,
+            GlobalSettingsService settingsService) {
         this.keyId = keyId != null ? keyId.trim() : null;
         this.keySecret = keySecret != null ? keySecret.trim() : null;
         this.webhookSecret = webhookSecret != null ? webhookSecret.trim() : null;
+        this.settingsService = settingsService;
+    }
+
+    private String getActiveKeyId() {
+        com.cakeplatform.api.modules.settings.GlobalSettings s = settingsService.getSettings();
+        if (s != null && s.getRazorpayKeyId() != null && !s.getRazorpayKeyId().isBlank()) return s.getRazorpayKeyId();
+        return this.keyId;
+    }
+
+    private String getActiveKeySecret() {
+        com.cakeplatform.api.modules.settings.GlobalSettings s = settingsService.getSettings();
+        if (s != null && s.getRazorpayKeySecret() != null && !s.getRazorpayKeySecret().isBlank()) return s.getRazorpayKeySecret();
+        return this.keySecret;
+    }
+
+    private String getActiveWebhookSecret() {
+        com.cakeplatform.api.modules.settings.GlobalSettings s = settingsService.getSettings();
+        if (s != null && s.getRazorpayWebhookSecret() != null && !s.getRazorpayWebhookSecret().isBlank()) return s.getRazorpayWebhookSecret();
+        return this.webhookSecret;
     }
 
     /**
@@ -49,18 +72,18 @@ public class RazorpayService {
             return false;
         }
 
-        boolean secretPresent = (this.keySecret != null && !this.keySecret.isBlank());
-        int secretLength = secretPresent ? this.keySecret.length() : 0;
+        boolean secretPresent = (getActiveKeySecret() != null && !getActiveKeySecret().isBlank());
+        int secretLength = secretPresent ? getActiveKeySecret().length() : 0;
         
-        String maskedKeyId = (this.keyId != null && this.keyId.length() > 8) 
-            ? this.keyId.substring(0, 8) + "..." 
+        String maskedKeyId = (getActiveKeyId() != null && getActiveKeyId().length() > 8) 
+            ? getActiveKeyId().substring(0, 8) + "..." 
             : "[MISSING/SHORT]";
             
         log.info("Verification context - KeyId: {}, Secret present: {}, Secret length: {}", 
             maskedKeyId, secretPresent, secretLength);
 
         String data = razorpayOrderId + "|" + razorpayPaymentId;
-        String expectedSignature = calculateHmacSha256(data, keySecret);
+        String expectedSignature = calculateHmacSha256(data, getActiveKeySecret());
         if (expectedSignature == null) {
             log.error("Failed to calculate expected HMAC signature (returned null)");
             return false;
@@ -81,7 +104,7 @@ public class RazorpayService {
             return false;
         }
 
-        String expectedSignature = calculateHmacSha256(rawPayload, webhookSecret);
+        String expectedSignature = calculateHmacSha256(rawPayload, getActiveWebhookSecret());
         if (expectedSignature == null) {
             return false;
         }
@@ -126,7 +149,7 @@ public class RazorpayService {
             throw new IllegalStateException("Razorpay credentials not configured.");
         }
         try {
-            RazorpayClient razorpayClient = new RazorpayClient(keyId, keySecret);
+            RazorpayClient razorpayClient = new RazorpayClient(getActiveKeyId(), getActiveKeySecret());
             long amountPaise = amount.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.UNNECESSARY).longValueExact();
             
             JSONObject orderRequest = new JSONObject();
@@ -152,7 +175,7 @@ public class RazorpayService {
             throw new IllegalStateException("Razorpay credentials not configured.");
         }
         try {
-            RazorpayClient razorpayClient = new RazorpayClient(keyId, keySecret);
+            RazorpayClient razorpayClient = new RazorpayClient(getActiveKeyId(), getActiveKeySecret());
             long amountPaise = amount.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.UNNECESSARY).longValueExact();
             
             JSONObject orderRequest = new JSONObject();
@@ -181,7 +204,7 @@ public class RazorpayService {
             return;
         }
         try {
-            RazorpayClient client = new RazorpayClient(keyId, keySecret);
+            RazorpayClient client = new RazorpayClient(getActiveKeyId(), getActiveKeySecret());
             Order order = client.orders.fetch(razorpayOrderId);
             long rzpAmount = ((Number) order.get("amount")).longValue();
             String rzpCurrency = order.get("currency");
@@ -206,7 +229,9 @@ public class RazorpayService {
      * Returns true if production or non-placeholder credentials have been configured.
      */
     public boolean isConfigured() {
-        return keyId != null && !keyId.isBlank() && !keyId.contains("placeholder")
-                && keySecret != null && !keySecret.isBlank() && !keySecret.contains("placeholder");
+        String currentKey = getActiveKeyId();
+        String currentSecret = getActiveKeySecret();
+        return currentKey != null && !currentKey.isBlank() && !currentKey.contains("placeholder")
+                && currentSecret != null && !currentSecret.isBlank() && !currentSecret.contains("placeholder");
     }
 }

@@ -25,8 +25,10 @@ public class AdminDashboardController {
     private final AdminDashboardService adminDashboardService;
 
     @GetMapping("/dashboard/stats")
-    public ResponseEntity<DashboardStatsResponse> getPlatformStats() {
-        return ResponseEntity.ok(adminDashboardService.getPlatformStats());
+    public ResponseEntity<DashboardStatsResponse> getPlatformStats(
+            @RequestParam(required = false) java.time.LocalDate startDate,
+            @RequestParam(required = false) java.time.LocalDate endDate) {
+        return ResponseEntity.ok(adminDashboardService.getPlatformStats(startDate, endDate));
     }
 
     @GetMapping("/shops")
@@ -39,6 +41,15 @@ public class AdminDashboardController {
             size = 50;
         }
         return ResponseEntity.ok(adminDashboardService.getAllShops(org.springframework.data.domain.PageRequest.of(page, size), search, status));
+    }
+
+    /**
+     * Lightweight endpoint that returns ONLY the shop status counts for tab badges.
+     * Much cheaper than getPlatformStats() which aggregates revenue, orders, etc.
+     */
+    @GetMapping("/shops/counts")
+    public ResponseEntity<Map<String, Long>> getShopCounts() {
+        return ResponseEntity.ok(adminDashboardService.getShopStatusCounts());
     }
 
     @GetMapping("/shops/{shopId}")

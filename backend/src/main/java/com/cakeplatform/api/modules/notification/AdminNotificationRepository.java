@@ -18,14 +18,14 @@ public interface AdminNotificationRepository extends JpaRepository<AdminNotifica
            "  AND (:isRead IS NULL OR n.isRead = :isRead) " +
            "  AND (:search IS NULL OR :search = '' OR " +
            "       LOWER(n.title) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "       LOWER(n.message) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-           "ORDER BY n.createdAt DESC")
-    List<AdminNotification> findWithFilters(
+           "       LOWER(n.message) LIKE LOWER(CONCAT('%', :search, '%')))")
+    org.springframework.data.domain.Page<AdminNotification> findWithFilters(
             @Param("recipientId") Long recipientId,
             @Param("category") String category,
             @Param("categoryEnum") AdminNotificationCategory categoryEnum,
             @Param("isRead") Boolean isRead,
-            @Param("search") String search
+            @Param("search") String search,
+            org.springframework.data.domain.Pageable pageable
     );
 
     @Query("SELECT COUNT(n) FROM AdminNotification n " +

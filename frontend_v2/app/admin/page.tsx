@@ -30,16 +30,16 @@ export default function AdminOverviewPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentShops, setRecentShops] = useState<AdminShopSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [dateRange, setDateRange] = useState<string>('All Time');
+  const [dateFilter, setDateFilter] = useState<{ start?: string; end?: string }>({ start: undefined, end: undefined });
   const toast = useToast();
 
   const loadData = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setIsLoading(true);
+    if (!isManual) setIsLoading(true);
 
     try {
       const [statsData, shopsData] = await Promise.all([
-        getPlatformStats(),
+        getPlatformStats(dateFilter.start, dateFilter.end),
         getAllShops(0, 5), // Only need top 5 for the dashboard
       ]);
       setStats(statsData);
@@ -49,17 +49,58 @@ export default function AdminOverviewPage() {
       toast.error(err.message || 'Failed to load dashboard data. Please try again.');
     } finally {
       setIsLoading(false);
-      setRefreshing(false);
     }
-  }, [toast]);
+  }, [toast, dateFilter.start, dateFilter.end]);
 
   useEffect(() => {
     loadData();
+
+    const handleRefresh = () => {
+      loadData(true);
+    };
+
+    window.addEventListener('adminGlobalRefresh', handleRefresh);
+    return () => {
+      window.removeEventListener('adminGlobalRefresh', handleRefresh);
+    };
   }, [loadData]);
 
   if (isLoading) {
     return <LoadingState message="Loading platform intelligence..." />;
   }
+
+  const handleDateRangeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const range = e.target.value;
+    setDateRange(range);
+    
+    const today = new Date();
+    const formatDate = (date: Date) => date.toISOString().split('T')[0];
+    
+    let start: string | undefined = undefined;
+    let end: string | undefined = undefined;
+
+    if (range === 'Last 7 Days') {
+      const d = new Date(today);
+      d.setDate(today.getDate() - 7);
+      start = formatDate(d);
+      end = formatDate(today);
+    } else if (range === 'Last 30 Days') {
+      const d = new Date(today);
+      d.setDate(today.getDate() - 30);
+      start = formatDate(d);
+      end = formatDate(today);
+    } else if (range === 'This Month') {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1);
+      start = formatDate(d);
+      end = formatDate(today);
+    } else if (range === 'This Year') {
+      const d = new Date(today.getFullYear(), 0, 1);
+      start = formatDate(d);
+      end = formatDate(today);
+    }
+
+    setDateFilter({ start, end });
+  };
 
   const formatCurrency = (val?: number) => {
     return `₹${(val || 0).toLocaleString('en-IN')}`;
@@ -92,16 +133,19 @@ export default function AdminOverviewPage() {
             Real-time multi-tenant health, GMV volume, and bakery compliance status
           </p>
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => loadData(true)}
-          disabled={refreshing}
-          className="self-start sm:self-auto gap-2"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>Refresh Metrics</span>
-        </Button>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <select
+            value={dateRange}
+            onChange={handleDateRangeChange}
+            className="text-sm border-slate-200 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value="All Time">All Time</option>
+            <option value="Last 7 Days">Last 7 Days</option>
+            <option value="Last 30 Days">Last 30 Days</option>
+            <option value="This Month">This Month</option>
+            <option value="This Year">This Year</option>
+          </select>
+        </div>
       </div>
 
       {/* Pending Approval Action Alert Banner */}

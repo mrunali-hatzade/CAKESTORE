@@ -8,10 +8,14 @@ import {
   Edit2,
   Power,
   RefreshCw,
+  ChevronUp,
+  ChevronDown,
+  Save,
 } from 'lucide-react';
 import {
   getAllPlans,
   togglePlanStatus,
+  reorderPlans,
 } from '@/lib/api/admin';
 import { AdminPlan } from '@/types/admin';
 import { Card } from '@/components/ui/Card';
@@ -25,28 +29,75 @@ import { AdminPlanModal } from '@/components/admin/plans/AdminPlanModal';
 export default function AdminPlansPage() {
   const [plans, setPlans] = useState<AdminPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<AdminPlan | null>(null);
+  const [isOrderChanged, setIsOrderChanged] = useState(false);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
   const toast = useToast();
 
   const loadPlans = React.useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setIsLoading(true);
+    if (!isManual) setIsLoading(true);
 
     try {
       const data = await getAllPlans();
       setPlans(data || []);
+      setIsOrderChanged(false);
     } catch {
       toast.error('Failed to load subscription plans');
     } finally {
       setIsLoading(false);
-      setRefreshing(false);
     }
   }, [toast]);
 
+  const movePlan = (planId: number, direction: 'up' | 'down', cycle: string) => {
+    setPlans((prev) => {
+      const cyclePlans = prev.filter((p) => p.billingCycle === cycle || (!p.billingCycle && cycle === 'monthly'));
+      const cycleIdx = cyclePlans.findIndex((p) => p.id === planId);
+      
+      if (cycleIdx < 0) return prev;
+      const swapCycleIdx = direction === 'up' ? cycleIdx - 1 : cycleIdx + 1;
+      if (swapCycleIdx < 0 || swapCycleIdx >= cyclePlans.length) return prev;
+      
+      const swapPlanId = cyclePlans[swapCycleIdx].id;
+      
+      const idx1 = prev.findIndex((p) => p.id === planId);
+      const idx2 = prev.findIndex((p) => p.id === swapPlanId);
+      
+      const newPlans = [...prev];
+      const temp = newPlans[idx1];
+      newPlans[idx1] = newPlans[idx2];
+      newPlans[idx2] = temp;
+      
+      return newPlans;
+    });
+    setIsOrderChanged(true);
+  };
+
+  const handleSaveOrder = async () => {
+    try {
+      setIsSavingOrder(true);
+      await reorderPlans(plans.map(p => p.id));
+      toast.success('Plan display order saved successfully');
+      setIsOrderChanged(false);
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save plan order');
+    } finally {
+      setIsSavingOrder(false);
+    }
+  };
+
   useEffect(() => {
     loadPlans();
+
+    const handleRefresh = () => {
+      loadPlans(true);
+    };
+
+    window.addEventListener('adminGlobalRefresh', handleRefresh);
+    return () => {
+      window.removeEventListener('adminGlobalRefresh', handleRefresh);
+    };
   }, [loadPlans]);
 
   const openCreateModal = () => {
@@ -93,12 +144,12 @@ export default function AdminPlansPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => loadPlans(true)}
-            disabled={refreshing}
-            className="gap-1.5"
+            onClick={handleSaveOrder}
+            disabled={!isOrderChanged || isSavingOrder}
+            className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            <Save className={`w-3.5 h-3.5 ${isSavingOrder ? 'animate-pulse' : ''}`} />
+            <span>{isSavingOrder ? 'Saving...' : 'Save Order'}</span>
           </Button>
 
           <Button
@@ -168,9 +219,19 @@ export default function AdminPlansPage() {
                         <div>
                           {/* Top Bar */}
                           <div className="flex items-center justify-between">
-                            <h3 className="font-serif font-bold text-xl text-slate-900">
-                              {plan.name}
-                            </h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-serif font-bold text-xl text-slate-900">
+                                {plan.name}
+                              </h3>
+                              <div className="flex flex-col -space-y-1">
+                                <button onClick={() => movePlan(plan.id, 'up', cycle)} className="text-slate-400 hover:text-indigo-600" title="Move Up">
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => movePlan(plan.id, 'down', cycle)} className="text-slate-400 hover:text-indigo-600" title="Move Down">
+                                  <ChevronDown className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
                             <div className="flex items-center gap-1.5">
                               {plan.billingCycle && (
                                 <Badge variant="default" size="sm">

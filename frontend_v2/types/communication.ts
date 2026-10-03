@@ -18,6 +18,8 @@ export interface PlatformFeedback {
   message: string;
   createdAt: string;
   isRead: boolean;
+  adminReply?: string;
+  repliedAt?: string;
 }
 
 export interface CreatePlatformFeedbackPayload {
@@ -35,6 +37,8 @@ export interface ContactEnquiry {
   message: string;
   createdAt: string;
   isRead: boolean;
+  adminReply?: string;
+  repliedAt?: string;
 }
 
 export interface CreateContactEnquiryPayload {

@@ -43,7 +43,13 @@ public class ContactEnquiry {
     private User user;
 
     @Column(name = "is_read", nullable = false)
+    @Builder.Default
     private Boolean isRead = false;
+
+    @Column(columnDefinition = "TEXT")
+    private String adminReply;
+
+    private java.time.LocalDateTime repliedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

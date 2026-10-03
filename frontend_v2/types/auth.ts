@@ -1,6 +1,7 @@
 export type UserRole = 'ROLE_CUSTOMER' | 'ROLE_SHOP_OWNER' | 'ROLE_ADMIN';
 
 export interface AuthUser {
+  id?: number | string;
   email: string;
   role: UserRole;
   shopId?: number | null;
@@ -15,6 +16,7 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
+  id?: number | string;
   token: string;
   role: UserRole;
   email: string;

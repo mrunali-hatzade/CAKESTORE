@@ -5,6 +5,10 @@ import com.cakeplatform.api.modules.notification.AdminNotificationCategory;
 import com.cakeplatform.api.modules.notification.AdminNotificationPriority;
 import com.cakeplatform.api.modules.notification.AdminNotificationService;
 import com.cakeplatform.api.modules.notification.AdminNotificationType;
+import com.cakeplatform.api.modules.notification.NotificationService;
+import com.cakeplatform.api.modules.notification.NotificationType;
+import com.cakeplatform.api.modules.user.User;
+import com.cakeplatform.api.modules.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +22,8 @@ public class ShopStatusManager {
     private final ShopRepository shopRepository;
     private final ActivityLoggerService activityLogger;
     private final AdminNotificationService adminNotificationService;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     @Transactional
     public void activateShop(Long shopId, Long actorUserId) {
@@ -74,6 +80,11 @@ public class ShopStatusManager {
                         "SHOP",
                         "/admin/shops/" + shopId
                 );
+
+                User owner = userRepository.findById(shop.getOwner().getId()).orElse(null);
+                if (owner != null) {
+                    notificationService.createNotification(owner, NotificationType.ADMIN_MESSAGE, "Bakery Account Suspended", "Your bakery has been suspended. Reason: " + metadata, shopId.toString(), true);
+                }
             } catch (Exception ex) {
                 log.error("Failed to dispatch admin notification for shop suspension: {}", ex.getMessage());
             }

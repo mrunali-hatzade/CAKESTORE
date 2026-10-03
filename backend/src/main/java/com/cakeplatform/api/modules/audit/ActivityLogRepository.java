@@ -8,4 +8,5 @@ import java.util.List;
 @Repository
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> {
     List<ActivityLog> findByShopIdOrderByTimestampDesc(Long shopId);
+    List<ActivityLog> findByShopIdAndEntityTypeInOrderByTimestampDesc(Long shopId, java.util.Collection<String> entityTypes);
 }

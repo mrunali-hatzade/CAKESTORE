@@ -8,6 +8,9 @@ import {
   RefreshCw, X, ArrowRight
 } from 'lucide-react';
 import { notificationsApi, NotificationRecord, NotificationType } from '@/lib/api/notifications';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 function formatRelativeTime(dateString: string): string {
   try {
@@ -75,6 +78,7 @@ export default function NotificationBell() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const { user, token } = useAuth();
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -110,6 +114,31 @@ export default function NotificationBell() {
     const interval = setInterval(fetchUnreadCount, 60_000);
     return () => clearInterval(interval);
   }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (!user || !token) return;
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS('http://localhost:8080/ws-endpoint'),
+      connectHeaders: { Authorization: `Bearer ${token}` },
+      onConnect: () => {
+        client.subscribe(`/queue/notifications-${user.id}`, (message) => {
+          try {
+            const newNotif = JSON.parse(message.body);
+            setUnreadCount((prev) => prev + 1);
+            setNotifications((prev) => [newNotif, ...prev]);
+          } catch (err) {
+            console.error('Error parsing notification:', err);
+          }
+        });
+      },
+    });
+
+    client.activate();
+    return () => {
+      client.deactivate();
+    };
+  }, [user, token]);
 
   // Click outside listener to dismiss popover
   useEffect(() => {

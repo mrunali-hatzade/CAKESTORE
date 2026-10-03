@@ -15,29 +15,45 @@ import {
   Filter,
   RefreshCw,
 } from 'lucide-react';
-import { getAllShops, updateShopStatus, getPlatformStats } from '@/lib/api/admin';
-import { AdminShopSummary, DashboardStats } from '@/types/admin';
+import { getAllShops, updateShopStatus, getShopCounts } from '@/lib/api/admin';
+import { AdminShopSummary } from '@/types/admin';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/common/Toast';
+
+import { useSearchParams } from 'next/navigation';
 
 type FilterTab = 'ALL' | 'PENDING' | 'ACTIVE' | 'SUSPENDED';
 
 export default function AdminShopsPage() {
+  const searchParams = useSearchParams();
   const [shops, setShops] = useState<AdminShopSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [mutatingId, setMutatingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [shopCounts, setShopCounts] = useState<{ total: number; active: number; pending: number; suspended: number } | null>(null);
+
+  // Bulk selection state
+  const [selectedShopIds, setSelectedShopIds] = useState<number[]>([]);
+  const [isBulkMutating, setIsBulkMutating] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState<{ action: string; label: string } | null>(null);
+
+  // Sync URL search params with local state
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q !== null) {
+      setSearchQuery((prev) => (q !== prev ? q : prev));
+    }
+  }, [searchParams]);
 
   // Pagination state
   const [page, setPage] = useState(0);
@@ -61,14 +77,13 @@ export default function AdminShopsPage() {
   }, [activeTab]);
 
   const fetchShops = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setIsLoading(true);
+    if (!isManual) setIsLoading(true);
 
     try {
       setError('');
       // Fetch stats for the tab counts
-      const statsRes = await getPlatformStats();
-      setStats(statsRes);
+      const statsRes = await getShopCounts();
+      setShopCounts(statsRes);
 
       const response = await getAllShops(page, 20, debouncedSearch, activeTab);
       setShops(response.content || []);
@@ -80,13 +95,54 @@ export default function AdminShopsPage() {
       toast.error('Failed to load shops');
     } finally {
       setIsLoading(false);
-      setRefreshing(false);
     }
   }, [page, debouncedSearch, activeTab, toast]);
 
   useEffect(() => {
     fetchShops();
+
+    const handleRefresh = () => {
+      fetchShops(true);
+    };
+
+    window.addEventListener('adminGlobalRefresh', handleRefresh);
+    return () => {
+      window.removeEventListener('adminGlobalRefresh', handleRefresh);
+    };
   }, [fetchShops]);
+
+  const handleBulkAction = async (newStatus: string) => {
+    if (!selectedShopIds.length) return;
+    setIsBulkMutating(true);
+    try {
+      await Promise.all(
+        selectedShopIds.map((id) => updateShopStatus(id, newStatus))
+      );
+      toast.success(`Bulk action successful: ${selectedShopIds.length} bakeries updated to ${newStatus}`);
+      setSelectedShopIds([]);
+      fetchShops(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Bulk action failed');
+    } finally {
+      setIsBulkMutating(false);
+    }
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedShopIds(shops.map(s => s.shopId));
+    } else {
+      setSelectedShopIds([]);
+    }
+  };
+
+  const handleSelectShop = (shopId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedShopIds(prev => [...prev, shopId]);
+    } else {
+      setSelectedShopIds(prev => prev.filter(id => id !== shopId));
+    }
+  };
 
   const handleStatusChange = async (shopId: number, newStatus: string) => {
     setMutatingId(shopId);
@@ -134,16 +190,6 @@ export default function AdminShopsPage() {
             Audit FSSAI credentials, inspect bakery onboarding, and manage store operational status
           </p>
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => fetchShops(true)}
-          disabled={refreshing}
-          className="self-start sm:self-auto gap-2"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </Button>
       </div>
 
       {/* Controls Bar: Tabs & Search */}
@@ -158,7 +204,7 @@ export default function AdminShopsPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            All ({(stats?.totalShops || 0)})
+            All ({(shopCounts?.total || 0)})
           </button>
           <button
             onClick={() => setActiveTab('PENDING')}
@@ -169,9 +215,9 @@ export default function AdminShopsPage() {
             }`}
           >
             <span>Pending Approval</span>
-            {(stats?.pendingShops || 0) > 0 && (
+            {(shopCounts?.pending || 0) > 0 && (
               <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">
-                {(stats?.pendingShops || 0)}
+                {(shopCounts?.pending || 0)}
               </span>
             )}
           </button>
@@ -183,7 +229,7 @@ export default function AdminShopsPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Active ({(stats?.activeShops || 0)})
+            Active ({(shopCounts?.active || 0)})
           </button>
           <button
             onClick={() => setActiveTab('SUSPENDED')}
@@ -193,7 +239,7 @@ export default function AdminShopsPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Suspended ({(stats?.suspendedShops || 0)})
+            Suspended ({(shopCounts?.suspended || 0)})
           </button>
         </div>
 
@@ -208,6 +254,47 @@ export default function AdminShopsPage() {
           />
         </div>
       </Card>
+
+      {/* Bulk Actions Panel */}
+      {selectedShopIds.length > 0 && (
+        <Card className="p-4 border-slate-200 shadow-soft bg-indigo-50 border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-sm font-medium text-indigo-900">
+            {selectedShopIds.length} bakery(s) selected
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={isBulkMutating}
+              onClick={() => setBulkConfirm({ action: 'ACTIVE', label: 'approve' })}
+              className="bg-emerald-600 hover:bg-emerald-700 border-emerald-700 text-xs px-3 py-1.5"
+            >
+              Bulk Approve (KYC)
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={isBulkMutating}
+              onClick={() => setBulkConfirm({ action: 'SUSPENDED', label: 'suspend' })}
+              className="text-xs px-3 py-1.5"
+            >
+              Bulk Suspend
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isBulkMutating}
+              onClick={() => setBulkConfirm({ action: 'REJECTED', label: 'reject' })}
+              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 text-xs px-3 py-1.5 bg-white"
+            >
+              Bulk Reject
+            </Button>
+            {isBulkMutating && (
+              <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Bakeries Table */}
       {shops.length === 0 ? (
@@ -226,6 +313,14 @@ export default function AdminShopsPage() {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-500 font-semibold">
+                  <th className="py-3.5 px-4 w-12">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      checked={shops.length > 0 && selectedShopIds.length === shops.length}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
                   <th className="py-3.5 px-5">Bakery Name & ID</th>
                   <th className="py-3.5 px-4">Owner Profile</th>
                   <th className="py-3.5 px-4">Registration Date</th>
@@ -239,6 +334,16 @@ export default function AdminShopsPage() {
 
                   return (
                     <tr key={shop.shopId} className="hover:bg-slate-50/50 transition-colors">
+                      {/* Checkbox */}
+                      <td className="py-4 px-4">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          checked={selectedShopIds.includes(shop.shopId)}
+                          onChange={(e) => handleSelectShop(shop.shopId, e.target.checked)}
+                        />
+                      </td>
+
                       {/* Name & ID */}
                       <td className="py-4 px-5">
                         <div className="flex items-center gap-3">
@@ -365,6 +470,36 @@ export default function AdminShopsPage() {
             </div>
           )}
         </Card>
+      )}
+
+      {/* Bulk Confirmation Modal */}
+      {bulkConfirm && (
+        <Modal
+          isOpen={true}
+          onClose={() => setBulkConfirm(null)}
+          title="Confirm Bulk Action"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to {bulkConfirm.label} {selectedShopIds.length} bakery(s)? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="ghost" onClick={() => setBulkConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  await handleBulkAction(bulkConfirm.action);
+                  setBulkConfirm(null);
+                }}
+                disabled={isBulkMutating}
+              >
+                {isBulkMutating ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Confirm'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

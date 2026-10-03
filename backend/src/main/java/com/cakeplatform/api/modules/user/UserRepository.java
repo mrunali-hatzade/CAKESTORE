@@ -16,4 +16,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     java.util.List<User> findByRole(UserRole role);
     
     long countByCreatedAtGreaterThanEqual(java.time.LocalDateTime startOfDay);
+    long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end);
 }

@@ -2,6 +2,7 @@ package com.cakeplatform.api.modules.admin.dto;
 
 import lombok.Data;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 public class DashboardStatsResponse {
@@ -19,4 +20,7 @@ public class DashboardStatsResponse {
     private BigDecimal totalPlatformRevenue;
     private BigDecimal monthlyGmv;
     private BigDecimal totalGmv;
+    
+    private LocalDate startDate;
+    private LocalDate endDate;
 }

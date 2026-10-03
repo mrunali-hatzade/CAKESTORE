@@ -22,7 +22,6 @@ import {
   Cake,
   Activity,
   AlertTriangle,
-  RefreshCw,
   Ban,
   FileCheck,
 } from 'lucide-react';
@@ -46,7 +45,6 @@ export default function AdminShopDetailPage() {
 
   const [details, setDetails] = useState<AdminShopDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
 
   // Suspension Modal State (B2)
@@ -57,10 +55,9 @@ export default function AdminShopDetailPage() {
 
   const toast = useToast();
 
-  const loadShop = useCallback(async (isManual = false) => {
+  const loadShop = useCallback(async () => {
     if (!shopId) return;
-    if (isManual) setRefreshing(true);
-    else setIsLoading(true);
+    setIsLoading(true);
 
     try {
       const data = await getShopDetails(shopId);
@@ -69,12 +66,14 @@ export default function AdminShopDetailPage() {
       toast.error(err.message || 'Failed to fetch bakery details');
     } finally {
       setIsLoading(false);
-      setRefreshing(false);
     }
   }, [shopId, toast]);
 
   useEffect(() => {
     loadShop();
+    const handleRefresh = () => loadShop();
+    window.addEventListener('adminGlobalRefresh', handleRefresh);
+    return () => window.removeEventListener('adminGlobalRefresh', handleRefresh);
   }, [loadShop]);
 
   const handleStatusUpdate = async (newStatus: string, reason?: string) => {
@@ -106,6 +105,7 @@ export default function AdminShopDetailPage() {
                 ? `Admin suspended shop: ${reason?.trim()}`
                 : `Admin changed shop status to ${newStatus}`,
               createdAt: new Date().toISOString(),
+              timestamp: new Date().toISOString(),
             },
             ...(details.activityLogs || []),
           ],
@@ -152,6 +152,7 @@ export default function AdminShopDetailPage() {
                 ? 'Admin approved bakery verification documents'
                 : `Admin rejected verification: ${reason?.trim()}`,
               createdAt: new Date().toISOString(),
+              timestamp: new Date().toISOString(),
             },
             ...(details.activityLogs || []),
           ],
@@ -220,9 +221,9 @@ export default function AdminShopDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Top Bar with Back Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 px-4 py-2.5 sm:-mx-8 sm:-mt-8 sm:px-8 sm:py-3 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <Link
           href="/admin/shops"
           className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
@@ -239,16 +240,6 @@ export default function AdminShopDetailPage() {
               <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
             </Button>
           </Link>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => loadShop(true)}
-            disabled={refreshing}
-            className="gap-1.5"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </Button>
         </div>
       </div>
 
@@ -283,16 +274,18 @@ export default function AdminShopDetailPage() {
           {/* Moderation Status Controls */}
           <div className="flex flex-wrap items-center gap-2.5">
             {shop.status !== 'ACTIVE' && (
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={isMutating}
-                onClick={() => handleStatusUpdate('ACTIVE')}
-                className="bg-emerald-600 hover:bg-emerald-700 border-emerald-700 gap-1.5"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Activate Storefront</span>
-              </Button>
+              <div title={shop.verificationStatus !== 'VERIFIED' ? 'Cannot activate until KYC verification is approved' : ''}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={isMutating || shop.verificationStatus !== 'VERIFIED'}
+                  onClick={() => handleStatusUpdate('ACTIVE')}
+                  className="bg-emerald-600 hover:bg-emerald-700 border-emerald-700 gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Activate Storefront</span>
+                </Button>
+              </div>
             )}
 
             {shop.status === 'ACTIVE' && (
@@ -326,14 +319,16 @@ export default function AdminShopDetailPage() {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <Card className="p-5 border-slate-200/80 shadow-soft">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Catalog Products</span>
-            <Cake className="w-5 h-5 text-indigo-500" />
-          </div>
-          <p className="text-2xl font-bold font-serif text-slate-900 mt-2">{details.totalProducts}</p>
-          <span className="text-xs text-slate-500 mt-1 block">Live menu items</span>
-        </Card>
+        <Link href={`/shop/${shop.id}`} target="_blank">
+          <Card className="p-5 border-slate-200/80 shadow-soft hover:shadow-md transition-shadow cursor-pointer h-full">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Catalog Products</span>
+              <Cake className="w-5 h-5 text-indigo-500" />
+            </div>
+            <p className="text-2xl font-bold font-serif text-slate-900 mt-2">{details.totalProducts}</p>
+            <span className="text-xs text-slate-500 mt-1 block">Live menu items</span>
+          </Card>
+        </Link>
 
         <Card className="p-5 border-slate-200/80 shadow-soft">
           <div className="flex items-center justify-between">
@@ -398,7 +393,9 @@ export default function AdminShopDetailPage() {
                 <Phone className="w-4 h-4 text-slate-400 shrink-0" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Phone</span>
-                  <p className="text-slate-800 font-medium">{shop.phone || '—'}</p>
+                  <p className="text-slate-800 font-medium">
+                    {shop.phone ? <a href={`tel:${shop.phone}`} className="text-indigo-600 hover:underline">{shop.phone}</a> : '—'}
+                  </p>
                 </div>
               </div>
 
@@ -406,7 +403,9 @@ export default function AdminShopDetailPage() {
                 <Mail className="w-4 h-4 text-slate-400 shrink-0" />
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Email</span>
-                  <p className="text-slate-800 font-medium truncate">{shop.email || '—'}</p>
+                  <p className="text-slate-800 font-medium truncate">
+                    {shop.email ? <a href={`mailto:${shop.email}`} className="text-indigo-600 hover:underline">{shop.email}</a> : '—'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -432,7 +431,7 @@ export default function AdminShopDetailPage() {
                 <span className="text-[10px] font-semibold text-emerald-600">Compliance</span>
               </div>
               <p className="text-base font-bold font-mono text-indigo-950">
-                {shop.fssaiRegistration || 'NOT_SUBMITTED'}
+                {shop.fssaiRegistration || (businessDocuments?.some(doc => doc.documentType?.includes('FSSAI')) ? 'Document Attached (Number Missing)' : 'NOT_SUBMITTED')}
               </p>
             </div>
 
@@ -569,7 +568,7 @@ export default function AdminShopDetailPage() {
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-[10px] text-slate-400 font-semibold uppercase block">Avg Order Value</span>
                 <p className="text-base font-bold text-indigo-600 mt-0.5">
-                  ₹{details.totalOrders > 0 ? Math.round((details.totalRevenue ?? 0) / details.totalOrders) : 0}
+                  ₹{details.avgOrderValue ?? (details.totalOrders > 0 ? Math.round((details.totalRevenue ?? 0) / details.totalOrders) : 0)}
                 </p>
               </div>
             </div>
@@ -610,9 +609,17 @@ export default function AdminShopDetailPage() {
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Renewal / Expiry</span>
-                  <span className="font-semibold text-slate-700">
-                    {subscriptions[0]?.endDate || '—'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-700">
+                      {subscriptions[0]?.endDate || '—'}
+                    </span>
+                    {subscriptions[0]?.endDate && (() => {
+                      const daysLeft = Math.ceil((new Date(subscriptions[0].endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                      if (daysLeft < 0) return <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">⚠️ EXPIRED</span>;
+                      if (daysLeft <= 7) return <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">⚠️ Expires in {daysLeft} day(s)</span>;
+                      return null;
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
@@ -659,7 +666,7 @@ export default function AdminShopDetailPage() {
                         {log.action}
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        {new Date(log.createdAt).toLocaleString('en-IN', {
+                        {new Date(log.timestamp || log.createdAt || Date.now()).toLocaleString('en-IN', {
                           day: 'numeric',
                           month: 'short',
                           hour: '2-digit',
