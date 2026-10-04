@@ -15,11 +15,16 @@ import java.util.List;
 @Entity
 @Table(name = "products")
 @Data
+@org.hibernate.annotations.SQLDelete(sql = "UPDATE products SET is_deleted = true WHERE id=?")
+@org.hibernate.annotations.SQLRestriction("is_deleted=false")
 public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)

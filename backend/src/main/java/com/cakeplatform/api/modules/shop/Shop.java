@@ -16,11 +16,16 @@ import java.util.List;
 @Table(name = "shops")
 @Data
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@org.hibernate.annotations.SQLDelete(sql = "UPDATE shops SET is_deleted = true WHERE id=?")
+@org.hibernate.annotations.SQLRestriction("is_deleted=false")
 public class Shop {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
