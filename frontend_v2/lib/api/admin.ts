@@ -137,3 +137,12 @@ export const adminApi = {
   sendAdminMessage,
   getAdminBroadcastHistory,
 };
+
+export async function getRecentActivity(): Promise<any[]> {
+  return apiClient.get<any[]>('/api/admin/dashboard/stats/activity');
+}
+
+export async function getRevenueAnalytics(): Promise<{ saasRevenue: any[], networkGmv: any[] }> {
+  const res: any = await apiClient.get('/api/admin/dashboard/stats/analytics/revenue');
+  return res.data || res;
+}

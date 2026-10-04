@@ -16,12 +16,14 @@ import {
   ShieldCheck,
   Building2,
   RefreshCw,
+  Activity,
 } from 'lucide-react';
-import { getPlatformStats, getAllShops } from '@/lib/api/admin';
+import { getPlatformStats, getAllShops, getRecentActivity } from '@/lib/api/admin';
 import { DashboardStats, AdminShopSummary } from '@/types/admin';
 import { communicationApi } from '@/lib/api/communication';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import AnalyticsCharts from '@/components/admin/AnalyticsCharts';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/common/Toast';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -29,6 +31,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 export default function AdminOverviewPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentShops, setRecentShops] = useState<AdminShopSummary[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState<string>('All Time');
   const [dateFilter, setDateFilter] = useState<{ start?: string; end?: string }>({ start: undefined, end: undefined });
@@ -38,12 +41,14 @@ export default function AdminOverviewPage() {
     if (!isManual) setIsLoading(true);
 
     try {
-      const [statsData, shopsData] = await Promise.all([
+      const [statsData, shopsData, activityData] = await Promise.all([
         getPlatformStats(dateFilter.start, dateFilter.end),
         getAllShops(0, 5), // Only need top 5 for the dashboard
+        getRecentActivity(),
       ]);
       setStats(statsData);
       setRecentShops(shopsData.content || []);
+      setActivities(activityData || []);
     } catch (err: any) {
       console.warn('Failed to load admin stats:', err);
       toast.error(err.message || 'Failed to load dashboard data. Please try again.');
@@ -149,7 +154,7 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Pending Approval Action Alert Banner */}
-      {(stats?.pendingShops ?? 0) > 0 && (
+      {(stats?.pendingBakeries ?? 0) > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-soft">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -157,7 +162,7 @@ export default function AdminOverviewPage() {
             </div>
             <div>
               <h3 className="text-sm font-bold text-amber-900">
-                {stats?.pendingShops} {stats?.pendingShops === 1 ? 'Bakery' : 'Bakeries'} Awaiting Verification
+                {stats?.pendingBakeries} {stats?.pendingBakeries === 1 ? 'Bakery' : 'Bakeries'} Awaiting Verification
               </h3>
               <p className="text-xs text-amber-700 mt-0.5">
                 New bakery registrations require administrative verification and compliance review.
@@ -174,71 +179,79 @@ export default function AdminOverviewPage() {
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Total Bakeries */}
+        {/* Platform Users */}
         <Card className="p-6 border-slate-200/80 shadow-soft hover:shadow-card transition-shadow">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Total Bakeries
-            </span>
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Store className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold font-serif text-slate-900 mt-3">
-            {stats?.totalShops ?? 0}
-          </p>
-          <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs">
-            <span className="text-emerald-700 font-medium">{stats?.activeShops ?? 0} active</span>
-            <span className="text-slate-300">•</span>
-            <span className="text-amber-700 font-medium">{stats?.pendingShops ?? 0} pending</span>
-            <span className="text-slate-300">•</span>
-            <span className="text-rose-700 font-medium">{stats?.suspendedShops ?? 0} suspended</span>
-            <span className="text-slate-300">•</span>
-            <span className="text-slate-500 font-medium">{stats?.inactiveShops ?? 0} inactive</span>
-          </div>
-        </Card>
-
-        {/* Subscriptions & Accounts */}
-        <Card className="p-6 border-slate-200/80 shadow-soft hover:shadow-card transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Active Subscriptions
-            </span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold font-serif text-slate-900 mt-3">
-            {stats?.activeSubscriptions ?? 0}
-          </p>
-          <div className="flex items-center gap-2 mt-2 text-xs">
-            <span className="text-rose-600 font-medium">
-              {stats?.expiredSubscriptions ?? 0} expired
-            </span>
-            <span className="text-slate-300">•</span>
-            <span className="text-slate-500 font-medium">
-              {stats?.totalUsers ?? 0} users total
-            </span>
-          </div>
-        </Card>
-
-        {/* Today's Platform Activity */}
-        <Card className="p-6 border-slate-200/80 shadow-soft hover:shadow-card transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Today&apos;s Activity
+              Platform Users
             </span>
             <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <Users className="w-5 h-5" />
             </div>
           </div>
           <p className="text-3xl font-bold font-serif text-slate-900 mt-3">
-            {stats?.todayRegistrations ?? 0}
+            {(stats?.totalAdmins ?? 0) + (stats?.totalShopOwners ?? 0)}
           </p>
           <div className="flex items-center gap-2 mt-2 text-xs">
-            <span className="text-purple-700 font-medium">New registrations</span>
+            <span className="text-indigo-600 font-medium">
+              {stats?.totalAdmins ?? 0} Admins
+            </span>
             <span className="text-slate-300">•</span>
-            <span className="text-emerald-700 font-medium">{stats?.todayPayments ?? 0} payments</span>
+            <span className="text-slate-500 font-medium">
+              {stats?.totalShopOwners ?? 0} Bakery Owners
+            </span>
+          </div>
+        </Card>
+
+        {/* Bakery Storefronts */}
+        <Card className="p-6 border-slate-200/80 shadow-soft hover:shadow-card transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Bakery Storefronts
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Store className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-3xl font-bold font-serif text-slate-900 mt-3">
+            {stats?.totalRegisteredBakeries ?? 0}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs">
+            <span className="text-emerald-700 font-medium">{stats?.activeBakeries ?? 0} active</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-amber-700 font-medium">{stats?.pendingBakeries ?? 0} pending</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-rose-700 font-medium">{stats?.suspendedBakeries ?? 0} suspended</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-slate-500 font-medium">{stats?.inactiveBakeries ?? 0} inactive</span>
+          </div>
+        </Card>
+
+        {/* SaaS Subscriptions */}
+        <Card className="p-6 border-slate-200/80 shadow-soft hover:shadow-card transition-shadow">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              SaaS Subscriptions
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-3xl font-bold font-serif text-slate-900 mt-3">
+            {stats?.totalRegisteredBakeries ?? 0}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs">
+            <span className="text-emerald-700 font-medium">
+              {stats?.activeSubscribedBakeries ?? 0} active
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-rose-600 font-medium">
+              {stats?.expiredSubscribedBakeries ?? 0} expired
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-amber-600 font-medium">
+              {stats?.pendingPaymentBakeries ?? 0} pending
+            </span>
           </div>
         </Card>
 
@@ -277,9 +290,14 @@ export default function AdminOverviewPage() {
         </Card>
       </div>
 
-      {/* Quick Administration Modules Shortcuts */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Link href="/admin/shops" className="group">
+      <AnalyticsCharts />
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Left Column (Alerts & Quick Actions) */}
+        <div className="xl:col-span-2 space-y-6">
+          {/* Quick Administration Modules Shortcuts */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <Link href="/admin/shops" className="group">
           <Card className="p-5 border-slate-200 hover:border-indigo-300 hover:shadow-card transition-all flex items-center justify-between">
             <div className="flex items-center gap-3.5">
               <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -429,7 +447,15 @@ export default function AdminOverviewPage() {
                       : '—'}
                   </td>
                   <td className="py-3.5 px-4">
-                    {getStatusBadge(shop.shopStatus)}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {getStatusBadge(shop.shopStatus)}
+                      {shop.subscriptionStatus === 'ACTIVE' && (
+                         <Badge variant="default" size="sm" className="bg-indigo-50 text-indigo-700 border-indigo-200">Sub: Active</Badge>
+                      )}
+                      {shop.subscriptionStatus === 'EXPIRED' && (
+                         <Badge variant="error" size="sm" className="bg-rose-50 text-rose-700 border-rose-200">Sub: Expired</Badge>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -452,6 +478,31 @@ export default function AdminOverviewPage() {
           </table>
         </div>
       </Card>
+        </div>
+
+        {/* Right Column (Live Activity Feed) */}
+        <div className="xl:col-span-1">
+          <Card className="p-6 border-slate-200/80 shadow-soft h-full max-h-[600px] overflow-y-auto">
+            <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-indigo-600" />
+              Live Platform Activity
+            </h3>
+            <div className="space-y-4">
+              {activities.map((log, index) => (
+                <div key={index} className="pb-3 border-b border-slate-100 last:border-0 last:pb-0">
+                  <p className="text-xs font-semibold text-slate-800">{log.action}</p>
+                  {log.metadata && <p className="text-[11px] text-slate-500 mt-0.5">{log.metadata}</p>}
+                  {log.timestamp && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

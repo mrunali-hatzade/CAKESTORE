@@ -1,4 +1,14 @@
 export interface DashboardStats {
+  totalAdmins?: number;
+  totalShopOwners?: number;
+  totalRegisteredBakeries?: number;
+  activeBakeries?: number;
+  pendingBakeries?: number;
+  suspendedBakeries?: number;
+  inactiveBakeries?: number;
+  activeSubscribedBakeries?: number;
+  expiredSubscribedBakeries?: number;
+  pendingPaymentBakeries?: number;
   totalShops: number;
   activeShops: number;
   suspendedShops: number;
@@ -30,6 +40,7 @@ export interface AdminShopSummary {
   ownerName?: string;
   ownerEmail?: string;
   shopStatus: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'REJECTED' | string;
+  subscriptionStatus?: string;
   registeredAt: string;
 }
 

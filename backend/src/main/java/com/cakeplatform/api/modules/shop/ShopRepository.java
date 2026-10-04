@@ -14,6 +14,8 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
     java.util.Optional<Shop> findFirstByOwnerId(Long ownerId);
     boolean existsByOwnerId(Long ownerId);
     long countByStatus(ShopStatus status);
+    long countByVerificationStatus(VerificationStatus status);
+    long countByVerificationStatusAndCreatedAtBetween(VerificationStatus status, java.time.LocalDateTime start, java.time.LocalDateTime end);
     List<Shop> findByStatus(ShopStatus status);
     long countByStatusAndCreatedAtBetween(ShopStatus status, java.time.LocalDateTime start, java.time.LocalDateTime end);
     long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end);

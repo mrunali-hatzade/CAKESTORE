@@ -54,6 +54,7 @@ public class CustomerStorefrontService {
     private final com.cakeplatform.api.modules.shop.ShopCustomFormFieldRepository shopCustomFormFieldRepository;
     private final com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository;
     private final com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository;
+    private final com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     public CustomerStorefrontService(
@@ -72,7 +73,8 @@ public class CustomerStorefrontService {
             com.cakeplatform.api.modules.shop.ShopStorefrontSettingsRepository shopStorefrontSettingsRepository,
             com.cakeplatform.api.modules.shop.ShopCustomFormFieldRepository shopCustomFormFieldRepository,
             com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository,
-            com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository
+            com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository,
+            com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository
     ) {
         this.shopRepository = shopRepository;
         this.productRepository = productRepository;
@@ -90,6 +92,7 @@ public class CustomerStorefrontService {
         this.shopCustomFormFieldRepository = shopCustomFormFieldRepository;
         this.feedbackRepository = feedbackRepository;
         this.productReviewRepository = productReviewRepository;
+        this.subscriptionRepository = subscriptionRepository;
     }
 
     // Backward-compatible constructor for existing test suites
@@ -120,6 +123,7 @@ public class CustomerStorefrontService {
                 null,
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -131,6 +135,11 @@ public class CustomerStorefrontService {
         // ACTIVE, INACTIVE, SUSPENDED, and EXPIRED remain online so customers can see them.
         if (shop.getStatus() == ShopStatus.PENDING) {
             throw new RuntimeException("Shop is currently unavailable or pending approval");
+        }
+        // Check if the shop has an active subscription
+        boolean hasActiveSubscription = subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(shopId, com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE).isPresent();
+        if (!hasActiveSubscription) {
+            throw new RuntimeException("Storefront is currently unavailable due to an expired subscription.");
         }
         return shop;
     }
@@ -154,8 +163,12 @@ public class CustomerStorefrontService {
                 com.cakeplatform.api.modules.shop.ShopSpecification.filterShops(
                         state, district, city, area, businessType, search, location
                 );
-        return shopRepository.findAll(spec)
-                .stream()
+        List<Shop> allShops = shopRepository.findAll(spec);
+        List<Shop> filteredShops = allShops.stream().filter(shop -> {
+            return subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(shop.getId(), com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE).isPresent();
+        }).collect(Collectors.toList());
+        
+        return filteredShops.stream()
                 .map(this::mapToStorefrontShopResponse)
                 .collect(Collectors.toList());
     }
@@ -432,6 +445,7 @@ public class CustomerStorefrontService {
         response.setYearsInBusiness(shop.getYearsInBusiness());
         response.setFssaiRegistration(shop.getFssaiRegistration());
         response.setVerificationStatus(shop.getVerificationStatus() != null ? shop.getVerificationStatus().name() : null);
+        response.setInactiveReason(shop.getInactiveReason());
 
         // Extended Shop Info
         response.setAddressLine1(shop.getAddressLine1());

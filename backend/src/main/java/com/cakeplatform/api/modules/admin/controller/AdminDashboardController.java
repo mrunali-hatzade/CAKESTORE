@@ -22,6 +22,18 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdminDashboardController {
 
+    @GetMapping("/dashboard/stats/activity")
+    public ResponseEntity<java.util.List<com.cakeplatform.api.modules.audit.ActivityLog>> getRecentActivity() {
+        return ResponseEntity.ok(adminDashboardService.getRecentGlobalActivity());
+    }
+
+
+    @GetMapping("/dashboard/stats/analytics/revenue")
+    public ResponseEntity<com.cakeplatform.api.modules.admin.dto.AnalyticsChartResponse> getRevenueAnalytics() {
+        return ResponseEntity.ok(adminDashboardService.getRevenueAnalytics());
+    }
+
+
     private final AdminDashboardService adminDashboardService;
 
     @GetMapping("/dashboard/stats")

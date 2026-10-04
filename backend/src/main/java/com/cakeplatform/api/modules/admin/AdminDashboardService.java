@@ -112,6 +112,67 @@ public class AdminDashboardService {
         );
     }
 
+    public java.util.List<com.cakeplatform.api.modules.audit.ActivityLog> getRecentGlobalActivity() {
+        return activityLogRepository.findTop50ByEntityTypeInOrderByTimestampDesc(java.util.List.of("SHOP", "SUBSCRIPTION", "PAYMENT", "USER"));
+    }
+
+    
+    public com.cakeplatform.api.modules.admin.dto.AnalyticsChartResponse getRevenueAnalytics() {
+        java.time.LocalDateTime sixMonthsAgo = java.time.LocalDateTime.now().minusMonths(5).withDayOfMonth(1).withHour(0).withMinute(0);
+        
+        java.util.List<com.cakeplatform.api.modules.payment.Payment> recentPayments = paymentRepository.findAll().stream()
+            .filter(p -> p.getPaidAt() != null && p.getPaidAt().isAfter(sixMonthsAgo) && "COMPLETED".equalsIgnoreCase(p.getStatus()))
+            .collect(java.util.stream.Collectors.toList());
+            
+        java.util.List<com.cakeplatform.api.modules.order.Order> recentOrders = orderRepository.findAll().stream()
+            .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(sixMonthsAgo) && ("COMPLETED".equalsIgnoreCase(o.getOrderStatus()) || "DELIVERED".equalsIgnoreCase(o.getOrderStatus())))
+            .collect(java.util.stream.Collectors.toList());
+
+        java.util.Map<String, java.math.BigDecimal> saasMap = new java.util.LinkedHashMap<>();
+        java.util.Map<String, java.math.BigDecimal> gmvMap = new java.util.LinkedHashMap<>();
+        
+        java.time.format.DateTimeFormatter shortFmt = java.time.format.DateTimeFormatter.ofPattern("MMM");
+        java.time.format.DateTimeFormatter longFmt = java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy");
+
+        // Initialize last 6 months in order
+        for (int i = 5; i >= 0; i--) {
+            java.time.LocalDateTime m = java.time.LocalDateTime.now().minusMonths(i);
+            String key = m.format(shortFmt);
+            saasMap.put(key, java.math.BigDecimal.ZERO);
+            gmvMap.put(key, java.math.BigDecimal.ZERO);
+        }
+
+        for (com.cakeplatform.api.modules.payment.Payment p : recentPayments) {
+            String key = p.getPaidAt().format(shortFmt);
+            if (saasMap.containsKey(key)) {
+                saasMap.put(key, saasMap.get(key).add(p.getAmount()));
+            }
+        }
+
+        for (com.cakeplatform.api.modules.order.Order o : recentOrders) {
+            String key = o.getCreatedAt().format(shortFmt);
+            if (gmvMap.containsKey(key)) {
+                gmvMap.put(key, gmvMap.get(key).add(o.getTotalAmount()));
+            }
+        }
+
+        java.util.List<com.cakeplatform.api.modules.admin.dto.RevenueDataPoint> saasList = new java.util.ArrayList<>();
+        java.util.List<com.cakeplatform.api.modules.admin.dto.RevenueDataPoint> gmvList = new java.util.ArrayList<>();
+        
+        for (int i = 5; i >= 0; i--) {
+            java.time.LocalDateTime m = java.time.LocalDateTime.now().minusMonths(i);
+            String shortKey = m.format(shortFmt);
+            String longKey = m.format(longFmt);
+            saasList.add(new com.cakeplatform.api.modules.admin.dto.RevenueDataPoint(shortKey, longKey, saasMap.get(shortKey)));
+            gmvList.add(new com.cakeplatform.api.modules.admin.dto.RevenueDataPoint(shortKey, longKey, gmvMap.get(shortKey)));
+        }
+
+        com.cakeplatform.api.modules.admin.dto.AnalyticsChartResponse res = new com.cakeplatform.api.modules.admin.dto.AnalyticsChartResponse();
+        res.setSaasRevenue(saasList);
+        res.setNetworkGmv(gmvList);
+        return res;
+    }
+
     public DashboardStatsResponse getPlatformStats(LocalDate startDate, LocalDate endDate) {
         DashboardStatsResponse stats = new DashboardStatsResponse();
         
@@ -126,16 +187,21 @@ public class AdminDashboardService {
             LocalDateTime start = startDate.atStartOfDay(zone).toLocalDateTime();
             LocalDateTime end = endDate.atTime(23, 59, 59, 999999999).atZone(zone).toLocalDateTime();
 
-            stats.setTotalShops(shopRepository.countByCreatedAtBetween(start, end));
-            stats.setActiveShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.ACTIVE, start, end));
-            stats.setSuspendedShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.SUSPENDED, start, end));
-            stats.setInactiveShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.INACTIVE, start, end));
-            stats.setPendingShops(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.PENDING, start, end));
-            stats.setTotalUsers(userRepository.countByCreatedAtBetween(start, end));
-
+            stats.setTotalAdmins(userRepository.countByRole(com.cakeplatform.api.modules.user.UserRole.ADMIN));
+            stats.setTotalShopOwners(userRepository.countByRole(com.cakeplatform.api.modules.user.UserRole.SHOP_OWNER));
+            
+            stats.setTotalRegisteredBakeries(shopRepository.countByCreatedAtBetween(start, end));
+            stats.setVerifiedBakeries(shopRepository.countByVerificationStatusAndCreatedAtBetween(com.cakeplatform.api.modules.shop.VerificationStatus.VERIFIED, start, end));
+            stats.setActiveBakeries(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.ACTIVE, start, end));
+            stats.setSuspendedBakeries(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.SUSPENDED, start, end));
+            stats.setInactiveBakeries(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.INACTIVE, start, end));
+            stats.setPendingBakeries(shopRepository.countByStatusAndCreatedAtBetween(ShopStatus.PENDING, start, end));
+            
+            stats.setActiveSubscribedBakeries(subscriptionRepository.countUniqueShopsByStatusBetween(SubscriptionStatus.ACTIVE, start, end));
+            stats.setExpiredSubscribedBakeries(subscriptionRepository.countUniqueShopsByStatusExcludingActiveBetween(SubscriptionStatus.EXPIRED, start, end));
+            stats.setPendingPaymentBakeries(subscriptionRepository.countUniqueShopsByStatusExcludingActiveBetween(SubscriptionStatus.PENDING, start, end));
+            
             stats.setTodayRegistrations(userRepository.countByCreatedAtBetween(startOfDay, startOfDay.plusDays(1).minusNanos(1)));
-            stats.setActiveSubscriptions(subscriptionRepository.countByStatusAndCreatedAtBetween(SubscriptionStatus.ACTIVE, start, end));
-            stats.setExpiredSubscriptions(subscriptionRepository.countByStatusAndCreatedAtBetween(SubscriptionStatus.EXPIRED, start, end));
             stats.setTodayPayments(paymentRepository.countCompletedPaymentsBetween(startOfDay, startOfDay.plusDays(1).minusNanos(1)));
 
             BigDecimal monthlySubRev = paymentRepository.getRevenueBetween(startOfMonth, startOfMonth.plusMonths(1).minusNanos(1));
@@ -151,16 +217,21 @@ public class AdminDashboardService {
             stats.setTotalGmv(totalGmv != null ? totalGmv : BigDecimal.ZERO);
 
         } else {
-            stats.setTotalShops(shopRepository.count());
-            stats.setActiveShops(shopRepository.countByStatus(ShopStatus.ACTIVE));
-            stats.setSuspendedShops(shopRepository.countByStatus(ShopStatus.SUSPENDED));
-            stats.setInactiveShops(shopRepository.countByStatus(ShopStatus.INACTIVE));
-            stats.setPendingShops(shopRepository.countByStatus(ShopStatus.PENDING));
-            stats.setTotalUsers(userRepository.count());
+            stats.setTotalAdmins(userRepository.countByRole(com.cakeplatform.api.modules.user.UserRole.ADMIN));
+            stats.setTotalShopOwners(userRepository.countByRole(com.cakeplatform.api.modules.user.UserRole.SHOP_OWNER));
+
+            stats.setTotalRegisteredBakeries(shopRepository.count());
+            stats.setVerifiedBakeries(shopRepository.countByVerificationStatus(com.cakeplatform.api.modules.shop.VerificationStatus.VERIFIED));
+            stats.setActiveBakeries(shopRepository.countByStatus(ShopStatus.ACTIVE));
+            stats.setSuspendedBakeries(shopRepository.countByStatus(ShopStatus.SUSPENDED));
+            stats.setInactiveBakeries(shopRepository.countByStatus(ShopStatus.INACTIVE));
+            stats.setPendingBakeries(shopRepository.countByStatus(ShopStatus.PENDING));
+
+            stats.setActiveSubscribedBakeries(subscriptionRepository.countUniqueShopsByStatus(SubscriptionStatus.ACTIVE));
+            stats.setExpiredSubscribedBakeries(subscriptionRepository.countUniqueShopsByStatusExcludingActive(SubscriptionStatus.EXPIRED));
+            stats.setPendingPaymentBakeries(subscriptionRepository.countUniqueShopsByStatusExcludingActive(SubscriptionStatus.PENDING));
 
             stats.setTodayRegistrations(userRepository.countByCreatedAtGreaterThanEqual(startOfDay));
-            stats.setActiveSubscriptions(subscriptionRepository.countByStatus(SubscriptionStatus.ACTIVE));
-            stats.setExpiredSubscriptions(subscriptionRepository.countByStatus(SubscriptionStatus.EXPIRED));
             stats.setTodayPayments(paymentRepository.countTodayCompletedPayments(startOfDay));
 
             BigDecimal monthlySubRev = paymentRepository.getMonthlyRevenue(startOfMonth);
@@ -202,12 +273,18 @@ public class AdminDashboardService {
             summary.setShopStatus(shop.getStatus() != null ? shop.getStatus().name() : "UNKNOWN");
             summary.setRegisteredAt(shop.getCreatedAt());
 
+            
             com.cakeplatform.api.modules.user.User owner = shop.getOwner();
             if (owner != null) {
                 summary.setOwnerName(owner.getFullName());
                 summary.setOwnerEmail(owner.getEmail());
             }
+            
+            com.cakeplatform.api.modules.subscription.Subscription lastSub = subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(shop.getId()).orElse(null);
+            summary.setSubscriptionStatus(lastSub != null ? lastSub.getStatus().name() : "NONE");
+
             return summary;
+
         });
     }
 

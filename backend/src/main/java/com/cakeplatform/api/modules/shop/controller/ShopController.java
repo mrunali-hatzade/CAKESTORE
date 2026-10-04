@@ -18,6 +18,16 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ShopController {
 
+    @PutMapping("/my-shop/status")
+    public ResponseEntity<ShopResponse> updateMyShopStatus(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam com.cakeplatform.api.modules.shop.ShopStatus status,
+            @RequestParam(required = false) String reason
+    ) {
+        return ResponseEntity.ok(shopService.updateShopStatusAndReason(userDetails.getId(), status, reason));
+    }
+
+
     private final ShopService shopService;
     private final OwnerDashboardService dashboardService;
 

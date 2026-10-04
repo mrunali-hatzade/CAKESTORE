@@ -130,15 +130,15 @@ class StageBAdminOperationsTest {
         DashboardStatsResponse stats = adminDashboardService.getPlatformStats(null, null);
 
         assertNotNull(stats);
-        assertEquals(20L, stats.getTotalShops());
-        assertEquals(12L, stats.getActiveShops());
-        assertEquals(2L, stats.getSuspendedShops());
-        assertEquals(3L, stats.getInactiveShops());
-        assertEquals(3L, stats.getPendingShops());
-        assertEquals(50L, stats.getTotalUsers());
+        assertEquals(20L, stats.getTotalRegisteredBakeries());
+        assertEquals(12L, stats.getActiveBakeries());
+        assertEquals(2L, stats.getSuspendedBakeries());
+        assertEquals(3L, stats.getInactiveBakeries());
+        assertEquals(3L, stats.getPendingBakeries());
+        assertEquals(50L, stats.getTotalAdmins());
         assertEquals(5L, stats.getTodayRegistrations());
-        assertEquals(12L, stats.getActiveSubscriptions());
-        assertEquals(4L, stats.getExpiredSubscriptions());
+        assertEquals(12L, stats.getActiveSubscribedBakeries());
+        assertEquals(4L, stats.getExpiredSubscribedBakeries());
         assertEquals(3L, stats.getTodayPayments());
         assertEquals(new BigDecimal("45000.00"), stats.getMonthlyPlatformRevenue());
         assertEquals(new BigDecimal("120000.00"), stats.getTotalPlatformRevenue());
@@ -152,8 +152,8 @@ class StageBAdminOperationsTest {
 
         DashboardStatsResponse stats = adminDashboardService.getPlatformStats(null, null);
 
-        assertEquals(7L, stats.getInactiveShops());
-        assertEquals(2L, stats.getSuspendedShops());
+        assertEquals(7L, stats.getInactiveBakeries());
+        assertEquals(2L, stats.getSuspendedBakeries());
         verify(shopRepository).countByStatus(ShopStatus.INACTIVE);
         verify(shopRepository).countByStatus(ShopStatus.SUSPENDED);
     }

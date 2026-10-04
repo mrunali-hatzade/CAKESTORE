@@ -11,4 +11,5 @@ public class AdminShopSummaryResponse {
     private String ownerEmail;
     private String shopStatus;
     private LocalDateTime registeredAt;
+    private String subscriptionStatus;
 }

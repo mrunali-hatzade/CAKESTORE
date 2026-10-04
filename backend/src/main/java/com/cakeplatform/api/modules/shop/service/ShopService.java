@@ -14,6 +14,8 @@ import java.util.List;
 public class ShopService {
 
     private final ShopRepository shopRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.cakeplatform.api.modules.audit.ActivityLoggerService activityLogger;
     private final com.cakeplatform.api.modules.security.ShopAccessValidator shopAccessValidator;
     private final com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
     private final com.cakeplatform.api.modules.location.service.LocationValidationService locationValidationService;
@@ -43,6 +45,28 @@ public class ShopService {
     }
 
     @Transactional
+        public ShopResponse updateShopStatusAndReason(Long ownerId, com.cakeplatform.api.modules.shop.ShopStatus status, String reason) {
+        Shop shop = getShopByOwnerId(ownerId);
+        if (shop.getStatus() == com.cakeplatform.api.modules.shop.ShopStatus.SUSPENDED) {
+            throw new com.cakeplatform.api.exception.SubscriptionExpiredException("Shop is suspended by administration. Cannot change status.");
+        }
+        shop.setStatus(status);
+        if (status == com.cakeplatform.api.modules.shop.ShopStatus.INACTIVE && reason != null) {
+            shop.setInactiveReason(reason);
+        } else {
+            shop.setInactiveReason(null);
+        }
+        shop = shopRepository.save(shop);
+        
+        // Notify admin if going inactive
+        if (status == com.cakeplatform.api.modules.shop.ShopStatus.INACTIVE) {
+            activityLogger.logActivity(ownerId, shop.getId(), "STATUS_CHANGE", "SHOP", shop.getId(), "Shop set to inactive. Reason: " + reason);
+        }
+        
+        return getMyShopProfile(ownerId);
+    }
+
+
     public ShopResponse updateMyShopProfile(Long ownerId, UpdateShopRequest request) {
         Shop shop = getShopByOwnerId(ownerId);
 

@@ -61,6 +61,8 @@ class StorefrontUpgradeCoreTest {
     @Mock
     private ProductReviewRepository productReviewRepository;
     @Mock
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+    @Mock
     private ShopAccessValidator shopAccessValidator;
 
     private CustomerStorefrontService customerStorefrontService;
@@ -87,7 +89,8 @@ class StorefrontUpgradeCoreTest {
                 shopStorefrontSettingsRepository,
                 shopCustomFormFieldRepository,
                 feedbackRepository,
-                productReviewRepository
+                productReviewRepository,
+                subscriptionRepository
         );
 
         ownerStorefrontService = new OwnerStorefrontService(

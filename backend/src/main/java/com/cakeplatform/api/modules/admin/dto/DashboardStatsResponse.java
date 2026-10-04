@@ -6,15 +6,25 @@ import java.time.LocalDate;
 
 @Data
 public class DashboardStatsResponse {
-    private long totalShops;
-    private long activeShops;
-    private long suspendedShops;
-    private long inactiveShops;
-    private long pendingShops;
-    private long totalUsers;
+    // 1. Users
+    private long totalAdmins;
+    private long totalShopOwners;
+
+    // 2. Bakeries
+    private long totalRegisteredBakeries;
+    private long activeBakeries;
+    private long verifiedBakeries;
+    private long suspendedBakeries;
+    private long inactiveBakeries;
+    private long pendingBakeries;
+    
+    // 3. Subscriptions
+    private long activeSubscribedBakeries;
+    private long expiredSubscribedBakeries;
+    private long pendingPaymentBakeries;
+
+    // Financials & Others
     private long todayRegistrations;
-    private long activeSubscriptions;
-    private long expiredSubscriptions;
     private long todayPayments;
     private BigDecimal monthlyPlatformRevenue;
     private BigDecimal totalPlatformRevenue;

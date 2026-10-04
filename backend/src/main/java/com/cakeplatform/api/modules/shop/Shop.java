@@ -95,6 +95,9 @@ public class Shop {
     @Column(name = "verification_status")
     private VerificationStatus verificationStatus = VerificationStatus.PROCESSING;
 
+    @Column(name = "inactive_reason", length = 500)
+    private String inactiveReason;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

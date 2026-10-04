@@ -19,14 +19,24 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class ShopStatusManager {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+
+
     private final ShopRepository shopRepository;
     private final ActivityLoggerService activityLogger;
     private final AdminNotificationService adminNotificationService;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
 
-    @Transactional
+        @Transactional
     public void activateShop(Long shopId, Long actorUserId) {
+        // Enforce Subscription Paywall: Admin cannot manually activate an EXPIRED shop without a payment
+        boolean hasActiveSubscription = subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(shopId, com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE).isPresent();
+        if (!hasActiveSubscription) {
+            throw new RuntimeException("Cannot activate shop: This bakery does not have an active subscription. They must pay to automatically activate.");
+        }
         changeShopStatus(shopId, ShopStatus.ACTIVE, actorUserId, "SHOP_ACTIVATED");
     }
 

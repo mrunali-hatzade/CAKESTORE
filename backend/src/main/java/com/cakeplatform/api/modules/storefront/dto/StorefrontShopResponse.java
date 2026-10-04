@@ -35,6 +35,7 @@ public class StorefrontShopResponse {
     private Integer yearsInBusiness;
     private String fssaiRegistration;
     private String verificationStatus;
+    private String inactiveReason;
 
     // About & Social
     private String aboutStory;

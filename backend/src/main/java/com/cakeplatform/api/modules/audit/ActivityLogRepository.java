@@ -9,4 +9,6 @@ import java.util.List;
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> {
     List<ActivityLog> findByShopIdOrderByTimestampDesc(Long shopId);
     List<ActivityLog> findByShopIdAndEntityTypeInOrderByTimestampDesc(Long shopId, java.util.Collection<String> entityTypes);
+    List<ActivityLog> findTop50ByOrderByTimestampDesc();
+    List<ActivityLog> findTop50ByEntityTypeInOrderByTimestampDesc(java.util.Collection<String> entityTypes);
 }
