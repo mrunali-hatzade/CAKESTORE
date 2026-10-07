@@ -19,25 +19,19 @@ import java.util.List;
 public class CustomerStorefrontController {
     private final CustomerStorefrontService storefrontService;
     private final com.cakeplatform.api.modules.order.InvoiceService invoiceService;
-    private final com.cakeplatform.api.security.JwtService jwtService;
-    private final org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
 
     // Backward-compatible constructor for existing unit tests
     public CustomerStorefrontController(CustomerStorefrontService storefrontService) {
-        this(storefrontService, null, null, null);
+        this(storefrontService, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public CustomerStorefrontController(
             CustomerStorefrontService storefrontService,
-            com.cakeplatform.api.modules.order.InvoiceService invoiceService,
-            com.cakeplatform.api.security.JwtService jwtService,
-            org.springframework.security.core.userdetails.UserDetailsService userDetailsService
+            com.cakeplatform.api.modules.order.InvoiceService invoiceService
     ) {
         this.storefrontService = storefrontService;
         this.invoiceService = invoiceService;
-        this.jwtService = jwtService;
-        this.userDetailsService = userDetailsService;
     }
 
     @GetMapping("/locations/popular-cities")
@@ -169,29 +163,47 @@ public class CustomerStorefrontController {
 
     @GetMapping("/orders/{orderNumber}")
     public ResponseEntity<Order> getGuestOrderDetails(
-            @PathVariable String orderNumber,
-            @RequestHeader(value = org.springframework.http.HttpHeaders.AUTHORIZATION, required = false) String authHeader
+            @PathVariable String orderNumber
     ) {
         Order order = storefrontService.getGuestOrder(orderNumber);
 
-        // If an Authorization header is provided, enforce guest phone scope
-        if (jwtService != null && authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            String guestPhone = jwtService.extractGuestPhone(token);
-            if (guestPhone != null) {
-                if (jwtService.isGuestTokenValid(token, guestPhone) && !guestPhone.equals(order.getCustomerPhone())) {
-                    return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
-                }
-            }
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+        boolean isCustomer = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"));
+        if (!isCustomer) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
         }
 
-        // Direct tracking is accessible by unguessable order number
+        String guestPhone = auth.getName();
+        if (!guestPhone.equals(order.getCustomerPhone())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+
         return ResponseEntity.ok(order);
     }
 
     @GetMapping("/orders/{orderNumber}/invoice")
-    public ResponseEntity<byte[]> downloadInvoice(@PathVariable String orderNumber) throws Exception {
+    public ResponseEntity<byte[]> downloadInvoice(
+            @PathVariable String orderNumber
+    ) throws Exception {
         Order order = storefrontService.getGuestOrder(orderNumber);
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+        boolean isCustomer = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"));
+        if (!isCustomer) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String guestPhone = auth.getName();
+        if (!guestPhone.equals(order.getCustomerPhone())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+
         if (invoiceService == null) {
             throw new IllegalStateException("Invoice service is currently unavailable");
         }

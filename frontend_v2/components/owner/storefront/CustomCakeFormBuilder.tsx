@@ -3,6 +3,7 @@ import { Sliders, Plus, Trash2, GripVertical, CheckCircle2, ArrowUp, ArrowDown }
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ShopCustomFormField, ShopStorefrontSettings } from '@/types/storefrontManagement';
 import { ownerStorefrontApi } from '@/lib/api/ownerStorefront';
 
@@ -23,6 +24,7 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+  const [fieldToDelete, setFieldToDelete] = useState<number | null>(null);
 
   // New field state
   const [newLabel, setNewLabel] = useState('');
@@ -94,15 +96,16 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
     }
   };
 
-  const handleDeleteField = async (fieldId?: number) => {
-    if (!fieldId) return;
-    if (!confirm('Are you sure you want to delete this custom field?')) return;
+  const handleDeleteField = async () => {
+    if (!fieldToDelete) return;
     try {
-      await ownerStorefrontApi.deleteCustomFormField(fieldId);
-      onFieldsChange(fields.filter((f) => f.id !== fieldId));
+      await ownerStorefrontApi.deleteCustomFormField(fieldToDelete);
+      onFieldsChange(fields.filter((f) => f.id !== fieldToDelete));
+      setFieldToDelete(null);
     } catch (err: any) {
       console.error('Failed to delete field', err);
       setErrorMessage(err.message || 'Failed to delete field');
+      throw err;
     }
   };
 
@@ -339,7 +342,7 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteField(field.id)}
+                        onClick={() => setFieldToDelete(field.id || null)}
                         className="p-1 text-red-500 hover:text-red-700 transition-all"
                         title="Delete Field"
                       >
@@ -353,6 +356,16 @@ export const CustomCakeFormBuilder: React.FC<CustomCakeFormBuilderProps> = ({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={fieldToDelete !== null}
+        onClose={() => setFieldToDelete(null)}
+        onConfirm={handleDeleteField}
+        title="Delete Custom Field"
+        description="Are you sure you want to delete this custom field? Customers will no longer see it."
+        confirmLabel="Delete"
+        isDestructive={true}
+      />
     </Card>
   );
 };

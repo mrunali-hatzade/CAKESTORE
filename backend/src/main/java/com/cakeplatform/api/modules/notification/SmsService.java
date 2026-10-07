@@ -22,6 +22,9 @@ public class SmsService {
     @Value("${twilio.phone-number:#{null}}")
     private String fromPhoneNumber;
 
+    @Value("${app.sms.log-payloads:false}")
+    private boolean logPayloads;
+
     private boolean isConfigured = false;
 
     @PostConstruct
@@ -38,7 +41,11 @@ public class SmsService {
     @Async
     public void sendSms(String toPhoneNumber, String messageBody) {
         if (!isConfigured) {
-            log.warn("Mock SMS: Cannot send to {} because Twilio is not configured. Message would have been: [Hidden for Security]", toPhoneNumber);
+            if (logPayloads) {
+                log.warn("Mock SMS (Local Dev): To {}, Message: {}", toPhoneNumber, messageBody);
+            } else {
+                log.warn("Mock SMS: Cannot send to {} because Twilio is not configured. Message would have been: [Hidden for Security]", toPhoneNumber);
+            }
             return;
         }
 

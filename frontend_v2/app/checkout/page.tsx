@@ -51,14 +51,12 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
 
+  const hasInitializedFromCart = React.useRef(false);
   useEffect(() => {
-    if (items.length > 0) {
-      if (items[0].deliveryDate && !deliveryDate) {
-        setDeliveryDate(items[0].deliveryDate);
-      }
-      if (items[0].deliverySlotId && !selectedSlotId) {
-        setSelectedSlotId(items[0].deliverySlotId);
-      }
+    if (items.length > 0 && !hasInitializedFromCart.current) {
+      if (items[0].deliveryDate) setDeliveryDate(items[0].deliveryDate);
+      if (items[0].deliverySlotId) setSelectedSlotId(items[0].deliverySlotId);
+      hasInitializedFromCart.current = true;
     }
   }, [items]);
 

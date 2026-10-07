@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { DeleteCategoryModal } from './DeleteCategoryModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface CategoryManagerModalProps {
   isOpen: boolean;
@@ -343,16 +344,47 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
       </Modal>
 
       {/* Reassign & Delete Confirmation Modal */}
-      <DeleteCategoryModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => {
-          setIsDeleteModalOpen(false);
-          setCategoryToDelete(null);
-        }}
-        category={categoryToDelete}
-        allCategories={categories}
-        onConfirmDelete={handleConfirmDelete}
-      />
+      {categoryToDelete && categoryToDelete.productCount > 0 ? (
+        <DeleteCategoryModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            setIsDeleteModalOpen(false);
+            setCategoryToDelete(null);
+          }}
+          category={categoryToDelete}
+          allCategories={categories}
+          onConfirmDelete={handleConfirmDelete}
+        />
+      ) : (
+        <ConfirmDialog
+          isOpen={isDeleteModalOpen && categoryToDelete !== null}
+          onClose={() => {
+            setIsDeleteModalOpen(false);
+            setCategoryToDelete(null);
+          }}
+          onConfirm={async () => {
+            if (categoryToDelete) {
+              await handleConfirmDelete(categoryToDelete.id);
+              setIsDeleteModalOpen(false);
+              setCategoryToDelete(null);
+            }
+          }}
+          title="Delete Category"
+          description={
+            <div>
+              <p className="text-sm text-brand-espresso mb-2">
+                Are you sure you want to delete <span className="font-semibold text-brand-plum">&ldquo;{categoryToDelete?.name}&rdquo;</span>?
+              </p>
+              <p className="text-xs text-brand-muted">
+                This category has no products assigned and can be removed immediately.
+              </p>
+            </div>
+          }
+          confirmLabel="Delete Category"
+          isDestructive={true}
+        />
+      )}
     </>
   );
 };
+

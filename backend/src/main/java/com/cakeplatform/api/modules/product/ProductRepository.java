@@ -12,16 +12,24 @@ import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
-    
     @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId")
     List<Product> findByShopId(@Param("shopId") Long shopId);
 
-    @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId " +
-           "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+    @Query(value = "SELECT p FROM Product p LEFT JOIN p.category c WHERE p.shop.id = :shopId " +
+           "AND (:query IS NULL OR :query = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
            "  OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
-           "  OR (p.category IS NOT NULL AND LOWER(p.category.name) LIKE LOWER(CONCAT('%', :query, '%')))) " +
-           "ORDER BY p.name ASC")
-    List<Product> searchProductsByShopId(@Param("shopId") Long shopId, @Param("query") String query, Pageable pageable);
+           "  OR LOWER(c.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "AND (:categoryId IS NULL OR (:categoryId = -1 AND c.id IS NULL) OR c.id = :categoryId)",
+           countQuery = "SELECT count(p) FROM Product p LEFT JOIN p.category c WHERE p.shop.id = :shopId " +
+           "AND (:query IS NULL OR :query = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(COALESCE(p.description, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(c.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "AND (:categoryId IS NULL OR (:categoryId = -1 AND c.id IS NULL) OR c.id = :categoryId)")
+    org.springframework.data.domain.Page<Product> findByShopIdWithFilters(
+            @Param("shopId") Long shopId, 
+            @Param("query") String query, 
+            @Param("categoryId") Long categoryId, 
+            Pageable pageable);
 
     @Query("SELECT p FROM Product p WHERE p.id = :id AND p.shop.id = :shopId")
     Optional<Product> findByIdAndShopId(@Param("id") Long id, @Param("shopId") Long shopId);
@@ -45,4 +53,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     int reassignCategory(@Param("sourceId") Long sourceId,
                          @Param("targetId") Long targetId,
                          @Param("shopId") Long shopId);
+
+    @Query("SELECT p FROM Product p " +
+           "LEFT JOIN ProductReview pr ON pr.product.id = p.id " +
+           "WHERE p.shop.id = :shopId AND p.status = 'ACTIVE' AND p.availability = true " +
+           "GROUP BY p " +
+           "ORDER BY COALESCE(AVG(pr.rating), 0) DESC, COUNT(pr.id) DESC")
+    List<Product> findTopRatedProducts(@Param("shopId") Long shopId, Pageable pageable);
 }

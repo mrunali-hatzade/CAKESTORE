@@ -27,9 +27,9 @@ public class ProductService {
         return shopAccessValidator.getValidShopForOwner(ownerId);
     }
 
-    public List<Product> getProductsByUserId(Long userId) {
+    public org.springframework.data.domain.Page<Product> getProductsByUserId(Long userId, String search, Long categoryId, org.springframework.data.domain.Pageable pageable) {
         Shop shop = getShopByOwnerId(userId);
-        return productRepository.findByShopId(shop.getId());
+        return productRepository.findByShopIdWithFilters(shop.getId(), search, categoryId, pageable);
     }
 
     @Transactional

@@ -34,11 +34,12 @@ export const ownerApi = {
 
   // Coupons
   getCoupons: async (): Promise<CouponRecord[]> => {
-    return apiClient.get<CouponRecord[]>('/api/owner/coupons');
+    const res = await apiClient.get<PaginatedResponse<CouponRecord>>('/api/owner/coupons', { params: { page: 0, size: 1000 } });
+    return res.content;
   },
 
-  getOwnerCoupons: async (): Promise<CouponRecord[]> => {
-    return apiClient.get<CouponRecord[]>('/api/owner/coupons');
+  getOwnerCoupons: async (page = 0, size = 10, search?: string, status?: string): Promise<PaginatedResponse<CouponRecord>> => {
+    return apiClient.get<PaginatedResponse<CouponRecord>>('/api/owner/coupons', { params: { page, size, ...(search ? { search } : {}), ...(status && status !== 'ALL' ? { status } : {}) } });
   },
 
   createCoupon: async (data: CreateCouponPayload): Promise<CouponRecord> => {
@@ -62,9 +63,9 @@ export const ownerApi = {
   },
 
   // Customers
-  getCustomers: async (page: number = 0, size: number = 10): Promise<PaginatedResponse<CustomerProfile>> => {
+  getCustomers: async (page: number = 0, size: number = 10, search: string = ''): Promise<PaginatedResponse<CustomerProfile>> => {
     return apiClient.get<PaginatedResponse<CustomerProfile>>('/api/owner/customers', {
-      params: { page, size },
+      params: { page, size, ...(search ? { search } : {}) },
     });
   },
 
@@ -81,8 +82,16 @@ export const ownerApi = {
     return apiClient.get<GeneralEnquiry[]>('/api/owner/enquiries');
   },
 
-  getOwnerEnquiries: async (): Promise<GeneralEnquiry[]> => {
-    return apiClient.get<GeneralEnquiry[]>('/api/owner/enquiries');
+  getOwnerEnquiries: async (page = 0, size = 20, search?: string, status?: string, type?: string): Promise<PaginatedResponse<GeneralEnquiry>> => {
+    return apiClient.get<PaginatedResponse<GeneralEnquiry>>('/api/owner/enquiries', {
+      params: { 
+        page, 
+        size, 
+        ...(search ? { search } : {}),
+        ...(status && status !== 'ALL' ? { status } : {}),
+        ...(type && type !== 'ALL' ? { type } : {})
+      },
+    });
   },
 
   replyToEnquiry: async (id: string | number, reply: string): Promise<GeneralEnquiry> => {
@@ -138,8 +147,15 @@ export const ownerApi = {
     return apiClient.get<FeedbackRecord[]>('/api/owner/feedback');
   },
 
-  getOwnerFeedback: async (): Promise<FeedbackRecord[]> => {
-    return apiClient.get<FeedbackRecord[]>('/api/owner/feedback');
+  getOwnerFeedback: async (page = 0, size = 20, search?: string, rating?: number): Promise<PaginatedResponse<FeedbackRecord>> => {
+    return apiClient.get<PaginatedResponse<FeedbackRecord>>('/api/owner/feedback', {
+      params: { 
+        page, 
+        size, 
+        ...(search ? { search } : {}),
+        ...(rating ? { rating } : {})
+      },
+    });
   },
 
   replyToReview: async (id: string | number, reply: string): Promise<FeedbackRecord> => {
@@ -218,12 +234,6 @@ export const ownerApi = {
     }
   },
 
-  processMockSubscriptionPayment: async (planId: number): Promise<PaymentMockResult> => {
-    return apiClient.post<PaymentMockResult>('/api/owner/payments/mock-checkout', {
-      planId: planId,
-    });
-  },
-
   // Stage C: Owner Payments & Invoices
   getPayments: async (): Promise<OwnerPaymentRecord[]> => {
     return apiClient.get<OwnerPaymentRecord[]>('/api/owner/payments');
@@ -277,5 +287,6 @@ export const ownerApi = {
     });
   },
 };
+
 
 

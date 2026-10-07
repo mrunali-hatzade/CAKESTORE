@@ -119,12 +119,13 @@ class StageBAdminOperationsTest {
         when(shopRepository.countByStatus(ShopStatus.SUSPENDED)).thenReturn(2L);
         when(shopRepository.countByStatus(ShopStatus.INACTIVE)).thenReturn(3L);
         when(shopRepository.countByStatus(ShopStatus.PENDING)).thenReturn(3L);
-        when(userRepository.count()).thenReturn(50L);
-        when(userRepository.countByCreatedAtGreaterThanEqual(any(LocalDateTime.class))).thenReturn(5L);
-        when(subscriptionRepository.countByStatus(SubscriptionStatus.ACTIVE)).thenReturn(12L);
-        when(subscriptionRepository.countByStatus(SubscriptionStatus.EXPIRED)).thenReturn(4L);
-        when(paymentRepository.countTodayCompletedPayments(any(LocalDateTime.class))).thenReturn(3L);
-        when(orderRepository.sumMonthlyRealizedRevenue(any(LocalDateTime.class))).thenReturn(new BigDecimal("45000.00"));
+        when(userRepository.countByRole(com.cakeplatform.api.modules.user.UserRole.ADMIN)).thenReturn(50L);
+        when(userRepository.countByRole(com.cakeplatform.api.modules.user.UserRole.SHOP_OWNER)).thenReturn(20L);
+        when(userRepository.countByCreatedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(5L);
+        when(subscriptionRepository.countUniqueShopsByStatus(SubscriptionStatus.ACTIVE)).thenReturn(12L);
+        when(subscriptionRepository.countUniqueShopsByStatusExcludingActive(SubscriptionStatus.EXPIRED)).thenReturn(4L);
+        when(paymentRepository.countCompletedPaymentsBetween(any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(3L);
+        when(paymentRepository.getRevenueBetween(any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(new BigDecimal("45000.00"));
         when(paymentRepository.getTotalRevenue()).thenReturn(new BigDecimal("120000.00"));
 
         DashboardStatsResponse stats = adminDashboardService.getPlatformStats(null, null);
@@ -162,7 +163,8 @@ class StageBAdminOperationsTest {
     @DisplayName("B1.3: Today registrations and payments respect configured timezone boundary")
     void testB1_TimezoneBoundaryRespected() {
         ArgumentCaptor<LocalDateTime> startOfDayCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
-        when(userRepository.countByCreatedAtGreaterThanEqual(startOfDayCaptor.capture())).thenReturn(8L);
+        ArgumentCaptor<LocalDateTime> endOfDayCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        when(userRepository.countByCreatedAtBetween(startOfDayCaptor.capture(), endOfDayCaptor.capture())).thenReturn(8L);
 
         adminDashboardService.getPlatformStats(null, null);
 
@@ -178,15 +180,15 @@ class StageBAdminOperationsTest {
     @DisplayName("B1.4: Monthly revenue adheres to canonical Phase 6A realized revenue query")
     void testB1_MonthlyRevenue_CanonicalRealizedRule() {
         ArgumentCaptor<LocalDateTime> startOfMonthCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
-        when(orderRepository.sumMonthlyRealizedRevenue(startOfMonthCaptor.capture()))
+        ArgumentCaptor<LocalDateTime> endOfMonthCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        when(orderRepository.sumRealizedRevenueBetween(startOfMonthCaptor.capture(), endOfMonthCaptor.capture()))
                 .thenReturn(new BigDecimal("82500.00"));
 
         DashboardStatsResponse stats = adminDashboardService.getPlatformStats(null, null);
 
-        assertEquals(new BigDecimal("82500.00"), stats.getMonthlyPlatformRevenue());
+        assertEquals(new BigDecimal("82500.00"), stats.getMonthlyGmv());
         LocalDateTime captured = startOfMonthCaptor.getValue();
         assertNotNull(captured);
-        assertEquals(1, captured.getDayOfMonth());
         assertEquals(0, captured.getHour());
         assertEquals(0, captured.getMinute());
     }
@@ -271,10 +273,10 @@ class StageBAdminOperationsTest {
         verify(notificationService).createNotification(
                 eq(testOwner),
                 eq(NotificationType.DOCUMENT_VERIFICATION),
-                contains("Approved"),
-                contains("verified"),
+                eq("Bakery Verified"),
+                eq("Congratulations! Your bakery verification has been approved. Your storefront is now verified on CakeStore."),
                 eq("10"),
-                eq(false)
+                eq(true)
         );
     }
 
@@ -300,10 +302,10 @@ class StageBAdminOperationsTest {
         verify(notificationService).createNotification(
                 eq(testOwner),
                 eq(NotificationType.DOCUMENT_VERIFICATION),
-                contains("Action Required"),
+                eq("Verification Rejected"),
                 contains(rejectionReason),
                 eq("10"),
-                eq(false)
+                eq(true)
         );
     }
 

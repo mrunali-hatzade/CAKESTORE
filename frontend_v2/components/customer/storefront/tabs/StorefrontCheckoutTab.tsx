@@ -39,6 +39,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/common/Toast';
 import { paymentsService } from '@/lib/services/payments';
 import { ShopDeliveryConfig } from '@/types/shop';
+import { useCustomerAuth } from '@/lib/auth/CustomerAuthContext';
+import { Modal } from '@/components/ui/Modal';
+import { customerProfileApi, CustomerAddress, CustomerProfile } from '@/lib/api/customerProfile';
 
 interface StorefrontCheckoutTabProps {
   shop: Shop;
@@ -92,8 +95,24 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
   const router = useRouter();
   const { items, totalPrice, clearCart, appliedCoupon, setAppliedCoupon } = useCart();
   const toast = useToast();
+  const customerAuth = useCustomerAuth();
 
   const [viewingItem, setViewingItem] = useState<any | null>(null);
+
+  // OTP Verification Modal State
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [checkoutOtp, setCheckoutOtp] = useState('');
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (showOtpModal && resendTimer > 0) {
+      interval = setInterval(() => setResendTimer((prev) => prev - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [showOtpModal, resendTimer]);
 
   const [availableCoupons, setAvailableCoupons] = useState<
     Array<{
@@ -181,20 +200,18 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
     toast.info('Coupon removed.');
   };
 
+  const hasInitializedFromCart = React.useRef(false);
   useEffect(() => {
-    if (items.length > 0) {
-      if (items[0].deliveryDate && !deliveryDate) {
-        setDeliveryDate(items[0].deliveryDate);
-      }
-      if (items[0].deliverySlotId && !selectedSlotId) {
-        setSelectedSlotId(items[0].deliverySlotId);
-      }
-      if (items[0].deliveryTime && !customDeliveryTime) {
+    if (items.length > 0 && !hasInitializedFromCart.current) {
+      if (items[0].deliveryDate) setDeliveryDate(items[0].deliveryDate);
+      if (items[0].deliverySlotId) setSelectedSlotId(items[0].deliverySlotId);
+      if (items[0].deliveryTime) {
         setCustomDeliveryTime(items[0].deliveryTime);
         setTimeSelectionMode('CUSTOM');
       } else if (items[0].deliveryTimeType) {
         setTimeSelectionMode(items[0].deliveryTimeType);
       }
+      hasInitializedFromCart.current = true;
     }
   }, [items]);
 
@@ -206,6 +223,52 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
         .catch(() => setSlots([]));
     }
   }, [shop?.id, deliveryDate]);
+
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (customerAuth.isAuthenticated && customerAuth.token) {
+      if (customerAuth.phone && !customerPhone) {
+        setCustomerPhone(customerAuth.phone);
+      }
+      
+      const fetchProfileData = async () => {
+        setIsLoadingAddresses(true);
+        try {
+          const prof = await customerProfileApi.getProfile(customerAuth.token!);
+          if (prof.fullName && !customerName) setCustomerName(prof.fullName);
+          if (prof.email && !customerEmail) setCustomerEmail(prof.email);
+          
+          const addrs = await customerProfileApi.getAddresses(customerAuth.token!);
+          setSavedAddresses(addrs);
+          
+          const defaultAddr = addrs.find(a => a.default);
+          if (defaultAddr && !deliveryAddress) {
+            setSelectedAddressId(defaultAddr.id);
+            setDeliveryAddress(defaultAddr.deliveryAddress);
+            if (defaultAddr.recipientName && !customerName) setCustomerName(defaultAddr.recipientName);
+            if (defaultAddr.recipientPhone && !customerPhone) setCustomerPhone(defaultAddr.recipientPhone);
+          }
+        } catch (err) {
+          console.error("Failed to fetch customer profile data", err);
+        } finally {
+          setIsLoadingAddresses(false);
+        }
+      };
+      
+      fetchProfileData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerAuth.isAuthenticated, customerAuth.token]);
+
+  const handleSelectSavedAddress = (addr: CustomerAddress) => {
+    setSelectedAddressId(addr.id);
+    setDeliveryAddress(addr.deliveryAddress);
+    setCustomerName(addr.recipientName);
+    setCustomerPhone(addr.recipientPhone);
+  };
 
   const applicableSlots = useMemo<DeliverySlot[]>(() => {
     if (!deliveryDate || slots.length === 0) return slots;
@@ -355,6 +418,89 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
       ? `Preferred Delivery Time: ${preferredTimeStr}.${specialInstructions.trim() ? ' ' + specialInstructions.trim() : ''}`
       : (specialInstructions.trim() || undefined);
 
+    // Auth Check - Request OTP if not authenticated for this phone number
+    if (!customerAuth.isAuthenticated || customerAuth.phone !== cleanPhone) {
+      setIsSubmitting(true);
+      setError(null);
+      try {
+        await customerAuth.requestOtp(cleanPhone);
+        setCheckoutOtp('');
+        setShowOtpModal(true);
+        setResendTimer(60);
+      } catch (err: any) {
+        const msg = err.response?.data?.message || err.message || '';
+        if (msg.includes('Please wait') && msg.includes('seconds')) {
+          setCheckoutOtp('');
+          setShowOtpModal(true);
+          const match = msg.match(/wait (\d+) seconds/);
+          if (match) {
+            setResendTimer(parseInt(match[1]));
+          } else {
+            setResendTimer(60);
+          }
+          toast.info('You recently requested an OTP. Please enter it below.');
+        } else {
+          setError(msg || 'Failed to send verification code to this mobile number.');
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+      return; // Pause order placement, wait for OTP
+    }
+
+    await executeOrderPlacement(cleanPhone, finalSlotId, enrichedDeliveryAddress, enrichedInstructions, customerAuth.token);
+  };
+
+  const handleVerifyOtpAndPlaceOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkoutOtp || checkoutOtp.length !== 6) {
+      setOtpError('Please enter a valid 6-digit code.');
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    const cleanPhone = customerPhone.trim().replace(/^0+/, '');
+
+    try {
+      const token = await customerAuth.verifyOtp(cleanPhone, checkoutOtp);
+      setShowOtpModal(false);
+      setCheckoutOtp('');
+      
+      // Re-calculate fields for execution since we're in a new closure/event loop
+      let finalSlotId = selectedSlotId;
+      if (timeSelectionMode === 'CUSTOM') {
+        finalSlotId = resolvedSlotForCustomTime?.id || selectedSlotId || applicableSlots[0]?.id || slots[0]?.id;
+      }
+      if (!finalSlotId && slots.length > 0) {
+        finalSlotId = slots[0]?.id;
+      }
+      
+      const preferredTimeStr = timeSelectionMode === 'CUSTOM' && customDeliveryTime.trim()
+        ? (customDeliveryTime.includes('M') ? customDeliveryTime.trim() : format24To12(customDeliveryTime))
+        : undefined;
+      const enrichedDeliveryAddress = preferredTimeStr
+        ? `${deliveryAddress.trim()} [Preferred Delivery Time: ${preferredTimeStr}]`
+        : deliveryAddress.trim();
+      const enrichedInstructions = preferredTimeStr
+        ? `Preferred Delivery Time: ${preferredTimeStr}.${specialInstructions.trim() ? ' ' + specialInstructions.trim() : ''}`
+        : (specialInstructions.trim() || undefined);
+
+      await executeOrderPlacement(cleanPhone, finalSlotId, enrichedDeliveryAddress, enrichedInstructions, token);
+    } catch (err: any) {
+      setOtpError(err.response?.data?.message || err.message || 'Invalid or expired OTP. Please try again.');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const executeOrderPlacement = async (
+    cleanPhone: string,
+    finalSlotId: number | undefined,
+    enrichedDeliveryAddress: string,
+    enrichedInstructions: string | undefined,
+    tokenToUse: string | null
+  ) => {
     setIsSubmitting(true);
     setError(null);
 
@@ -380,7 +526,7 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
           cakeMessage: i.customMessage,
           addonIds: i.addonIds && i.addonIds.length > 0 ? i.addonIds : undefined,
         })),
-      });
+      }, tokenToUse); // Attach JWT!
 
       if (paymentMethod === 'ONLINE') {
         try {
@@ -666,12 +812,48 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
               2. Delivery Address &amp; Schedule
             </h2>
 
+            {savedAddresses.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm font-medium text-brand-text mb-2">Saved Addresses</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  {savedAddresses.map(addr => (
+                    <div 
+                      key={addr.id} 
+                      onClick={() => handleSelectSavedAddress(addr)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        selectedAddressId === addr.id 
+                          ? 'border-brand-primary bg-brand-primary/5 shadow-sm' 
+                          : 'border-brand-border hover:border-brand-primary/50'
+                      }`}
+                    >
+                      <div className="flex justify-between mb-1">
+                        <span className="font-semibold text-sm flex items-center text-brand-text">
+                          {addr.label}
+                          {addr.default && <span className="ml-2 text-[10px] bg-brand-cream text-brand-primary px-1.5 py-0.5 rounded uppercase font-bold">Default</span>}
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-muted line-clamp-2">{addr.deliveryAddress}</p>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex items-center">
+                  <div className="flex-1 h-px bg-brand-border/60"></div>
+                  <span className="px-3 text-xs text-brand-muted font-medium uppercase tracking-wider">Or enter manually</span>
+                  <div className="flex-1 h-px bg-brand-border/60"></div>
+                </div>
+              </div>
+            )}
+
             <Input
               label="Delivery Street Address"
               required
               placeholder="e.g. Flat 302, Green Valley Apartments, MG Road"
               value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
+              onChange={(e) => {
+                setDeliveryAddress(e.target.value);
+                setSelectedAddressId(null);
+              }}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1207,6 +1389,87 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* OTP Verification Modal */}
+      <Modal
+        isOpen={showOtpModal}
+        onClose={() => {
+          setShowOtpModal(false);
+          setIsSubmitting(false); // Make sure order button resets
+        }}
+        title="Verify Your Phone Number"
+        description={`We've sent a 6-digit OTP to ${customerPhone} to secure your order.`}
+        maxWidth="sm"
+      >
+        <form onSubmit={handleVerifyOtpAndPlaceOrder} className="space-y-4">
+          {otpError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex flex-col gap-1">
+              <span className="font-bold">Verification Failed</span>
+              <span>{otpError}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-brand-espresso">Enter 6-Digit OTP</label>
+            <input
+              type="text"
+              required
+              maxLength={6}
+              placeholder="••••••"
+              value={checkoutOtp}
+              onChange={(e) => setCheckoutOtp(e.target.value.replace(/\D/g, ''))}
+              className="w-full px-4 py-3 rounded-xl border border-brand-border bg-white text-center tracking-widest text-xl font-mono focus:outline-none focus:border-brand-plum focus:ring-1 focus:ring-brand-plum"
+            />
+          </div>
+          
+          <div className="flex justify-end items-center mt-1 mb-2">
+            {resendTimer > 0 ? (
+              <span className="text-[11px] text-brand-muted font-medium">
+                Resend OTP in {resendTimer}s
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await customerAuth.requestOtp(customerPhone.trim().replace(/^0+/, ''));
+                    setResendTimer(60);
+                    toast.success('OTP resent successfully!');
+                  } catch (err: any) {
+                    setOtpError(err.response?.data?.message || err.message || 'Failed to request OTP');
+                  }
+                }}
+                disabled={isVerifyingOtp}
+                className="text-[11px] font-bold text-brand-plum hover:text-brand-plum-light transition-colors"
+              >
+                Resend OTP
+              </button>
+            )}
+          </div>
+
+          <Button
+            type="submit"
+            disabled={isVerifyingOtp || checkoutOtp.length !== 6}
+            className="w-full font-bold h-11"
+          >
+            {isVerifyingOtp ? 'Verifying & Placing Order...' : 'Verify & Place Order'}
+          </Button>
+
+          <p className="text-[10px] text-center text-brand-muted pt-2">
+            Wrong number?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setShowOtpModal(false);
+                setIsSubmitting(false);
+              }}
+              className="font-bold text-brand-plum hover:underline"
+            >
+              Go back and edit
+            </button>
+          </p>
+        </form>
+      </Modal>
     </div>
   );
 };

@@ -29,6 +29,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -105,6 +106,12 @@ function OwnerCouponsContent() {
   const [searchTerm, setSearchTerm] = useState(urlSearch);
   const [statusFilter, setStatusFilter] = useState<CouponFilterStatus>('ALL');
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCoupons, setTotalCoupons] = useState(0);
+  const itemsPerPage = 10;
+
   // Copy code feedback
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -162,14 +169,16 @@ function OwnerCouponsContent() {
     setError(null);
 
     try {
-      const data = await ownerApi.getOwnerCoupons();
-      setCoupons(data || []);
+      const data = await ownerApi.getOwnerCoupons(currentPage, itemsPerPage, searchTerm || undefined, statusFilter);
+      setCoupons(data?.content || []);
+      setTotalPages(data?.totalPages || 1);
+      setTotalCoupons(data?.totalElements || 0);
     } catch (err: any) {
       setError(err?.message || 'Failed to load promotional coupons');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, itemsPerPage, searchTerm, statusFilter]);
 
   useEffect(() => {
     fetchCoupons();
@@ -302,9 +311,10 @@ function OwnerCouponsContent() {
     }
   };
 
-  const handleDeleteCoupon = async (c: CouponRecord) => {
+  const handleDeleteCoupon = async () => {
+    if (!deleteConfirmCoupon) return;
+    const c = deleteConfirmCoupon;
     const hasOrderHistory = (c.usedCount || 0) > 0;
-    setIsDeleting(true);
 
     try {
       const res = await ownerApi.deleteCoupon(c.id);
@@ -328,8 +338,7 @@ function OwnerCouponsContent() {
       setDeleteConfirmCoupon(null);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to delete coupon');
-    } finally {
-      setIsDeleting(false);
+      throw err;
     }
   };
 
@@ -351,22 +360,8 @@ function OwnerCouponsContent() {
     return counts;
   }, [coupons]);
 
-  // Filtered List
-  const filteredCoupons = useMemo(() => {
-    return coupons.filter((c) => {
-      const statusInfo = computeCouponStatus(c);
-      if (statusFilter !== 'ALL' && statusInfo.status !== statusFilter) {
-        return false;
-      }
-      if (searchTerm.trim()) {
-        const query = searchTerm.trim().toUpperCase();
-        const codeMatch = c.code.toUpperCase().includes(query);
-        const typeMatch = c.discountType.toUpperCase().includes(query);
-        return codeMatch || typeMatch;
-      }
-      return true;
-    });
-  }, [coupons, statusFilter, searchTerm]);
+  // Filtered List is handled via server-side pagination now
+  const filteredCoupons = coupons;
 
   if (loading) return <LoadingState message="Loading storefront discount coupons..." />;
 
@@ -732,6 +727,35 @@ function OwnerCouponsContent() {
         </div>
       )}
 
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-4 bg-white border border-owner-border rounded-xl mt-4">
+          <span className="text-xs text-owner-muted">
+            Page {currentPage + 1} of {totalPages} ({totalCoupons} total coupons)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="text-xs"
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="text-xs"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Create / Edit Coupon Modal */}
       <Modal
         isOpen={isModalOpen}
@@ -849,41 +873,21 @@ function OwnerCouponsContent() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmCoupon !== null && (
-        <Modal
-          isOpen={true}
-          onClose={() => setDeleteConfirmCoupon(null)}
-          title={(deleteConfirmCoupon.usedCount || 0) > 0 ? 'Deactivate Coupon?' : 'Delete Coupon?'}
-        >
-          <div className="space-y-4 pt-2">
-            <p className="text-xs text-owner-muted leading-relaxed">
-              {(deleteConfirmCoupon.usedCount || 0) > 0
-                ? `Coupon "${deleteConfirmCoupon.code}" has been redeemed in ${deleteConfirmCoupon.usedCount} order(s). To preserve historical invoices and accounting records, it will be immediately paused instead of deleted.`
-                : `Are you sure you want to permanently delete coupon "${deleteConfirmCoupon.code}"? This action cannot be undone.`}
-            </p>
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-owner-border">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteConfirmCoupon(null)}
-                disabled={isDeleting}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDeleteCoupon(deleteConfirmCoupon)}
-                disabled={isDeleting}
-                className="text-xs font-bold"
-              >
-                {isDeleting ? 'Processing...' : (deleteConfirmCoupon.usedCount || 0) > 0 ? 'Deactivate Coupon' : 'Confirm Delete'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <ConfirmDialog
+        isOpen={deleteConfirmCoupon !== null}
+        onClose={() => setDeleteConfirmCoupon(null)}
+        onConfirm={handleDeleteCoupon}
+        title={deleteConfirmCoupon ? ((deleteConfirmCoupon.usedCount || 0) > 0 ? 'Deactivate Coupon?' : 'Delete Coupon?') : ''}
+        description={
+          deleteConfirmCoupon ? (
+            (deleteConfirmCoupon.usedCount || 0) > 0
+              ? `Coupon "${deleteConfirmCoupon.code}" has been redeemed in ${deleteConfirmCoupon.usedCount} order(s). To preserve historical invoices and accounting records, it will be immediately paused instead of deleted.`
+              : `Are you sure you want to permanently delete coupon "${deleteConfirmCoupon.code}"? This action cannot be undone.`
+          ) : ''
+        }
+        confirmLabel={deleteConfirmCoupon ? ((deleteConfirmCoupon.usedCount || 0) > 0 ? 'Deactivate Coupon' : 'Confirm Delete') : ''}
+        isDestructive={true}
+      />
     </div>
   );
 }

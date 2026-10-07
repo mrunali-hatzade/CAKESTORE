@@ -118,18 +118,18 @@ export default function OwnerSubscriptionPage() {
         return;
       }
 
-      if (keyId && !keyId.includes('placeholder') && typeof window !== 'undefined' && (window as any).Razorpay) {
+      if (keyId && !keyId.includes('placeholder')) {
         const rzpOptions = {
           key: keyId,
           amount: orderData.amountPaise,
           currency: orderData.currency || 'INR',
           name: 'CakeStore',
-          description: `Platform License for ${shop?.businessName || 'Bakery'}`,
+          description: `Subscription Renewal for ${orderData.shopName || 'Bakery'}`,
           order_id: orderData.razorpayOrderId,
           prefill: {
-            name: shop?.businessName || '',
+            name: user?.fullName || '',
             email: user?.email || '',
-            contact: shop?.phone || (shop as any)?.businessPhone || '',
+            contact: shop?.phone || user?.email || '',
           },
           theme: {
             color: '#5C2434',
@@ -137,34 +137,29 @@ export default function OwnerSubscriptionPage() {
           handler: async (response: any) => {
             try {
               if (!response.razorpay_order_id || !response.razorpay_payment_id || !response.razorpay_signature) {
-                const errorMsg = `Incomplete payment details received from gateway.`;
-                console.error(errorMsg, response);
-                throw new Error(errorMsg);
+                throw new Error('Incomplete payment details.');
               }
-
-              const result = await ownerApi.verifySubscriptionPayment({
+              await ownerApi.verifySubscriptionPayment({
                 razorpayOrderId: response.razorpay_order_id,
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpaySignature: response.razorpay_signature,
                 planId: targetPlanId,
               });
-              setSuccessNotice(
-                `Payment verified (${result.providerPaymentId || response.razorpay_payment_id}). Your bakery subscription is now ACTIVE!`
-              );
+              setSuccessNotice('Payment processed successfully. Subscription updated.');
               await Promise.allSettled([
                 fetchSubscription(true),
                 refreshShop ? refreshShop() : Promise.resolve(),
                 refreshDashboard ? refreshDashboard() : Promise.resolve(),
               ]);
             } catch (err: any) {
-              setErrorNotice(err?.message || 'Payment verification failed. Please contact support.');
+              setErrorNotice(err?.message || 'Payment verification failed. Please try again.');
             } finally {
               setRenewing(false);
             }
           },
           modal: {
             ondismiss: () => {
-              setErrorNotice('Payment checkout was closed before completion.');
+              setErrorNotice('Payment was not completed. Please try again.');
               setRenewing(false);
             },
           },
@@ -173,17 +168,15 @@ export default function OwnerSubscriptionPage() {
         const rzp = new (window as any).Razorpay(rzpOptions);
         rzp.open();
       } else {
-        // Sandbox / test simulation fallback when placeholder keys are active
+        // Sandbox simulation when test placeholder keys are active
         const simulatedPaymentId = `pay_test_${Date.now()}`;
-        const result = await ownerApi.verifySubscriptionPayment({
+        await ownerApi.verifySubscriptionPayment({
           razorpayOrderId: orderData.razorpayOrderId,
           razorpayPaymentId: simulatedPaymentId,
           razorpaySignature: 'simulated_test_sig',
           planId: targetPlanId,
         });
-        setSuccessNotice(
-          `Payment verified (${result.providerPaymentId || simulatedPaymentId}). Your bakery subscription is now ACTIVE!`
-        );
+        setSuccessNotice('Mock payment processed successfully. Subscription updated.');
         await Promise.allSettled([
           fetchSubscription(true),
           refreshShop ? refreshShop() : Promise.resolve(),

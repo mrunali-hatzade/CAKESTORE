@@ -112,16 +112,23 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
         }
       }
 
+      if (response.status === 500) {
+        if (typeof window !== 'undefined') {
+          console.error('Internal Server Error');
+        }
+      }
+
       // Auto-logout on token expiry or unauthorized access
       if (response.status === 401) {
         clearStoredToken();
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('cakeStoreGuestToken');
+          sessionStorage.removeItem('cakeStoreGuestPhone');
+        }
+        
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          const isProtectedRoute =
-            window.location.pathname.startsWith('/dashboard') ||
-            window.location.pathname.startsWith('/admin');
-          if (isProtectedRoute) {
-            window.location.href = `/login?session=expired`;
-          }
+          // Notify the user that the session has expired and ask them to refresh manually
+          alert('Your session has expired. Please refresh the page to log in again.');
         }
       }
 

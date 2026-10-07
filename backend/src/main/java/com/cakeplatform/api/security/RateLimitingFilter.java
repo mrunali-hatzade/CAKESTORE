@@ -55,7 +55,7 @@ public class RateLimitingFilter implements Filter {
         }
 
         // 2. Auth Endpoints: Strict 10 req/min
-        if (uri.startsWith("/api/auth/")) {
+        if (uri.startsWith("/api/auth/") || uri.startsWith("/api/customer/storefront/tracking/")) {
             String ip = getClientIp(httpRequest);
             Bucket bucket = authBuckets.computeIfAbsent(ip, k -> createBucket(10, Duration.ofMinutes(1)));
             if (!bucket.tryConsume(1)) {
@@ -73,7 +73,7 @@ public class RateLimitingFilter implements Filter {
             }
         }
         // 4. Storefront General Browsing: Generous 120 req/min
-        else if (uri.startsWith("/api/storefront/")) {
+        else if (uri.startsWith("/api/storefront/") || uri.startsWith("/api/customer/storefront/")) {
             String ip = getClientIp(httpRequest);
             Bucket bucket = storefrontBuckets.computeIfAbsent(ip, k -> createBucket(120, Duration.ofMinutes(1)));
             if (!bucket.tryConsume(1)) {

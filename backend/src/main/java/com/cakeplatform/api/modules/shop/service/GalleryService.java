@@ -34,6 +34,13 @@ public class GalleryService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<GalleryItemResponse> getOwnerGalleryItems(Long ownerId, String search, org.springframework.data.domain.Pageable pageable) {
+        Shop shop = getShopByOwnerId(ownerId);
+        return galleryItemRepository.searchByShopId(shop.getId(), search, pageable)
+                .map(GalleryItemResponse::fromEntity);
+    }
+
     @Transactional
     public GalleryItemResponse createGalleryItem(Long ownerId, GalleryItemRequest request) {
         Shop shop = getShopByOwnerId(ownerId);

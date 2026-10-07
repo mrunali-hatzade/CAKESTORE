@@ -25,13 +25,13 @@ public class DocumentAccessController {
     private final StorageService storageService;
 
     @GetMapping("/admin/documents/{id}/view")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<Void> viewDocumentAdmin(@PathVariable Long id) {
         return handleDocumentView(id, null, true);
     }
 
     @GetMapping("/owner/documents/{id}/view")
-    @PreAuthorize("hasRole('SHOP_OWNER')")
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     public ResponseEntity<Void> viewDocumentOwner(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails userDetails) {
         return handleDocumentView(id, userDetails.getId(), false);
     }

@@ -21,6 +21,7 @@ import java.util.Collections;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -72,7 +73,7 @@ public class OwnerOrderControllerTest {
                 1
         );
 
-        when(orderService.getPaginatedOrdersByUserId(eq(1L), any(org.springframework.data.domain.Pageable.class)))
+        when(orderService.getPaginatedOrdersByUserId(eq(1L), isNull(), isNull(), isNull(), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(mockPage);
 
         mockMvc.perform(get("/api/owner/orders?page=0&size=20")

@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/common/Toast';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -110,6 +111,12 @@ export default function OwnerGalleryPage() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 20;
+
   const [isSeeding, setIsSeeding] = useState(false);
   const handleSeedGalleryExample = async () => {
     setIsSeeding(true);
@@ -153,17 +160,46 @@ export default function OwnerGalleryPage() {
 
   const fetchGalleryItems = useCallback(async () => {
     try {
-      const [galleryData, productsData] = await Promise.all([
-        galleryApi.getOwnerGalleryItems(),
-        productsApi.getOwnerProducts().catch(() => []),
-      ]);
-      setItems(galleryData || []);
-      setProducts(productsData || []);
+      // For global pagination we request from both endpoints based on the view mode
+      let galleryPromise = Promise.resolve({ content: [], totalElements: 0, totalPages: 0 });
+      let productsPromise = Promise.resolve({ content: [], totalElements: 0, totalPages: 0 });
+
+      if (galleryViewMode === 'ALL' || galleryViewMode === 'SHOWCASE') {
+        // Request enough to allow global sorting for current page view
+        const fetchSize = (currentPage + 1) * itemsPerPage;
+        galleryPromise = galleryApi.getOwnerGalleryItems(0, fetchSize, searchQuery).catch(() => ({ content: [], totalElements: 0, totalPages: 0 })) as any;
+      }
+
+      if (galleryViewMode === 'ALL' || galleryViewMode === 'PRODUCTS') {
+        const fetchSize = (currentPage + 1) * itemsPerPage;
+        // For products, we also apply search
+        productsPromise = productsApi.getOwnerProducts(0, fetchSize, searchQuery).catch(() => ({ content: [], totalElements: 0, totalPages: 0 })) as any;
+      }
+
+      const [galleryData, productsData] = await Promise.all([galleryPromise, productsPromise]);
+
+      // @ts-ignore - The types might be slightly off due to our fallback, but it has content and totalElements
+      setItems(galleryData?.content || []);
+      // @ts-ignore
+      setProducts(productsData?.content || []);
+
+      // Compute total pages based on mode
+      let combinedTotal = 0;
+      // @ts-ignore
+      if (galleryViewMode === 'ALL') combinedTotal = (galleryData?.totalElements || 0) + (productsData?.totalElements || 0);
+      // @ts-ignore
+      else if (galleryViewMode === 'SHOWCASE') combinedTotal = galleryData?.totalElements || 0;
+      // @ts-ignore
+      else if (galleryViewMode === 'PRODUCTS') combinedTotal = productsData?.totalElements || 0;
+
+      setTotalItems(combinedTotal);
+      setTotalPages(Math.max(1, Math.ceil(combinedTotal / itemsPerPage)));
     } catch (err: any) {
       console.error('Failed to load gallery items:', err);
       setItems([]);
+      setProducts([]);
     }
-  }, []);
+  }, [currentPage, searchQuery, galleryViewMode]);
 
   useEffect(() => {
     const init = async () => {
@@ -283,17 +319,16 @@ export default function OwnerGalleryPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    setIsDeleting(true);
+  const handleDelete = async () => {
+    if (deleteConfirmId === null) return;
     try {
-      await galleryApi.deleteGalleryItem(id);
-      setItems((prev) => prev.filter((i) => i.id !== id));
+      await galleryApi.deleteGalleryItem(deleteConfirmId);
+      setItems((prev) => prev.filter((i) => i.id !== deleteConfirmId));
       setDeleteConfirmId(null);
       toast.success('Photo removed from gallery showcase');
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete gallery item.');
-    } finally {
-      setIsDeleting(false);
+      throw err;
     }
   };
 
@@ -391,7 +426,7 @@ export default function OwnerGalleryPage() {
   }, [unifiedItems]);
 
   const filteredItems = useMemo(() => {
-    return unifiedItems.filter((item) => {
+    const filtered = unifiedItems.filter((item) => {
       if (galleryViewMode === 'SHOWCASE' && item.origin !== 'showcase') return false;
       if (galleryViewMode === 'PRODUCTS' && item.origin !== 'product') return false;
 
@@ -406,7 +441,11 @@ export default function OwnerGalleryPage() {
 
       return matchesSearch && matchesCat;
     });
-  }, [unifiedItems, galleryViewMode, searchQuery, selectedCategoryFilter]);
+
+    // Slice for pagination
+    const startIndex = currentPage * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [unifiedItems, galleryViewMode, searchQuery, selectedCategoryFilter, currentPage, itemsPerPage]);
 
   const totalShowcaseCount = items.length;
   const totalProductsCount = unifiedItems.filter((i) => i.origin === 'product').length;
@@ -748,6 +787,35 @@ export default function OwnerGalleryPage() {
         </div>
       )}
 
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-4 bg-white border border-owner-border rounded-xl mt-4">
+          <span className="text-xs text-owner-muted">
+            Page {currentPage + 1} of {totalPages} ({totalItems} total photos)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="text-xs"
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="text-xs"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Add / Edit Modal */}
       <Modal
         isOpen={isModalOpen}
@@ -1006,39 +1074,15 @@ export default function OwnerGalleryPage() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmId !== null && (
-        <Modal
-          isOpen={true}
-          onClose={() => setDeleteConfirmId(null)}
-          title="Delete Showcase Photo?"
-        >
-          <div className="space-y-4 pt-2">
-            <p className="text-xs text-owner-muted leading-relaxed">
-              Are you sure you want to remove this photo from your gallery showcase? This action cannot be undone.
-            </p>
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-owner-border">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteConfirmId(null)}
-                disabled={isDeleting}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDelete(deleteConfirmId)}
-                disabled={isDeleting}
-                className="text-xs font-bold"
-              >
-                {isDeleting ? 'Deleting...' : 'Confirm Delete'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <ConfirmDialog
+        isOpen={deleteConfirmId !== null}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleDelete}
+        title="Delete Showcase Photo?"
+        description="Are you sure you want to remove this photo from your gallery showcase? This action cannot be undone."
+        confirmLabel="Confirm Delete"
+        isDestructive={true}
+      />
 
       {/* Fullscreen Image Preview Modal */}
       {previewImage && (
@@ -1068,3 +1112,4 @@ export default function OwnerGalleryPage() {
     </div>
   );
 }
+

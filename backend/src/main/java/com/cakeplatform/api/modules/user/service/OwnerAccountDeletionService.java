@@ -159,7 +159,8 @@ public class OwnerAccountDeletionService {
                 o.setDeliverySlot(null);
             }
             orderRepository.saveAll(orders);
-            orderRepository.deleteAll(orders);
+            // Preserved historical orders for analytics
+            // orderRepository.deleteAll(orders);
 
             deliverySlotRepository.deleteByShopId(shopId);
 
@@ -170,11 +171,14 @@ public class OwnerAccountDeletionService {
             // Products reference ProductCategory with ON DELETE RESTRICT.
             // Deleting products first clears the restriction safely.
             productRepository.deleteAll(products);
-            productCategoryRepository.deleteByShopId(shopId);
+            // Preserved product categories because soft-deleted products still reference them
+            // productCategoryRepository.deleteByShopId(shopId);
 
             // G. Payments and Subscriptions
-            paymentRepository.deleteByShopId(shopId);
-            subscriptionRepository.deleteByShopId(shopId);
+            // Preserved historical payments for analytics
+            // paymentRepository.deleteByShopId(shopId);
+            // Preserved historical subscriptions for analytics
+            // subscriptionRepository.deleteByShopId(shopId);
 
             // H. Delete Shop entity
             shopRepository.delete(shop);
@@ -196,7 +200,16 @@ public class OwnerAccountDeletionService {
         );
 
         // 10. Delete User entity
-        userRepository.delete(user);
-        log.info("Successfully permanently deleted owner User ID: {}", ownerId);
-    }
+        
+        
+        // 10. Soft-Delete / Anonymize User entity
+        // We do NOT hard delete the user to preserve foreign key integrity for Shop/Orders.
+        user.setEmail("deleted_" + System.currentTimeMillis() + "_" + user.getId() + "@deleted.cakeplatform.com");
+        user.setPasswordHash("");
+        user.setStatus(com.cakeplatform.api.modules.user.UserStatus.DISABLED);
+        userRepository.save(user); // Save anonymized details
+        userRepository.delete(user); // Trigger @SQLDelete to set is_deleted = true
+        
+        log.info("Successfully soft-deleted and anonymized owner User ID: {}", ownerId);
+}
 }

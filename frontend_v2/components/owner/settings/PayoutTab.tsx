@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ownerApi } from '@/lib/api/owner';
 import { ShopPayoutDetails } from '@/types/owner';
+import { useUnsavedChanges } from '@/context/UnsavedChangesContext';
 
 interface PayoutTabProps {
   initialPayout: ShopPayoutDetails | null;
@@ -22,6 +23,26 @@ export default function PayoutTab({ initialPayout, isAdminWithoutShop, onUpdate 
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const { setDirty } = useUnsavedChanges();
+
+  // Snapshot for dirty state tracking
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
+  const currentSnapshot = JSON.stringify({
+    beneficiaryName, bankAccountNumber, ifscCode, upiId
+  });
+
+  useEffect(() => {
+    if (initialSnapshot === null) {
+      setInitialSnapshot(currentSnapshot);
+    } else {
+      setDirty('settings-payout', currentSnapshot !== initialSnapshot);
+    }
+  }, [currentSnapshot, initialSnapshot, setDirty]);
+
+  useEffect(() => {
+    return () => setDirty('settings-payout', false);
+  }, [setDirty]);
 
   // Sync state if initialPayout updates
   useEffect(() => {
@@ -47,6 +68,8 @@ export default function PayoutTab({ initialPayout, isAdminWithoutShop, onUpdate 
         ifscCode,
         upiId,
       });
+      setInitialSnapshot(currentSnapshot);
+      setDirty('settings-payout', false);
       setSuccessMsg('Bank account & UPI payout coordinates saved securely!');
       onUpdate();
       setTimeout(() => setSuccessMsg(null), 4000);

@@ -23,6 +23,7 @@ public class GuestOtpService {
     private final SmsService smsService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final com.cakeplatform.api.modules.user.UserRepository userRepository;
 
     private static final int OTP_LENGTH = 6;
     private static final int OTP_EXPIRY_MINUTES = 10;
@@ -31,21 +32,13 @@ public class GuestOtpService {
     private final SecureRandom secureRandom = new SecureRandom();
 
     private String normalizePhone(String phone) {
-        if (phone == null) return null;
-        String normalized = phone.replaceAll("\\s+", "").replaceAll("\\-", "");
-        if (!normalized.startsWith("+")) {
-            if (normalized.length() == 10) {
-                normalized = "+91" + normalized; // Default to India if not specified, matching checkout assumption
-            } else {
-                normalized = "+" + normalized;
-            }
-        }
-        return normalized;
+        return com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(phone);
     }
 
     @Transactional
     public void requestOtp(String phoneNumber) {
         String normalizedPhone = normalizePhone(phoneNumber);
+        if (normalizedPhone == null) throw new RuntimeException("Invalid phone number");
         
         // Prevent revealing if user has orders or not in the HTTP response.
         // For rate limiting and resend cooldown:
@@ -53,7 +46,8 @@ public class GuestOtpService {
         if (existing.isPresent()) {
             OtpVerification otp = existing.get();
             if (otp.getCreatedAt().plusSeconds(RESEND_COOLDOWN_SECONDS).isAfter(LocalDateTime.now())) {
-                throw new RuntimeException("Please wait before requesting a new OTP");
+                long secondsLeft = java.time.Duration.between(LocalDateTime.now(), otp.getCreatedAt().plusSeconds(RESEND_COOLDOWN_SECONDS)).getSeconds();
+                throw new RuntimeException("Please wait " + secondsLeft + " seconds before requesting a new OTP.");
             }
             // Invalidate old OTP by setting expiry to now
             otp.setExpiresAt(LocalDateTime.now());
@@ -64,18 +58,23 @@ public class GuestOtpService {
         String otpHash = passwordEncoder.encode(rawOtp);
 
         OtpVerification verification = new OtpVerification();
-        verification.setPhoneNumber(normalizedPhone);
+        verification.setPhoneNumber(normalizedPhone); // Store 10 digit number in DB
         verification.setOtpHash(otpHash);
         verification.setExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
         otpRepository.save(verification);
 
-        String message = String.format("Your CakeStore order tracking code is: %s. It is valid for %d minutes.", rawOtp, OTP_EXPIRY_MINUTES);
-        smsService.sendSms(normalizedPhone, message);
+        // The OTP is invalidated after successful verification – no need to state the validity period.
+        String message = String.format("Your CakeStore order tracking code is: %s.", rawOtp);
+        // Twilio requires E.164 format
+        String smsPhone = "+91" + normalizedPhone;
+        smsService.sendSms(smsPhone, message);
     }
 
     @Transactional
     public String verifyOtp(String phoneNumber, String otp) {
         String normalizedPhone = normalizePhone(phoneNumber);
+        if (normalizedPhone == null) throw new RuntimeException("Invalid phone number");
+        
         OtpVerification verification = otpRepository.findTopByPhoneNumberOrderByCreatedAtDesc(normalizedPhone)
                 .orElseThrow(() -> new RuntimeException("Invalid or expired OTP"));
 
@@ -98,9 +97,23 @@ public class GuestOtpService {
         verification.setExpiresAt(LocalDateTime.now());
         otpRepository.save(verification);
 
-        // Generate short-lived JWT for guest tracker (15 mins)
-        // We will need a method in JwtService to generate a guest token
-        return jwtService.generateGuestToken(normalizedPhone);
+        // Hydrate Customer Account
+        com.cakeplatform.api.modules.user.User user = userRepository.findByMobileIncludingDeleted(normalizedPhone).orElse(null);
+        if (user == null) {
+            user = new com.cakeplatform.api.modules.user.User();
+            user.setMobile(normalizedPhone);
+            user.setRole(com.cakeplatform.api.modules.user.UserRole.CUSTOMER);
+            user = userRepository.save(user);
+        } else if (user.isDeleted()) {
+            user.setDeleted(false);
+            user = userRepository.save(user);
+        }
+
+        // Issue CUSTOMER JWT
+        com.cakeplatform.api.security.CustomUserDetails userDetails = new com.cakeplatform.api.security.CustomUserDetails(user);
+        java.util.Map<String, Object> extraClaims = new java.util.HashMap<>();
+        extraClaims.put("granted_role", "CUSTOMER");
+        return jwtService.generateToken(extraClaims, userDetails);
     }
 
     private String generateOtp() {

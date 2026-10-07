@@ -92,8 +92,12 @@ class OwnerDashboardServiceTest {
         when(productRepository.countByShopId(shop.getId())).thenReturn(10L);
         when(productRepository.countByShopIdAndStatusAndAvailability(shop.getId(), "ACTIVE", true)).thenReturn(8L);
         
-        List<Order> activeOrders = Arrays.asList(paidOrderToday, codOrderToday, cancelledOrderToday);
-        when(orderRepository.findVisibleOrdersByShopId(shop.getId())).thenReturn(activeOrders);
+
+        when(orderRepository.sumRevenueForShopByDateRange(eq(shop.getId()), any(), any())).thenReturn(new BigDecimal("1500"));
+        when(orderRepository.countPendingConfirmationOrdersForShop(shop.getId())).thenReturn(1L);
+        when(orderRepository.sumPendingCodForShop(shop.getId())).thenReturn(java.util.Collections.singletonList(new Object[]{new BigDecimal("500"), 1L}));
+        when(orderRepository.countDeliveriesForShopByDateRange(eq(shop.getId()), any(), any())).thenReturn(1L);
+        when(orderRepository.countUnscheduledDeliveriesForShopByDateRange(eq(shop.getId()), any(), any())).thenReturn(2L);
 
         OwnerDashboardStatsResponse stats = ownerDashboardService.getDashboardStats(1L);
 
@@ -116,4 +120,8 @@ class OwnerDashboardServiceTest {
         assertEquals(2, stats.getUnscheduledTodayDeliveries());
     }
 }
+
+
+
+
 

@@ -21,7 +21,7 @@ public class OwnerChatController {
     private final ChatService chatService;
 
     @GetMapping("/conversations")
-    @PreAuthorize("hasRole('SHOP_OWNER')")
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     public ResponseEntity<ConversationResponse> getActiveConversation(@AuthenticationPrincipal CustomUserDetails userDetails) {
         ConversationResponse response = chatService.getActiveConversationForOwner(userDetails.getId());
         if (response == null) {
@@ -31,19 +31,19 @@ public class OwnerChatController {
     }
 
     @PostMapping("/conversations")
-    @PreAuthorize("hasRole('SHOP_OWNER')")
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     public ResponseEntity<ConversationResponse> createActiveConversation(@AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(chatService.getOrCreateActiveConversationForOwner(userDetails.getId()));
     }
 
     @GetMapping("/messages")
-    @PreAuthorize("hasRole('SHOP_OWNER')")
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     public ResponseEntity<List<MessageResponse>> getMessages(@AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(chatService.getMessages(userDetails.getId()));
     }
 
     @PostMapping("/messages")
-    @PreAuthorize("hasRole('SHOP_OWNER')")
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     public ResponseEntity<MessageResponse> sendMessage(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestBody CreateMessageRequest request) {
@@ -51,14 +51,14 @@ public class OwnerChatController {
     }
 
     @PatchMapping("/read")
-    @PreAuthorize("hasRole('SHOP_OWNER')")
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     public ResponseEntity<Void> markMessagesAsRead(@AuthenticationPrincipal CustomUserDetails userDetails) {
         chatService.markMessagesAsReadForOwner(userDetails.getId());
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/unread-count")
-    @PreAuthorize("hasRole('SHOP_OWNER')")
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     public ResponseEntity<Map<String, Long>> getUnreadCount(@AuthenticationPrincipal CustomUserDetails userDetails) {
         long count = chatService.getUnreadCountForOwner(userDetails.getId());
         return ResponseEntity.ok(Map.of("unreadCount", count));

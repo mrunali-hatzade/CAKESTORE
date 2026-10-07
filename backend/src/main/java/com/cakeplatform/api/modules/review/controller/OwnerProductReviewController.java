@@ -15,16 +15,21 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/owner/product-reviews")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerProductReviewController {
 
     private final ProductReviewService productReviewService;
 
     @GetMapping
-    public ResponseEntity<List<OwnerProductReviewResponse>> getMyProductReviews(
-            @AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(productReviewService.getOwnerProductReviews(userDetails.getId()));
+    public ResponseEntity<org.springframework.data.domain.Page<OwnerProductReviewResponse>> getMyProductReviews(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Integer rating,
+            @RequestParam(required = false) String search) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        return ResponseEntity.ok(productReviewService.getOwnerProductReviews(userDetails.getId(), rating, search, pageable));
     }
 
     @PostMapping("/{reviewId}/reply")

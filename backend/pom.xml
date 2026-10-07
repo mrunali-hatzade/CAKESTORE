@@ -16,10 +16,13 @@
     
     <properties>
         <java.version>17</java.version>
-        <jjwt.version>0.12.6</jjwt.version>
+        <flyway.version>9.22.2</flyway.version>
+        <postgresql.version>42.7.3</postgresql.version>
         <db.url>jdbc:postgresql://localhost:5432/cake_platform</db.url>
         <db.username>postgres</db.username>
         <db.password>password</db.password>
+        <jjwt.version>0.13.0</jjwt.version>
+        <start-class>com.cakeplatform.api.CakePlatformApplication</start-class>
     </properties>
 
     <dependencies>
@@ -68,10 +71,10 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-postgresql</artifactId>
-        </dependency>
+
+
+
+
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
@@ -97,6 +100,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -176,11 +184,11 @@
                     <password>${db.password}</password>
                 </configuration>
                 <dependencies>
-                    <dependency>
-                        <groupId>org.flywaydb</groupId>
-                        <artifactId>flyway-database-postgresql</artifactId>
-                        <version>${flyway.version}</version>
-                    </dependency>
+
+
+
+
+
                     <dependency>
                         <groupId>org.postgresql</groupId>
                         <artifactId>postgresql</artifactId>

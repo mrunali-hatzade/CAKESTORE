@@ -35,6 +35,8 @@ public class GuestTrackingTest {
     private JwtService jwtService;
     @Mock
     private OrderRepository orderRepository;
+    @Mock
+    private com.cakeplatform.api.modules.user.UserRepository userRepository;
 
     @InjectMocks
     private GuestOtpService guestOtpService;
@@ -87,7 +89,12 @@ public class GuestTrackingTest {
         
         when(otpRepository.findTopByPhoneNumberOrderByCreatedAtDesc(any())).thenReturn(Optional.of(otp));
         when(passwordEncoder.matches("123456", "hashed_otp")).thenReturn(true);
-        when(jwtService.generateGuestToken("+919876543210")).thenReturn("jwt_token");
+        when(userRepository.findByMobile("9876543210")).thenReturn(Optional.empty());
+        
+        com.cakeplatform.api.modules.user.User savedUser = new com.cakeplatform.api.modules.user.User();
+        savedUser.setMobile("9876543210");
+        when(userRepository.save(any())).thenReturn(savedUser);
+        when(jwtService.generateToken(any(), any())).thenReturn("jwt_token");
         
         String token = guestOtpService.verifyOtp("9876543210", "123456");
         

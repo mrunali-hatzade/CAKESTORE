@@ -66,60 +66,26 @@ public class OwnerDashboardService {
         }
 
         // Action Items & Server Authoritative Logic
-        List<Order> activeOrders = orderRepository.findVisibleOrdersByShopId(shopId);
-        String todayStr = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        java.time.LocalDateTime startOfDay = today.atStartOfDay();
+        java.time.LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
         
-        long todayDeliveries = 0;
-        long unscheduledDeliveries = 0;
-        long pendingConfOrders = 0;
-        long pendingCodOrders = 0;
+        long pendingConfOrders = orderRepository.countPendingConfirmationOrdersForShop(shopId);
+        
+        List<Object[]> pendingCodResults = orderRepository.sumPendingCodForShop(shopId);
         BigDecimal pendingCodAmount = BigDecimal.ZERO;
-        BigDecimal todayRevenue = BigDecimal.ZERO;
-
-        for (Order o : activeOrders) {
-            String pStatus = o.getPaymentStatus() != null ? o.getPaymentStatus().toUpperCase() : "";
-            String oStatus = o.getOrderStatus() != null ? o.getOrderStatus().toUpperCase() : "";
-            String pMethod = o.getPaymentMethod() != null ? o.getPaymentMethod().toUpperCase() : "";
-            
-            boolean isCod = pMethod.equals("COD") || pMethod.equals("CASH_ON_DELIVERY");
-            boolean isPaid = pStatus.equals("PAID") || pStatus.equals("COMPLETED");
-            boolean isCancelled = oStatus.equals("CANCELLED");
-            
-            // Pending Confirmations
-            if ((oStatus.equals("NEW") || oStatus.equals("PENDING")) && (isCod || isPaid)) {
-                pendingConfOrders++;
-            }
-            
-            // COD Pending
-            if (isCod && !pStatus.equals("PAID") && !pStatus.equals("COMPLETED") && !isCancelled) {
-                pendingCodOrders++;
-                if (o.getTotalAmount() != null) {
-                    pendingCodAmount = pendingCodAmount.add(o.getTotalAmount());
-                }
-            }
-            
-            // Today Revenue
-            String createdDate = o.getCreatedAt() != null ? o.getCreatedAt().atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : "";
-            if (createdDate.equals(todayStr) && !isCancelled && !pStatus.equals("REFUNDED") && !pStatus.equals("FAILED") && (isPaid || isCod)) {
-                if (o.getTotalAmount() != null) {
-                    todayRevenue = todayRevenue.add(o.getTotalAmount());
-                }
-            }
-            
-            // Today Deliveries
-            if ((isCod || isPaid) && !isCancelled) {
-                String orderDeliveryDate = o.getDeliveryDate() != null ? o.getDeliveryDate().toString() : "";
-                if (orderDeliveryDate.startsWith(todayStr)) {
-                    todayDeliveries++;
-                    if (o.getDeliverySlot() == null) {
-                        unscheduledDeliveries++;
-                    }
-                }
-            }
+        long pendingCodOrders = 0;
+        if (!pendingCodResults.isEmpty()) {
+            Object[] row = pendingCodResults.get(0);
+            pendingCodAmount = (BigDecimal) row[0];
+            pendingCodOrders = ((Number) row[1]).longValue();
         }
+
+        BigDecimal todayRevenue = orderRepository.sumRevenueForShopByDateRange(shopId, startOfDay, endOfDay);
+        long todayDeliveries = orderRepository.countDeliveriesForShopByDateRange(shopId, today, today.plusDays(1));
+        long unscheduledDeliveries = orderRepository.countUnscheduledDeliveriesForShopByDateRange(shopId, today, today.plusDays(1));
         
-        long pendingCustomEnquiries = customCakeRequestRepository.searchCustomCakesByShopId(shopId, "", org.springframework.data.domain.PageRequest.of(0, 1000))
-                .stream().filter(c -> "PENDING".equalsIgnoreCase(c.getStatus())).count();
+        long pendingCustomEnquiries = customCakeRequestRepository.countByShopIdAndStatus(shopId, "PENDING");
                 
         long inactiveCatalogCakes = Math.max(0, stats.getTotalProducts() - stats.getActiveProducts());
 
@@ -146,7 +112,7 @@ public class OwnerDashboardService {
         Pageable limit = PageRequest.of(0, 5);
 
         // 1. Orders
-        List<Order> orders = orderRepository.searchOrdersByShopId(shopId, query, limit);
+        List<Order> orders = orderRepository.findFilteredOrdersByShopId(shopId, null, null, query, limit).getContent();
         List<OwnerGlobalSearchResponse.OrderSearchResult> orderResults = orders.stream()
                 .map(o -> OwnerGlobalSearchResponse.OrderSearchResult.builder()
                         .id(o.getId())
@@ -161,7 +127,7 @@ public class OwnerDashboardService {
                 .collect(Collectors.toList());
 
         // 2. Products
-        List<Product> products = productRepository.searchProductsByShopId(shopId, query, limit);
+        List<Product> products = productRepository.findByShopIdWithFilters(shopId, query, null, limit).getContent();
         List<OwnerGlobalSearchResponse.ProductSearchResult> productResults = products.stream()
                 .map(p -> OwnerGlobalSearchResponse.ProductSearchResult.builder()
                         .id(p.getId())
@@ -175,7 +141,7 @@ public class OwnerDashboardService {
                 .collect(Collectors.toList());
 
         // 3. Customers
-        List<CustomerProfileResponse> customers = orderRepository.searchCustomerProfilesByShopId(shopId, query, limit);
+        List<CustomerProfileResponse> customers = orderRepository.searchCustomerProfilesByShopId(shopId, query, limit).getContent();
         List<OwnerGlobalSearchResponse.CustomerSearchResult> customerResults = customers.stream()
                 .map(c -> OwnerGlobalSearchResponse.CustomerSearchResult.builder()
                         .name(c.getName())
@@ -202,7 +168,7 @@ public class OwnerDashboardService {
                 .collect(Collectors.toList());
 
         // 5. Inquiries
-        List<Enquiry> enquiries = enquiryRepository.searchEnquiriesByShopId(shopId, query, limit);
+        List<Enquiry> enquiries = enquiryRepository.searchEnquiriesByShopId(shopId, null, null, query, limit).getContent();
         List<OwnerGlobalSearchResponse.EnquirySearchResult> enquiryResults = enquiries.stream()
                 .map(e -> OwnerGlobalSearchResponse.EnquirySearchResult.builder()
                         .id(e.getId())

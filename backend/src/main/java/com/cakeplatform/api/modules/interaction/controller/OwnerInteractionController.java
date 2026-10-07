@@ -18,7 +18,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerInteractionController {
 
@@ -26,8 +26,14 @@ public class OwnerInteractionController {
 
     // --- Feedback ---
     @GetMapping("/feedback")
-    public ResponseEntity<List<Feedback>> getMyFeedback(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(ownerInteractionService.getMyFeedback(userDetails.getId()));
+    public ResponseEntity<org.springframework.data.domain.Page<Feedback>> getMyFeedback(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Integer rating,
+            @RequestParam(required = false) String search) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        return ResponseEntity.ok(ownerInteractionService.getMyFeedback(userDetails.getId(), rating, search, pageable));
     }
 
     @PostMapping("/feedback/{id}/reply")
@@ -56,8 +62,15 @@ public class OwnerInteractionController {
 
     // --- Enquiries ---
     @GetMapping("/enquiries")
-    public ResponseEntity<List<Enquiry>> getMyEnquiries(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(ownerInteractionService.getMyEnquiries(userDetails.getId()));
+    public ResponseEntity<org.springframework.data.domain.Page<Enquiry>> getMyEnquiries(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String search) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        return ResponseEntity.ok(ownerInteractionService.getMyEnquiries(userDetails.getId(), status, type, search, pageable));
     }
 
     @PostMapping("/enquiries/{id}/reply")

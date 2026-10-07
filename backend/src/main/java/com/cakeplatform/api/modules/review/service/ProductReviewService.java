@@ -205,31 +205,27 @@ public class ProductReviewService {
 
         if (feedbackRepository != null) {
             try {
-                List<Feedback> feedbacks = feedbackRepository.findByShopIdAndIsApprovedTrueAndDeletedAtIsNullOrderByCreatedAtDesc(shopId);
                 String pName = product.getName() != null ? product.getName().trim() : "";
+                List<Feedback> feedbacks = feedbackRepository.findProductFeedback(shopId, productId, pName);
+                
                 for (Feedback f : feedbacks) {
-                    boolean matchesProduct = (f.getProduct() != null && f.getProduct().getId().equals(productId))
-                            || (f.getProductName() != null && !pName.isEmpty() && f.getProductName().equalsIgnoreCase(pName))
-                            || (f.getComment() != null && !pName.isEmpty() && f.getComment().contains("[" + pName + "]"));
-                    if (matchesProduct) {
-                        String cleanComment = f.getComment() != null ? f.getComment() : "";
-                        if (!pName.isEmpty() && cleanComment.startsWith("[" + pName + "]")) {
-                            cleanComment = cleanComment.substring(("[" + pName + "]").length()).trim();
-                        }
-                        publicList.add(PublicProductReviewResponse.builder()
-                                .id(f.getId())
-                                .customerDisplayName(getMaskedDisplayName(f.getCustomerDisplayName()))
-                                .rating(f.getRating() != null ? f.getRating() : 5)
-                                .reviewText(cleanComment)
-                                .isVerifiedPurchase(f.getOrderReference() != null && !f.getOrderReference().isBlank())
-                                .ownerReply(f.getOwnerReply())
-                                .ownerRepliedAt(null)
-                                .cakeImageUrl(f.getCakeImageUrl())
-                                .cakeVideoUrl(f.getCakeVideoUrl())
-                                .createdAt(f.getCreatedAt())
-                                .source("FEEDBACK")
-                                .build());
+                    String cleanComment = f.getComment() != null ? f.getComment() : "";
+                    if (!pName.isEmpty() && cleanComment.toLowerCase().startsWith("[" + pName.toLowerCase() + "]")) {
+                        cleanComment = cleanComment.substring(("[" + pName + "]").length()).trim();
                     }
+                    publicList.add(PublicProductReviewResponse.builder()
+                            .id(f.getId())
+                            .customerDisplayName(getMaskedDisplayName(f.getCustomerDisplayName()))
+                            .rating(f.getRating() != null ? f.getRating() : 5)
+                            .reviewText(cleanComment)
+                            .isVerifiedPurchase(f.getOrderReference() != null && !f.getOrderReference().isBlank())
+                            .ownerReply(f.getOwnerReply())
+                            .ownerRepliedAt(null)
+                            .cakeImageUrl(f.getCakeImageUrl())
+                            .cakeVideoUrl(f.getCakeVideoUrl())
+                            .createdAt(f.getCreatedAt())
+                            .source("FEEDBACK")
+                            .build());
                 }
             } catch (Exception ex) {
                 log.warn("Failed to load feedbacks for product summary: {}", ex.getMessage());
@@ -312,15 +308,14 @@ public class ProductReviewService {
     }
 
     @Transactional(readOnly = true)
-    public List<OwnerProductReviewResponse> getOwnerProductReviews(Long ownerUserId) {
+    public org.springframework.data.domain.Page<OwnerProductReviewResponse> getOwnerProductReviews(Long ownerUserId, Integer rating, String search, org.springframework.data.domain.Pageable pageable) {
         Shop shop = shopRepository.findByOwnerId(ownerUserId).stream()
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Shop not found for authenticated owner"));
 
-        List<ProductReview> reviews = productReviewRepository.findByShopIdOrderByCreatedAtDesc(shop.getId());
+        org.springframework.data.domain.Page<ProductReview> reviewsPage = productReviewRepository.searchProductReviewsByShopId(shop.getId(), rating, search, pageable);
 
-        return reviews.stream()
-                .map(r -> OwnerProductReviewResponse.builder()
+        return reviewsPage.map(r -> OwnerProductReviewResponse.builder()
                         .id(r.getId())
                         .productId(r.getProduct() != null ? r.getProduct().getId() : null)
                         .productName(r.getProduct() != null ? r.getProduct().getName() : (r.getOrderItem() != null ? r.getOrderItem().getProductNameSnapshot() : "Artisanal Cake"))
@@ -335,8 +330,7 @@ public class ProductReviewService {
                         .cakeImageUrl(r.getCakeImageUrl())
                         .cakeVideoUrl(r.getCakeVideoUrl())
                         .createdAt(r.getCreatedAt())
-                        .build())
-                .collect(Collectors.toList());
+                        .build());
     }
 
     @Transactional

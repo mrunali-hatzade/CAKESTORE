@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mediaApi } from '@/lib/api/media';
 
 interface AboutBakerySectionProps {
@@ -26,6 +27,7 @@ export const AboutBakerySection: React.FC<AboutBakerySectionProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [confirmRemoveImage, setConfirmRemoveImage] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,9 +50,8 @@ export const AboutBakerySection: React.FC<AboutBakerySectionProps> = ({
   };
 
   const handleRemoveImage = () => {
-    if (window.confirm('Remove about image?')) {
-      onAboutImageUrlChange('');
-    }
+    onAboutImageUrlChange('');
+    setConfirmRemoveImage(false);
   };
 
   return (
@@ -140,7 +141,7 @@ export const AboutBakerySection: React.FC<AboutBakerySectionProps> = ({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={handleRemoveImage}
+                  onClick={() => setConfirmRemoveImage(true)}
                   className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
@@ -150,6 +151,16 @@ export const AboutBakerySection: React.FC<AboutBakerySectionProps> = ({
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmRemoveImage}
+        onClose={() => setConfirmRemoveImage(false)}
+        onConfirm={async () => handleRemoveImage()}
+        title="Remove About Image"
+        description="Are you sure you want to remove the about bakery image?"
+        confirmLabel="Remove"
+        isDestructive={true}
+      />
     </Card>
   );
 };

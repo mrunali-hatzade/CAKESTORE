@@ -16,7 +16,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner/storefront")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerStorefrontController {
 
@@ -117,5 +117,14 @@ public class OwnerStorefrontController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         ownerStorefrontService.deleteCustomFormField(userDetails.getId(), id);
         return ResponseEntity.ok(Map.of("message", "Custom form field deleted successfully"));
+    }
+
+    // --- Website Management Atomic Save ---
+    @PutMapping("/website")
+    public ResponseEntity<?> updateWebsiteConfiguration(
+            @Valid @RequestBody WebsiteConfigurationRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        ownerStorefrontService.saveWebsiteConfiguration(userDetails.getId(), request);
+        return ResponseEntity.ok(Map.of("message", "Website configuration saved successfully"));
     }
 }

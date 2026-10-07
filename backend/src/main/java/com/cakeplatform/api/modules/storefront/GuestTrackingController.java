@@ -3,7 +3,6 @@ package com.cakeplatform.api.modules.storefront;
 import com.cakeplatform.api.modules.auth.service.GuestOtpService;
 import com.cakeplatform.api.modules.order.Order;
 import com.cakeplatform.api.modules.order.OrderRepository;
-import com.cakeplatform.api.security.JwtService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,8 +18,8 @@ import org.springframework.web.bind.annotation.*;
 public class GuestTrackingController {
 
     private final GuestOtpService otpService;
-    private final JwtService jwtService;
     private final OrderRepository orderRepository;
+    private final com.cakeplatform.api.modules.user.UserRepository userRepository;
 
     @PostMapping("/request-otp")
     public ResponseEntity<Void> requestOtp(@RequestBody PhoneRequest request) {
@@ -42,28 +41,32 @@ public class GuestTrackingController {
 
     @GetMapping("/orders")
     public ResponseEntity<Page<Order>> getMyOrders(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        String token = extractToken(authHeader);
-        if (token == null) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        String phone = jwtService.extractGuestPhone(token);
-        if (phone == null || !jwtService.isGuestTokenValid(token, phone)) {
+
+        boolean isCustomer = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"));
+        if (!isCustomer) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String identifier = auth.getName();
+        String phone = identifier;
+        
+        com.cakeplatform.api.modules.user.User user = userRepository.findByEmail(identifier)
+                .orElseGet(() -> userRepository.findByMobile(identifier).orElse(null));
+                
+        if (user != null && user.getMobile() != null) {
+            phone = user.getMobile();
         }
 
         Page<Order> orders = orderRepository.findVisibleOrdersByCustomerPhone(phone, PageRequest.of(page, size));
         return ResponseEntity.ok(orders);
-    }
-
-    private String extractToken(String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
-        }
-        return null;
     }
 
     @Data

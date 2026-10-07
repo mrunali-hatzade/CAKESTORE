@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { PaginatedResponse } from '@/types/order';
 
 export interface PublicReview {
   id: number;
@@ -106,13 +107,20 @@ export const reviewsApi = {
         `/api/storefront/shops/${shopId}/reviews/eligibility`,
         { params: { orderNumber, phone } }
       );
-    } catch {
-      return [];
+    } catch (err) {
+      throw err;
     }
   },
 
-  getOwnerProductReviews: async (): Promise<OwnerProductReview[]> => {
-    return apiClient.get<OwnerProductReview[]>('/api/owner/product-reviews');
+  getOwnerProductReviews: async (page = 0, size = 20, search?: string, rating?: number): Promise<PaginatedResponse<OwnerProductReview>> => {
+    return apiClient.get<PaginatedResponse<OwnerProductReview>>('/api/owner/product-reviews', {
+      params: { 
+        page, 
+        size, 
+        ...(search ? { search } : {}),
+        ...(rating ? { rating } : {})
+      }
+    });
   },
 
   replyToProductReview: async (

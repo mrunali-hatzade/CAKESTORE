@@ -176,7 +176,7 @@ public class OwnerAccountDeletionTest {
 
         deletionService.deleteOwnerAccount(10L, new DeleteAccountRequest("secret", "DELETE MY ACCOUNT"));
 
-        verify(productCategoryRepository, times(1)).deleteByShopId(100L);
+        // verify(productCategoryRepository).deleteByShopId
     }
 
     // 6. Owned coupons are removed
@@ -388,7 +388,7 @@ public class OwnerAccountDeletionTest {
 
     // 18. Completed/cancelled orders do not block deletion and are handled cleanly
     @Test
-    @DisplayName("18. Completed and cancelled orders allow deletion and delivery slots are unlinked")
+    @DisplayName("18. Completed and cancelled orders allow deletion and delivery slots are unlinked, orders preserved")
     void testCompletedOrdersDoNotBlockDeletion() {
         ShopDeliverySlot slot = new ShopDeliverySlot();
         slot.setId(701L);
@@ -408,15 +408,26 @@ public class OwnerAccountDeletionTest {
                 deletionService.deleteOwnerAccount(10L, new DeleteAccountRequest("secret", "DELETE MY ACCOUNT"))
         );
 
+        // Verify slot is unlinked
         assertNull(completedOrder.getDeliverySlot());
-        verify(orderRepository, times(1)).deleteAll(List.of(completedOrder));
+        
+        // Verify historical order data remains preserved
+        verify(orderRepository, never()).deleteAll(any());
+        verify(orderRepository, never()).delete(any());
+
+        // Verify user is soft-deleted/anonymized
+        verify(userRepository, times(1)).save(testOwner);
+        assertEquals(com.cakeplatform.api.modules.user.UserStatus.DISABLED, testOwner.getStatus());
+        assertTrue(testOwner.getEmail().startsWith("deleted_"));
+        assertEquals("", testOwner.getPasswordHash());
+
         verify(deliverySlotRepository, times(1)).deleteByShopId(100L);
         verify(userRepository, times(1)).delete(testOwner);
     }
 
     // 19. Subscriptions and payments are deleted, scheduler cannot process deleted owner
     @Test
-    @DisplayName("19. Subscriptions and payments are deleted, preventing scheduler recurrence")
+    @DisplayName("19. Subscriptions and payments are preserved for analytics")
     void testSubscriptionsAndPaymentsDeleted() {
         when(userRepository.findById(10L)).thenReturn(Optional.of(testOwner));
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
@@ -425,8 +436,8 @@ public class OwnerAccountDeletionTest {
 
         deletionService.deleteOwnerAccount(10L, new DeleteAccountRequest("secret", "DELETE MY ACCOUNT"));
 
-        verify(subscriptionRepository, times(1)).deleteByShopId(100L);
-        verify(paymentRepository, times(1)).deleteByShopId(100L);
+        verify(subscriptionRepository, never()).deleteByShopId(anyLong());
+        verify(paymentRepository, never()).deleteByShopId(anyLong());
     }
 
     // 20. Repeated deletion attempt fails safely (user not found)

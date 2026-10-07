@@ -23,6 +23,8 @@ import {
   MessageCircle,
   Leaf,
   Star,
+  UserCircle,
+  RefreshCcw,
 } from 'lucide-react';
 import { Shop } from '@/types/shop';
 import { StorefrontTab } from './StorefrontTabNav';
@@ -32,6 +34,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils/cn';
 import { isDummyOrInvalidImageUrl } from '@/lib/utils/image';
+import { clearAuthSession } from '@/lib/api/axiosInterceptor';
 
 interface StorefrontNavbarProps {
   shop: Shop;
@@ -58,7 +61,8 @@ const MOBILE_MENU_ITEMS: MobileMenuItem[] = [
   { id: 'contact', label: 'Contact Us', icon: MessageSquare },
   { id: 'offers', label: 'Offers & Coupons', icon: Tag },
   { id: 'gallery', label: 'Cake Gallery', icon: ImageIcon },
-  { id: 'track', label: 'Track Order', icon: Truck },
+  { id: 'track', label: 'My Orders', icon: Truck },
+  { id: 'profile', label: 'My Profile', icon: UserCircle },
   { id: 'about', label: 'About Us', icon: Info },
 ];
 
@@ -132,7 +136,8 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
     { id: 'custom-cakes', label: 'Custom Cakes', icon: Sparkles },
     { id: 'gallery', label: 'Cake Gallery', icon: ImageIcon },
     { id: 'contact', label: 'Contact Us', icon: MessageSquare },
-    { id: 'track', label: 'Track Order', icon: Truck },
+    { id: 'track', label: 'My Orders', icon: Truck },
+    { id: 'profile', label: 'My Profile', icon: UserCircle },
   ];
 
   const menuTabs = allMenuTabs.filter((tab) => {
@@ -321,6 +326,21 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
               )}
             </button>
 
+            {/* Reset Session Button (Desktop) */}
+            <button
+              type="button"
+              onClick={() => {
+                clearAuthSession();
+                window.location.reload();
+              }}
+              className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-brand-border text-brand-espresso hover:text-rose-600 hover:border-rose-200 transition-all shadow-sm cursor-pointer"
+              aria-label="Reset session and log out"
+              title="Reset Session"
+            >
+              <RefreshCcw className="w-3.5 h-3.5" />
+              <span className="text-xs font-bold hidden xl:inline">Reset Session</span>
+            </button>
+
             {/* Mobile Hamburger Button — only on small screens */}
             {onNavigateTab && (
               <button
@@ -493,6 +513,18 @@ export const StorefrontNavbar: React.FC<StorefrontNavbarProps> = ({
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back to Marketplace</span>
               </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  clearAuthSession();
+                  window.location.reload();
+                }}
+                className="flex items-center gap-2 mt-4 text-xs font-medium text-rose-500 hover:text-rose-600 transition-colors w-full cursor-pointer"
+              >
+                <RefreshCcw className="w-3.5 h-3.5" />
+                <span>Reset Session (Start Over)</span>
+              </button>
             </div>
           </div>
         </>

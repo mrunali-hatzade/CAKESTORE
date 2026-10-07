@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
@@ -30,18 +31,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
            "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
            "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
-           "ORDER BY o.createdAt DESC")
-    org.springframework.data.domain.Page<Order> findVisibleOrdersByShopId(@Param("shopId") Long shopId, Pageable pageable);
-
-    @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
-           "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
-           "         AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'COMPLETED')) " +
-           "AND (LOWER(o.orderNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "AND (:status IS NULL OR o.orderStatus = :status OR (:status = 'NEW' AND o.orderStatus = 'PENDING')) " +
+           "AND (:paymentStatus IS NULL " +
+           "     OR (:paymentStatus = 'COD_PENDING' AND UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY') AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('PAID', 'REFUNDED')) " +
+           "     OR (:paymentStatus = 'PAID' AND UPPER(COALESCE(o.paymentStatus, '')) = 'PAID') " +
+           "     OR (:paymentStatus = 'REFUND_DUE' AND UPPER(COALESCE(o.orderStatus, '')) = 'CANCELLED' AND UPPER(COALESCE(o.paymentStatus, '')) = 'PAID') " +
+           "     OR (:paymentStatus = 'REFUNDED' AND UPPER(COALESCE(o.paymentStatus, '')) = 'REFUNDED') " +
+           "     OR (:paymentStatus = 'COD' AND UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY')) " +
+           "     OR (:paymentStatus = 'ONLINE' AND UPPER(COALESCE(o.paymentMethod, '')) NOT IN ('COD', 'CASH_ON_DELIVERY'))) " +
+           "AND (:query IS NULL OR :query = '' " +
+           "  OR LOWER(o.orderNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
            "  OR LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
            "  OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
            "  OR LOWER(COALESCE(o.customerEmail, '')) LIKE LOWER(CONCAT('%', :query, '%'))) " +
            "ORDER BY o.createdAt DESC")
-    List<Order> searchOrdersByShopId(@Param("shopId") Long shopId, @Param("query") String query, Pageable pageable);
+    org.springframework.data.domain.Page<Order> findFilteredOrdersByShopId(
+           @Param("shopId") Long shopId, 
+           @Param("status") String status, 
+           @Param("paymentStatus") String paymentStatus, 
+           @Param("query") String query, 
+           Pageable pageable);
 
     @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
            "AND NOT (UPPER(COALESCE(o.paymentMethod, '')) IN ('ONLINE_PAYMENT', 'RAZORPAY') " +
@@ -188,8 +197,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "    OR LOWER(COALESCE(o.customerEmail, '')) LIKE LOWER(CONCAT('%', :query, '%')) " +
            "    OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :query, '%'))) " +
            "GROUP BY COALESCE(NULLIF(TRIM(LOWER(o.customerEmail)), ''), NULLIF(TRIM(o.customerPhone), ''), NULLIF(TRIM(o.customerName), ''), 'Guest Customer') " +
-           "ORDER BY MAX(o.createdAt) DESC")
-    List<com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse> searchCustomerProfilesByShopId(
+           "ORDER BY MAX(o.createdAt) DESC",
+           countQuery = "SELECT COUNT(DISTINCT COALESCE(NULLIF(TRIM(LOWER(o.customerEmail)), ''), NULLIF(TRIM(o.customerPhone), ''), NULLIF(TRIM(o.customerName), ''), 'Guest Customer')) FROM Order o WHERE o.shop.id = :shopId AND (LOWER(COALESCE(o.customerName, '')) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(COALESCE(o.customerEmail, '')) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(COALESCE(o.customerPhone, '')) LIKE LOWER(CONCAT('%', :query, '%')))")
+    org.springframework.data.domain.Page<com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse> searchCustomerProfilesByShopId(
            @Param("shopId") Long shopId, 
            @Param("query") String query, 
            Pageable pageable);
@@ -221,7 +231,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     long countCouponOrdersByShopId(@Param("shopId") Long shopId);
 
     List<String> CAPACITY_CONSUMING_STATUSES = List.of(
-        "NEW", "CONFIRMED", "PREPARING", "READY", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "COMPLETED", "DELIVERED"
+        "PAYMENT_PENDING", "NEW", "CONFIRMED", "PREPARING", "READY", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "COMPLETED", "DELIVERED"
     );
 
     @Query("SELECT COUNT(o) FROM Order o " +
@@ -237,6 +247,42 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     default long countActiveOrdersForSlotAndDate(Long slotId, java.time.LocalDate deliveryDate) {
         return countActiveOrdersForSlotAndDate(slotId, deliveryDate, CAPACITY_CONSUMING_STATUSES);
     }
+
+    @Query("SELECT o FROM Order o WHERE o.orderStatus = 'PAYMENT_PENDING' AND o.createdAt < :expiryTime")
+    List<Order> findStalePaymentPendingOrders(@Param("expiryTime") LocalDateTime expiryTime);
+
+    @Modifying
+    @Query("UPDATE Order o SET o.orderStatus = 'CANCELLED' WHERE o.id = :orderId AND o.orderStatus = 'PAYMENT_PENDING'")
+    int cancelIfPaymentPending(@Param("orderId") Long orderId);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) IN ('NEW', 'PENDING') " +
+           "AND (UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY') " +
+           "     OR UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED'))")
+    long countPendingConfirmationOrdersForShop(@Param("shopId") Long shopId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND o.createdAt >= :startDate AND o.createdAt < :endDate " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "AND UPPER(COALESCE(o.paymentStatus, '')) NOT IN ('REFUNDED', 'FAILED') " +
+           "AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') " +
+           "     OR UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY'))")
+    BigDecimal sumRevenueForShopByDateRange(@Param("shopId") Long shopId, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND o.deliveryDate >= :startDate AND o.deliveryDate < :endDate " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') " +
+           "     OR UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY'))")
+    long countDeliveriesForShopByDateRange(@Param("shopId") Long shopId, @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+           "AND o.deliverySlot IS NULL " +
+           "AND o.deliveryDate >= :startDate AND o.deliveryDate < :endDate " +
+           "AND UPPER(COALESCE(o.orderStatus, '')) != 'CANCELLED' " +
+           "AND (UPPER(COALESCE(o.paymentStatus, '')) IN ('PAID', 'COMPLETED') " +
+           "     OR UPPER(COALESCE(o.paymentMethod, '')) IN ('COD', 'CASH_ON_DELIVERY'))")
+    long countUnscheduledDeliveriesForShopByDateRange(@Param("shopId") Long shopId, @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate);
 
     @Query(value = "SELECT COALESCE(MAX(sub.cnt), 0) FROM (" +
                    "  SELECT COUNT(o.id) as cnt FROM orders o " +

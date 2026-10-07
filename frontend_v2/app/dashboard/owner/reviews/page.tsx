@@ -38,7 +38,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Textarea } from '@/components/ui/Textarea';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -67,7 +67,7 @@ export interface UnifiedReview {
 
 export default function OwnerReviewsPage() {
   const { user, isLoading: authLoading } = useAuth();
-  const { shop, registerRefreshHandler, refreshSidebarCounts } = useOwner();
+  const { shop, registerRefreshHandler, refreshSidebarCounts, dashboardStats } = useOwner();
 
   // Handle system administrators visiting owner reviews without an assigned bakery
   const isAdminWithoutShop = !authLoading && Boolean(
@@ -91,6 +91,12 @@ export default function OwnerReviewsPage() {
   const [deleteConfirmReview, setDeleteConfirmReview] = useState<UnifiedReview | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10; // Request 10 from each, resulting in up to 20 per page when merged
+
+  // Global Dashboard Stats for KPIs
+
   const fetchReviews = useCallback(async (isManual = false) => {
     if (authLoading) return;
 
@@ -103,21 +109,42 @@ export default function OwnerReviewsPage() {
     setError(null);
 
     try {
+      const parsedRating = ratingFilter === 'ALL' ? undefined : Number(ratingFilter);
+      
+      // If sourceFilter is PRODUCT_REVIEW, we don't need to fetch FEEDBACK, and vice versa.
+      const shouldFetchProducts = sourceFilter === 'ALL' || sourceFilter === 'PRODUCT_REVIEW';
+      const shouldFetchFeedback = sourceFilter === 'ALL' || sourceFilter === 'STOREFRONT_FEEDBACK';
+
+      // To preserve global sorting across two independent APIs without fetching the full dataset,
+      // we must fetch the top N items from BOTH APIs where N = (currentPage + 1) * itemsPerPage.
+      // This guarantees the absolute global top N items are present in the merged set.
+      const fetchSize = (currentPage + 1) * itemsPerPage;
+
       const [productReviewsRes, feedbackRes, productsRes] = await Promise.allSettled([
-        reviewsApi.getOwnerProductReviews(),
-        ownerApi.getReviews(),
-        productsApi.getOwnerProducts(),
+        shouldFetchProducts ? reviewsApi.getOwnerProductReviews(0, fetchSize, searchQuery, parsedRating) : Promise.resolve(null),
+        shouldFetchFeedback ? ownerApi.getOwnerFeedback(0, fetchSize, searchQuery, parsedRating) : Promise.resolve(null),
+        productsApi.getOwnerProducts()
       ]);
 
       const productReviews: OwnerProductReview[] =
-        productReviewsRes.status === 'fulfilled' && Array.isArray(productReviewsRes.value)
-          ? productReviewsRes.value
+        productReviewsRes.status === 'fulfilled' && productReviewsRes.value?.content
+          ? productReviewsRes.value.content
           : [];
+      
+      const productTotalElements = productReviewsRes.status === 'fulfilled' && productReviewsRes.value?.totalElements
+          ? productReviewsRes.value.totalElements
+          : 0;
 
       const feedbackList: FeedbackRecord[] =
-        feedbackRes.status === 'fulfilled' && Array.isArray(feedbackRes.value)
-          ? feedbackRes.value
+        feedbackRes.status === 'fulfilled' && feedbackRes.value?.content
+          ? feedbackRes.value.content
           : [];
+          
+      const feedbackTotalElements = feedbackRes.status === 'fulfilled' && feedbackRes.value?.totalElements
+          ? feedbackRes.value.totalElements
+          : 0;
+          
+      setTotalPages(Math.max(1, Math.ceil((productTotalElements + feedbackTotalElements) / itemsPerPage)));
 
       const products: Product[] =
         productsRes.status === 'fulfilled' && Array.isArray(productsRes.value)
@@ -222,13 +249,22 @@ export default function OwnerReviewsPage() {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
 
-      setReviews(combined);
+      // Slice the globally sorted array to only include the items for the current page
+      const startIndex = currentPage * itemsPerPage;
+      const paginatedSlice = combined.slice(startIndex, startIndex + itemsPerPage);
+
+      setReviews(paginatedSlice);
     } catch (err: any) {
       setError(err?.message || 'Failed to load reviews');
     } finally {
       setLoading(false);
     }
-  }, [authLoading, isAdminWithoutShop]);
+  }, [authLoading, isAdminWithoutShop, currentPage, searchQuery, sourceFilter, ratingFilter]);
+
+  // Reset to page 0 whenever filters change
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [sourceFilter, ratingFilter, searchQuery]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -254,36 +290,21 @@ export default function OwnerReviewsPage() {
   }, [registerRefreshHandler, fetchReviews]);
 
   // Filtered reviews
-  const filteredReviews = useMemo(() => {
-    return reviews.filter((r) => {
-      const matchesSource =
-        sourceFilter === 'ALL' || r.sourceType === sourceFilter;
-      const matchesRating =
-        ratingFilter === 'ALL' || r.rating === ratingFilter;
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        (r.customerName && r.customerName.toLowerCase().includes(q)) ||
-        (r.productName && r.productName.toLowerCase().includes(q)) ||
-        (r.reviewText && r.reviewText.toLowerCase().includes(q)) ||
-        (r.orderNumber && r.orderNumber.toLowerCase().includes(q)) ||
-        (r.customerEmail && r.customerEmail.toLowerCase().includes(q));
-      return matchesSource && matchesRating && matchesSearch;
-    });
-  }, [reviews, sourceFilter, ratingFilter, searchQuery]);
+  // Filtering is now handled on the backend for search and rating.
+  // sourceFilter is also handled by conditionally calling APIs.
+  const filteredReviews = reviews;
 
-  // Derived KPIs
-  const totalReviewsCount = reviews.length;
+  // Derived KPIs from backend dashboardStats
+  const stats: any = dashboardStats;
+  const totalReviewsCount = stats?.totalFeedback ?? 0;
+  const avgRating = (stats?.averageRating ?? 0.0).toFixed(1);
+  const fiveStarCount = stats?.fiveStarReviews ?? 0;
+  
+  // Since some exact stats might not be in dashboardStats yet, fallback to local estimates where missing
   const storefrontFeedbackCount = reviews.filter((r) => r.sourceType === 'STOREFRONT_FEEDBACK').length;
   const productReviewsCount = reviews.filter((r) => r.sourceType === 'PRODUCT_REVIEW').length;
-  const avgRating =
-    totalReviewsCount > 0
-      ? (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / totalReviewsCount).toFixed(1)
-      : '0.0';
-  const fiveStarCount = reviews.filter((r) => r.rating === 5).length;
-  const respondedCount = reviews.filter((r) => !!r.ownerReply).length;
-  const responseRate =
-    totalReviewsCount > 0 ? Math.round((respondedCount / totalReviewsCount) * 100) : 0;
+  const respondedCount = stats?.repliedFeedback ?? reviews.filter((r) => !!r.ownerReply).length;
+  const responseRate = totalReviewsCount > 0 ? Math.round((respondedCount / totalReviewsCount) * 100) : 0;
 
   const handleOpenReplyModal = (review: UnifiedReview) => {
     setSelectedReview(review);
@@ -340,7 +361,6 @@ export default function OwnerReviewsPage() {
 
   const handleDeleteFeedback = async () => {
     if (!deleteConfirmReview || isAdminWithoutShop) return;
-    setIsDeleting(true);
 
     try {
       if (deleteConfirmReview.backendSource === 'FEEDBACK') {
@@ -354,8 +374,7 @@ export default function OwnerReviewsPage() {
       setDeleteConfirmReview(null);
     } catch (err: any) {
       setError(err?.message || 'Failed to remove feedback entry');
-    } finally {
-      setIsDeleting(false);
+      throw err;
     }
   };
 
@@ -899,6 +918,38 @@ export default function OwnerReviewsPage() {
         </div>
       )}
 
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-4 border-t border-owner-border bg-white rounded-xl shadow-sm mt-4">
+          <span className="text-xs text-owner-muted">
+            Showing {filteredReviews.length} of {totalReviewsCount} reviews (Mixed from multiple sources)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="text-xs"
+            >
+              Previous
+            </Button>
+            <span className="px-3 py-1.5 text-xs font-semibold text-owner-heading flex items-center">
+              Page {currentPage + 1} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="text-xs"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Reply Modal */}
       <ReviewDetailsModal
         isOpen={!!selectedReview}
@@ -909,43 +960,23 @@ export default function OwnerReviewsPage() {
       />
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <ConfirmDialog
         isOpen={!!deleteConfirmReview}
         onClose={() => setDeleteConfirmReview(null)}
+        onConfirm={handleDeleteFeedback}
         title={deleteConfirmReview?.sourceType === 'PRODUCT_REVIEW' ? 'Remove Cake Review?' : 'Remove Customer Testimonial?'}
-        maxWidth="sm"
-      >
-        {deleteConfirmReview && (
-          <div className="space-y-4">
-            <p className="text-xs text-owner-muted leading-relaxed">
+        description={
+          deleteConfirmReview ? (
+            <>
               Are you sure you want to remove the review from{' '}
               <strong className="text-owner-heading">{deleteConfirmReview.customerName}</strong>
               {deleteConfirmReview.productName ? ` for "${deleteConfirmReview.productName}"` : ''}? This entry will be removed from your storefront and dashboard.
-            </p>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteConfirmReview(null)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white font-bold"
-                onClick={handleDeleteFeedback}
-                isLoading={isDeleting}
-              >
-                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                {deleteConfirmReview.sourceType === 'PRODUCT_REVIEW' ? 'Remove Review' : 'Remove Testimonial'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+            </>
+          ) : ''
+        }
+        confirmLabel={deleteConfirmReview?.sourceType === 'PRODUCT_REVIEW' ? 'Remove Review' : 'Remove Testimonial'}
+        isDestructive={true}
+      />
     </div>
   );
 }

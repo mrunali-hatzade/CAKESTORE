@@ -90,7 +90,8 @@ class StorefrontUpgradeCoreTest {
                 shopCustomFormFieldRepository,
                 feedbackRepository,
                 productReviewRepository,
-                subscriptionRepository
+                subscriptionRepository,
+                null
         );
 
         ownerStorefrontService = new OwnerStorefrontService(

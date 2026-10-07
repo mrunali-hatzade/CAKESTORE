@@ -20,12 +20,29 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
     long countByStatusAndCreatedAtBetween(ShopStatus status, java.time.LocalDateTime start, java.time.LocalDateTime end);
     long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end);
     
+    @Query(value = "SELECT COUNT(*) FROM shops WHERE is_deleted = true", nativeQuery = true)
+    long countDeletedShops();
+    
     @Query("SELECT s FROM Shop s WHERE " +
            "(:status IS NULL OR s.status = :status) AND " +
            "(:search IS NULL OR LOWER(s.businessName) LIKE LOWER(CONCAT('%', :search, '%')) " +
            "OR LOWER(s.owner.fullName) LIKE LOWER(CONCAT('%', :search, '%')) " +
            "OR LOWER(s.owner.email) LIKE LOWER(CONCAT('%', :search, '%')))")
     org.springframework.data.domain.Page<Shop> searchAndFilterAllShops(@Param("status") ShopStatus status, @Param("search") String search, org.springframework.data.domain.Pageable pageable);
+
+    @Query(value = "SELECT s.id as shopId, s.business_name as businessName, u.full_name as ownerName, u.email as ownerEmail, s.status as shopStatus, s.created_at as registeredAt " +
+           "FROM shops s LEFT JOIN users u ON s.owner_id = u.id " +
+           "WHERE s.is_deleted = true AND " +
+           "(:search IS NULL OR LOWER(s.business_name) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) " +
+           "OR LOWER(u.full_name) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) " +
+           "OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))",
+           countQuery = "SELECT count(*) FROM shops s LEFT JOIN users u ON s.owner_id = u.id " +
+           "WHERE s.is_deleted = true AND " +
+           "(:search IS NULL OR LOWER(s.business_name) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) " +
+           "OR LOWER(u.full_name) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')) " +
+           "OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))",
+           nativeQuery = true)
+    org.springframework.data.domain.Page<com.cakeplatform.api.modules.admin.dto.AdminShopSummaryProjection> searchAndFilterDeletedShopsProjection(@Param("search") String search, org.springframework.data.domain.Pageable pageable);
 
     @Query("SELECT s FROM Shop s WHERE s.status = :status AND (" +
            "LOWER(s.city) LIKE LOWER(CONCAT('%', :location, '%')) OR " +
@@ -73,7 +90,7 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
                    ")))) AS distance_km " +
                    "FROM shops s " +
                    "LEFT JOIN feedback f ON f.shop_id = s.id AND f.is_approved = true " +
-                   "WHERE s.status = 'ACTIVE' " +
+                   "WHERE s.status = 'ACTIVE' AND s.is_deleted = false " +
                    "  AND s.latitude IS NOT NULL " +
                    "  AND s.longitude IS NOT NULL " +
                    "  AND s.latitude BETWEEN :minLat AND :maxLat " +
@@ -171,7 +188,7 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
     @Query(value = "SELECT COUNT(*) FROM ( " +
                    "  SELECT s.id " +
                    "  FROM shops s " +
-                   "  WHERE s.status = 'ACTIVE' " +
+                   "  WHERE s.status = 'ACTIVE' AND s.is_deleted = false " +
                    "    AND s.latitude IS NOT NULL " +
                    "    AND s.longitude IS NOT NULL " +
                    "    AND s.latitude BETWEEN :minLat AND :maxLat " +
@@ -236,7 +253,7 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
                    "CAST(NULL AS double precision) AS distance_km " +
                    "FROM shops s " +
                    "LEFT JOIN feedback f ON f.shop_id = s.id AND f.is_approved = true " +
-                   "WHERE s.status = 'ACTIVE' " +
+                   "WHERE s.status = 'ACTIVE' AND s.is_deleted = false " +
                    "  AND (CAST(:city AS text) IS NULL OR LOWER(TRIM(s.city)) = LOWER(TRIM(CAST(:city AS text)))) " +
                    "  AND (CAST(:state AS text) IS NULL OR LOWER(TRIM(s.state)) = LOWER(TRIM(CAST(:state AS text)))) " +
                    "  AND (CAST(:district AS text) IS NULL OR LOWER(TRIM(s.district)) = LOWER(TRIM(CAST(:district AS text)))) " +
@@ -277,7 +294,7 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
                    "s.verification_status AS verification_status, ROUND(CAST(AVG(f.rating) AS numeric), 1) AS avg_rating, " +
                    "COUNT(f.id) AS total_reviews, CAST(NULL AS double precision) AS distance_km " +
                    "FROM shops s LEFT JOIN feedback f ON f.shop_id = s.id AND f.is_approved = true " +
-                   "WHERE s.status = 'ACTIVE' " +
+                   "WHERE s.status = 'ACTIVE' AND s.is_deleted = false " +
                    "  AND (CAST(:city AS text) IS NULL OR LOWER(TRIM(s.city)) = LOWER(TRIM(CAST(:city AS text)))) " +
                    "  AND (CAST(:state AS text) IS NULL OR LOWER(TRIM(s.state)) = LOWER(TRIM(CAST(:state AS text)))) " +
                    "  AND (CAST(:district AS text) IS NULL OR LOWER(TRIM(s.district)) = LOWER(TRIM(CAST(:district AS text)))) " +
@@ -299,7 +316,7 @@ public interface ShopRepository extends JpaRepository<Shop, Long>, JpaSpecificat
 
     @Query(value = "SELECT COUNT(s.id) " +
                    "FROM shops s " +
-                   "WHERE s.status = 'ACTIVE' " +
+                   "WHERE s.status = 'ACTIVE' AND s.is_deleted = false " +
                    "  AND (CAST(:city AS text) IS NULL OR LOWER(TRIM(s.city)) = LOWER(TRIM(CAST(:city AS text)))) " +
                    "  AND (CAST(:state AS text) IS NULL OR LOWER(TRIM(s.state)) = LOWER(TRIM(CAST(:state AS text)))) " +
                    "  AND (CAST(:district AS text) IS NULL OR LOWER(TRIM(s.district)) = LOWER(TRIM(CAST(:district AS text)))) " +

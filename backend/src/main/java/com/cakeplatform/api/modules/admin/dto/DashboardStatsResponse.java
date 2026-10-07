@@ -7,8 +7,11 @@ import java.time.LocalDate;
 @Data
 public class DashboardStatsResponse {
     // 1. Users
+    private long totalUsers;
     private long totalAdmins;
     private long totalShopOwners;
+    private long totalCustomers;
+    private long deletedAccounts;
 
     // 2. Bakeries
     private long totalRegisteredBakeries;
@@ -17,11 +20,17 @@ public class DashboardStatsResponse {
     private long suspendedBakeries;
     private long inactiveBakeries;
     private long pendingBakeries;
+    private long expiredBakeries;
+    private long deletedBakeries;
     
     // 3. Subscriptions
     private long activeSubscribedBakeries;
-    private long expiredSubscribedBakeries;
+    private long expiringSoonSubscribedBakeries;
+    private long gracePeriodSubscribedBakeries;
     private long pendingPaymentBakeries;
+    private long expiredSubscribedBakeries;
+    private long suspendedSubscribedBakeries;
+    private long cancelledSubscribedBakeries;
 
     // Financials & Others
     private long todayRegistrations;

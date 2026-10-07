@@ -17,16 +17,20 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner/gallery")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerGalleryController {
 
     private final GalleryService galleryService;
 
     @GetMapping
-    public ResponseEntity<List<GalleryItemResponse>> getGalleryItems(
-            @AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(galleryService.getOwnerGalleryItems(userDetails.getId()));
+    public ResponseEntity<org.springframework.data.domain.Page<GalleryItemResponse>> getGalleryItems(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        return ResponseEntity.ok(galleryService.getOwnerGalleryItems(userDetails.getId(), search, pageable));
     }
 
     @PostMapping

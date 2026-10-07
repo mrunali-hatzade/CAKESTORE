@@ -17,7 +17,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner/categories")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerCategoryController {
 

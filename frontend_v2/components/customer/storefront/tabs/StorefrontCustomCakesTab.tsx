@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -58,14 +58,14 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
     : true;
 
   // Active custom fields defined by the bakery owner, sorted by displayOrder
-  const allActiveFields: ShopCustomFormField[] = (shop.customCakeFormFields || [])
+  const allActiveFields: ShopCustomFormField[] = useMemo(() => (shop.customCakeFormFields || [])
     .filter((f) => f.isEnabled !== false)
-    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)), [shop.customCakeFormFields]);
 
   // Filter out contact fields to prevent any duplication with Section 1
-  const cakeSpecificationFields = allActiveFields.filter(
+  const cakeSpecificationFields = useMemo(() => allActiveFields.filter(
     (f) => !CONTACT_FIELD_KEYS.has(f.fieldKey.toLowerCase().trim())
-  );
+  ), [allActiveFields]);
 
   // Set initial reference image if passed
   useEffect(() => {
@@ -80,7 +80,7 @@ export const StorefrontCustomCakesTab: React.FC<StorefrontCustomCakesTabProps> =
         setDynamicValues((prev) => ({ ...prev, reference_image: initialReferenceImage }));
       }
     }
-  }, [initialReferenceImage]);
+  }, [initialReferenceImage, cakeSpecificationFields]);
 
   const handleDynamicChange = (key: string, value: string) => {
     setDynamicValues((prev) => ({ ...prev, [key]: value }));

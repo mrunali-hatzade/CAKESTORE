@@ -7,6 +7,7 @@ import {
   ShopDeliveryConfig,
   ShopStorefrontSettings,
   ShopCustomFormField,
+  WebsiteConfigurationRequest,
 } from '@/types/storefrontManagement';
 
 export const ownerStorefrontApi = {
@@ -46,6 +47,11 @@ export const ownerStorefrontApi = {
   },
   updateStorefrontSettings: async (data: Partial<ShopStorefrontSettings>): Promise<ShopStorefrontSettings> => {
     return apiClient.put<ShopStorefrontSettings>('/api/owner/storefront/settings', data);
+  },
+
+  // Atomic Save All
+  updateWebsiteConfiguration: async (data: WebsiteConfigurationRequest): Promise<{ message: string }> => {
+    return apiClient.put<{ message: string }>('/api/owner/storefront/website', data);
   },
 
   // Custom Cake Form Fields

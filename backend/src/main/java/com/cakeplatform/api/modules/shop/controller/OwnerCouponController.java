@@ -20,7 +20,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner/coupons")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 @Slf4j
 public class OwnerCouponController {
@@ -32,9 +32,25 @@ public class OwnerCouponController {
      * D2: Retrieve all coupons belonging to the authenticated owner's bakery.
      */
     @GetMapping
-    public ResponseEntity<List<Coupon>> getCoupons(@AuthenticationPrincipal CustomUserDetails userDetails) {
+    public ResponseEntity<org.springframework.data.domain.Page<Coupon>> getCoupons(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status) {
+        
+        if (size > 100) size = 100;
+        if (size < 1) size = 10;
+        if (page < 0) page = 0;
         Shop shop = shopAccessValidator.getValidShopForOwner(userDetails.getId());
-        return ResponseEntity.ok(couponRepository.findByShopId(shop.getId()));
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending());
+        
+        return ResponseEntity.ok(couponRepository.findByShopIdWithFilters(
+            shop.getId(), 
+            search != null ? search.trim() : null, 
+            status != null && !status.trim().isEmpty() ? status.trim().toUpperCase() : "ALL", 
+            pageable
+        ));
     }
 
     /**
@@ -175,4 +191,5 @@ public class OwnerCouponController {
         }
     }
 }
+
 

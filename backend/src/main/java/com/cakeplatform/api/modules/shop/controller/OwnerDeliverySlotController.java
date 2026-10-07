@@ -21,7 +21,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner/delivery-slots")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerDeliverySlotController {
 
@@ -55,7 +55,23 @@ public class OwnerDeliverySlotController {
         slot.setMaxOrders(request.getMaxOrders() != null ? request.getMaxOrders() : 10);
         slot.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
         
+        validateOverlap(shop, slot);
+        
         return ResponseEntity.ok(deliverySlotRepository.save(slot));
+    }
+    
+    private void validateOverlap(Shop shop, ShopDeliverySlot slot) {
+        List<ShopDeliverySlot> existingSlots = deliverySlotRepository.findByShopId(shop.getId());
+        for (ShopDeliverySlot existing : existingSlots) {
+            if (existing.getId() != null && existing.getId().equals(slot.getId())) continue;
+            if (existing.getDayOfWeek().equals(slot.getDayOfWeek())) {
+                if (slot.getStartTime().isBefore(existing.getEndTime()) && 
+                    slot.getEndTime().isAfter(existing.getStartTime())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Slot overlaps with existing slot: " + existing.getStartTime() + " - " + existing.getEndTime());
+                }
+            }
+        }
     }
     
     @PutMapping("/{id}")
@@ -96,6 +112,8 @@ public class OwnerDeliverySlotController {
         if (request.getIsActive() != null) {
             slot.setIsActive(request.getIsActive());
         }
+        
+        validateOverlap(shop, slot);
         
         return ResponseEntity.ok(deliverySlotRepository.save(slot));
     }

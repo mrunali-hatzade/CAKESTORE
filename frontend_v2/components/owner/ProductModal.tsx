@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/common/Toast';
+import { useUnsavedChanges } from '@/context/UnsavedChangesContext';
 
 const FALLBACK_CAKE =
   'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=400&q=80';
@@ -66,6 +67,9 @@ export function ProductModal({
 }: ProductModalProps) {
   const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { setDirty } = useUnsavedChanges();
+  const [showCloseWarning, setShowCloseWarning] = useState(false);
+  const [localDirty, setLocalDirty] = useState(false);
 
   // Product Form fields
   const [name, setName] = useState('');
@@ -114,6 +118,44 @@ export function ProductModal({
   
   const variantFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingVariant, setIsUploadingVariant] = useState(false);
+
+  // Snapshot for dirty state tracking
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
+  const currentSnapshot = JSON.stringify({
+    name, description, price, originalPrice, selectedCategoryId,
+    isEggless, allowEggChoice, eggPreferenceDefault, egglessPriceDiff,
+    inStock, imageUrl, ingredients, allergens, highlights, variants, altImages
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialSnapshot === null) {
+        setInitialSnapshot(currentSnapshot);
+      } else {
+        const dirty = currentSnapshot !== initialSnapshot;
+        setLocalDirty(dirty);
+        setDirty('product-modal', dirty);
+      }
+    } else {
+      setInitialSnapshot(null);
+      setLocalDirty(false);
+      setDirty('product-modal', false);
+      setShowCloseWarning(false);
+    }
+  }, [isOpen, currentSnapshot, initialSnapshot, setDirty]);
+
+  const handleAttemptClose = () => {
+    if (localDirty) {
+      setShowCloseWarning(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmClose = () => {
+    setShowCloseWarning(false);
+    onClose();
+  };
 
   // Reset or populate fields when modal opens/changes
   useEffect(() => {
@@ -403,6 +445,9 @@ export function ProductModal({
         await productsApi.createProduct(productPayload);
         toast.success('New cake added to catalog!');
       }
+      setInitialSnapshot(currentSnapshot);
+      setLocalDirty(false);
+      setDirty('product-modal', false);
       onClose();
       await onSaveSuccess();
     } catch (err: any) {
@@ -415,7 +460,7 @@ export function ProductModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleAttemptClose}
       maxWidth="5xl"
       title={editingProduct && !isDuplicate ? 'Edit Cake Details' : 'Add New Cake to Storefront'}
     >
@@ -972,7 +1017,7 @@ export function ProductModal({
 
         {/* Modal Footer */}
         <div className="pt-4 flex justify-end gap-3 border-t border-owner-border">
-          <Button variant="ghost" type="button" onClick={onClose}>
+          <Button variant="ghost" type="button" onClick={handleAttemptClose}>
             Cancel
           </Button>
           <Button type="submit" isLoading={isSubmitting}>
@@ -980,6 +1025,23 @@ export function ProductModal({
           </Button>
         </div>
       </form>
+
+      {/* Unsaved Changes Warning Modal inside Product Modal */}
+      <Modal isOpen={showCloseWarning} onClose={() => setShowCloseWarning(false)} title="Unsaved Changes">
+        <div className="space-y-6">
+          <p className="text-sm text-owner-muted leading-relaxed">
+            You have unsaved changes. Are you sure you want to close this? Your changes will be permanently lost.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="outline" onClick={() => setShowCloseWarning(false)}>
+              Keep Editing
+            </Button>
+            <Button variant="danger" onClick={handleConfirmClose}>
+              Discard Changes
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </Modal>
   );
 }

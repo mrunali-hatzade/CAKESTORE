@@ -29,34 +29,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addResourceLocations(uploadPath);
     }
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        String[] origins = Arrays.stream(allowedOriginsConfig.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toArray(String[]::new);
-
-        registry.addMapping("/**")
-                .allowedOrigins(origins)
-                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders(
-                        "Authorization",
-                        "Content-Type",
-                        "Accept",
-                        "Origin",
-                        "X-Requested-With",
-                        "Access-Control-Request-Method",
-                        "Access-Control-Request-Headers",
-                        "X-Review-Token",
-                        "x-review-token",
-                        "X-Customer-Name",
-                        "x-customer-name",
-                        "X-Customer-Phone",
-                        "x-customer-phone",
-                        "X-Order-Reference",
-                        "x-order-reference"
-                )
-                .exposedHeaders("Retry-After", "Content-Disposition")
-                .allowCredentials(true);
-    }
+    // CORS is handled by SecurityConfig.java
+    // public void addCorsMappings(CorsRegistry registry) { ... }
 }

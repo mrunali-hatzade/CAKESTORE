@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { ordersApi } from '@/lib/api/orders';
 import { Order } from '@/types/order';
+import { useCustomerAuth } from '@/lib/auth/CustomerAuthContext';
 
 interface CustomerOrderLookupModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
   onClose,
 }) => {
   const router = useRouter();
+  const customerAuth = useCustomerAuth();
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<TabType>('PHONE');
@@ -46,9 +48,8 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
 
   // Phone OTP Flow state
   const [phoneStep, setPhoneStep] = useState<PhoneFlowStep>('INPUT_PHONE');
-  const [phone, setPhone] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [otp, setOtp] = useState('');
-  const [guestToken, setGuestToken] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,36 +88,30 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
       setPhoneStep('ORDER_LIST');
     } catch (err: any) {
       // Token may have expired or be invalid
-      sessionStorage.removeItem('cakeStoreGuestToken');
-      sessionStorage.removeItem('cakeStoreGuestPhone');
-      setGuestToken(null);
+      customerAuth.logout();
       setPhoneStep('INPUT_PHONE');
       setError(err?.response?.data?.message || 'Session expired. Please request a new OTP.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [customerAuth]);
 
   // Check existing session on modal open
   useEffect(() => {
     if (isOpen) {
-      const savedToken = typeof window !== 'undefined' ? sessionStorage.getItem('cakeStoreGuestToken') : null;
-      const savedPhone = typeof window !== 'undefined' ? sessionStorage.getItem('cakeStoreGuestPhone') : null;
-
-      if (savedPhone) {
-        setPhone(savedPhone);
+      if (customerAuth.phone) {
+        setPhoneInput(customerAuth.phone);
       }
 
-      if (savedToken) {
-        setGuestToken(savedToken);
-        fetchOrdersForToken(savedToken);
+      if (customerAuth.isAuthenticated && customerAuth.token) {
+        fetchOrdersForToken(customerAuth.token);
       } else {
         setPhoneStep('INPUT_PHONE');
       }
       setError(null);
       setOrderNumberError(null);
     }
-  }, [isOpen, fetchOrdersForToken]);
+  }, [isOpen, customerAuth.isAuthenticated, customerAuth.token, customerAuth.phone, fetchOrdersForToken]);
 
   if (!isOpen) return null;
 
@@ -138,7 +133,7 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
   // Handler: Request OTP
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPhone = phone.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
+    const cleanPhone = phoneInput.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
     if (cleanPhone.length < 10) {
       setError('Please enter a valid 10-digit Indian mobile number.');
       return;
@@ -147,8 +142,8 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
     setIsLoading(true);
     setError(null);
     try {
-      await ordersApi.requestTrackingOtp(cleanPhone);
-      setPhone(cleanPhone);
+      await customerAuth.requestOtp(cleanPhone);
+      setPhoneInput(cleanPhone);
       setPhoneStep('INPUT_OTP');
       setOtp('');
       startCooldown(60);
@@ -171,11 +166,7 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
     setIsLoading(true);
     setError(null);
     try {
-      const res = await ordersApi.verifyTrackingOtp(phone, cleanOtp);
-      const token = res.token;
-      setGuestToken(token);
-      sessionStorage.setItem('cakeStoreGuestToken', token);
-      sessionStorage.setItem('cakeStoreGuestPhone', phone);
+      const token = await customerAuth.verifyOtp(phoneInput, cleanOtp);
       await fetchOrdersForToken(token);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Invalid or expired OTP. Please try again.');
@@ -186,9 +177,7 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
 
   // Reset to phone input (Change Phone / Log out phone)
   const handleResetPhone = () => {
-    sessionStorage.removeItem('cakeStoreGuestToken');
-    sessionStorage.removeItem('cakeStoreGuestPhone');
-    setGuestToken(null);
+    customerAuth.logout();
     setOrders([]);
     setOtp('');
     setError(null);
@@ -301,9 +290,9 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
                       autoFocus
                       maxLength={10}
                       placeholder="98765 43210"
-                      value={phone}
+                      value={phoneInput}
                       onChange={(e) => {
-                        setPhone(e.target.value.replace(/\D/g, ''));
+                        setPhoneInput(e.target.value.replace(/\D/g, ''));
                         if (error) setError(null);
                       }}
                       className="w-full pl-16 pr-4 py-2.5 rounded-xl border border-brand-border bg-white text-sm font-medium text-brand-espresso placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-plum/20 focus:border-brand-plum transition-all"
@@ -319,7 +308,7 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
                     type="submit"
                     size="sm"
                     isLoading={isLoading}
-                    disabled={phone.length < 10}
+                    disabled={phoneInput.length < 10}
                     className="gap-1.5 font-bold shadow-soft"
                   >
                     <span>Send Verification Code</span>
@@ -339,7 +328,7 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
                     </div>
                     <div className="text-xs text-brand-muted leading-relaxed">
                       <span className="font-semibold text-brand-espresso block">Verification Code Sent</span>
-                      Enter the 6-digit passcode sent to <span className="font-bold text-brand-espresso">+91 {phone}</span>.
+                      Enter the 6-digit passcode sent to <span className="font-bold text-brand-espresso">+91 {phoneInput}</span>.
                     </div>
                   </div>
                   <button
@@ -414,7 +403,7 @@ export const CustomerOrderLookupModal: React.FC<CustomerOrderLookupModalProps> =
                 <div className="flex items-center justify-between pb-2 border-b border-brand-border/60">
                   <div className="flex items-center gap-1.5 text-xs text-brand-muted">
                     <Phone className="w-3.5 h-3.5 text-brand-plum" />
-                    <span>Orders for <strong className="text-brand-espresso">+91 {phone}</strong></span>
+                    <span>Orders for <strong className="text-brand-espresso">+91 {phoneInput}</strong></span>
                   </div>
                   <button
                     type="button"

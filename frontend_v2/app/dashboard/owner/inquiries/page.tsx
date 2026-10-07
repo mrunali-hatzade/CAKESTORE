@@ -24,13 +24,14 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Textarea } from '@/components/ui/Textarea';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 function OwnerStoreInquiriesContent() {
   const searchParams = useSearchParams();
-  const { registerRefreshHandler, refreshSidebarCounts } = useOwner();
+  const { registerRefreshHandler, refreshSidebarCounts, dashboardStats } = useOwner();
   const [generalEnquiries, setGeneralEnquiries] = useState<GeneralEnquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,19 +51,36 @@ function OwnerStoreInquiriesContent() {
   const [deleteConfirmInquiry, setDeleteConfirmInquiry] = useState<GeneralEnquiry | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 20;
+
+
   const fetchData = useCallback(async (isManualRefresh = false) => {
     if (!isManualRefresh) setLoading(true);
     setError(null);
 
     try {
-      const data = await ownerApi.getOwnerEnquiries();
-      setGeneralEnquiries(data || []);
+      const data = await ownerApi.getOwnerEnquiries(
+        currentPage,
+        itemsPerPage,
+        searchQuery,
+        statusFilter,
+        categoryFilter
+      );
+      setGeneralEnquiries(data?.content || []);
+      setTotalPages(data?.totalPages || 1);
     } catch (err: any) {
       setError(err?.message || 'Unable to load storefront inquiries');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, searchQuery, statusFilter, categoryFilter]);
+
+  // Reset to page 0 whenever filters change
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [statusFilter, categoryFilter, searchQuery]);
 
   useEffect(() => {
     fetchData();
@@ -152,32 +170,15 @@ function OwnerStoreInquiriesContent() {
   }, [generalEnquiries]);
 
   // Filtered inquiries
-  const filteredGeneral = useMemo(() => {
-    return generalEnquiries.filter((item) => {
-      const matchesStatus =
-        statusFilter === 'ALL' || item.status?.toUpperCase() === statusFilter.toUpperCase();
-
-      const matchesCategory =
-        categoryFilter === 'ALL' ||
-        (item.enquiryType && item.enquiryType.trim().toUpperCase() === categoryFilter.trim().toUpperCase());
-
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        (item.customerName && item.customerName.toLowerCase().includes(q)) ||
-        (item.customerEmail && item.customerEmail.toLowerCase().includes(q)) ||
-        (item.customerMobile && item.customerMobile.toLowerCase().includes(q)) ||
-        (item.enquiryType && item.enquiryType.toLowerCase().includes(q)) ||
-        (item.message && item.message.toLowerCase().includes(q));
-
-      return matchesStatus && matchesCategory && matchesSearch;
-    });
-  }, [generalEnquiries, statusFilter, categoryFilter, searchQuery]);
+  // Filtering is now handled on the backend
+  const filteredGeneral = generalEnquiries;
 
   // KPIs
-  const totalCount = generalEnquiries.length;
-  const newCount = generalEnquiries.filter((g) => g.status === 'NEW').length;
-  const repliedCount = generalEnquiries.filter((g) => g.status === 'REPLIED').length;
+  // KPI calculations using global dashboardStats instead of current page
+  const stats: any = dashboardStats;
+  const totalCount = stats?.totalInquiries ?? 0;
+  const newCount = stats?.pendingInquiries ?? 0;
+  const repliedCount = totalCount - newCount;
   const responseRate = totalCount > 0 ? Math.round((repliedCount / totalCount) * 100) : 100;
 
   const handleUpdateStatus = async (id: number, status: string) => {
@@ -194,15 +195,13 @@ function OwnerStoreInquiriesContent() {
 
   const handleConfirmDelete = async () => {
     if (!deleteConfirmInquiry) return;
-    setDeletingId(deleteConfirmInquiry.id);
     try {
       await ownerApi.deleteGeneralEnquiry(deleteConfirmInquiry.id);
       await fetchData(true);
       setDeleteConfirmInquiry(null);
     } catch (err: any) {
       setError(err?.message || 'Failed to delete inquiry');
-    } finally {
-      setDeletingId(null);
+      throw err;
     }
   };
 
@@ -558,6 +557,38 @@ function OwnerStoreInquiriesContent() {
         </div>
       )}
 
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-4 border-t border-owner-border bg-white rounded-xl shadow-sm">
+          <span className="text-xs text-owner-muted">
+            Showing {filteredGeneral.length} of {stats?.totalInquiries || 'total'} inquiries
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="text-xs"
+            >
+              Previous
+            </Button>
+            <span className="px-3 py-1.5 text-xs font-semibold text-owner-heading flex items-center">
+              Page {currentPage + 1} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="text-xs"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Reply to General Enquiry */}
       <Modal
         isOpen={!!selectedGeneral}
@@ -648,42 +679,22 @@ function OwnerStoreInquiriesContent() {
         })()}
       </Modal>
       {/* Modal: Confirm Delete */}
-      <Modal
+      <ConfirmDialog
         isOpen={!!deleteConfirmInquiry}
         onClose={() => setDeleteConfirmInquiry(null)}
+        onConfirm={handleConfirmDelete}
         title="Delete Customer Inquiry?"
-        maxWidth="sm"
-      >
-        {deleteConfirmInquiry && (
-          <div className="space-y-4">
-            <p className="text-xs text-owner-muted leading-relaxed">
+        description={
+          deleteConfirmInquiry ? (
+            <>
               Are you sure you want to permanently delete the inquiry from{' '}
               <strong className="text-owner-heading">{deleteConfirmInquiry.customerName}</strong>? This action cannot be undone.
-            </p>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-owner-border">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteConfirmInquiry(null)}
-                disabled={deletingId !== null}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
-                onClick={handleConfirmDelete}
-                isLoading={deletingId !== null}
-              >
-                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                Delete Inquiry
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+            </>
+          ) : ''
+        }
+        confirmLabel="Delete Inquiry"
+        isDestructive={true}
+      />
     </div>
   );
 }

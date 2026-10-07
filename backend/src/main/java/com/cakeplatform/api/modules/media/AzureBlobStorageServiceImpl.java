@@ -68,6 +68,17 @@ public class AzureBlobStorageServiceImpl implements StorageService {
                 
         this.publicBlobContainerClient = blobServiceClient.getBlobContainerClient(publicContainerName);
         this.privateBlobContainerClient = blobServiceClient.getBlobContainerClient(privateContainerName);
+
+        // Test connection on startup
+        if (!"devstoreaccount1".equals(accountName) && !"dummyaccount".equals(accountName)) {
+            try {
+                log.info("Verifying Azure Blob Storage connection to account: {}", accountName);
+                this.publicBlobContainerClient.exists();
+            } catch (Exception e) {
+                log.error("Failed to connect to Azure Blob Storage account '{}'. Ensure credentials and network are configured.", accountName);
+                throw new IllegalStateException("Azure Blob Storage connection failed", e);
+            }
+        }
     }
 
     private Long getCurrentShopId() {

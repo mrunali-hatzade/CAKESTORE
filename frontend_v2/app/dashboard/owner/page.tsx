@@ -29,10 +29,9 @@ import { useToast } from '@/components/common/Toast';
 
 export default function OwnerOverviewPage() {
   // Authoritative shop state strictly from OwnerContext
-  const { registerRefreshHandler, shop } = useOwner();
+  const { registerRefreshHandler, shop, dashboardStats: stats, refreshDashboardStats } = useOwner();
   const toast = useToast();
 
-  const [stats, setStats] = useState<OwnerDashboardStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
   const [deliverySlots, setDeliverySlots] = useState<DeliverySlot[]>([]);
@@ -54,15 +53,13 @@ export default function OwnerOverviewPage() {
 
     try {
       // Parallel fetch of all operational data without duplicate shop profile calls
-      const [statsRes, ordersRes, analyticsRes, slotsRes, customCakesRes] = await Promise.allSettled([
-        ownerApi.getDashboardStats(),
-        ordersApi.getOwnerOrders(undefined, 0, 1000),
+      const [ordersRes, analyticsRes, slotsRes, customCakesRes] = await Promise.allSettled([
+        ordersApi.getOwnerOrders(undefined, undefined, 0, 1000),
         ownerApi.getAnalytics(),
         deliverySlotsApi.getOwnerSlots(),
         ownerApi.getCustomCakeRequests(),
       ]);
 
-      if (statsRes.status === 'fulfilled') setStats(statsRes.value);
       if (ordersRes.status === 'fulfilled') {
         const sorted = [...(ordersRes.value?.content || [])].sort(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -113,7 +110,7 @@ export default function OwnerOverviewPage() {
       );
       toast.success(targetStatus === 'PAID' ? 'Payment marked as collected!' : 'Payment reverted to pending');
       // Synchronize backend stats & analytics in background
-      ownerApi.getDashboardStats().then((s) => setStats(s)).catch(() => {});
+      refreshDashboardStats().catch(() => {});
       ownerApi.getAnalytics().then((a) => setAnalytics(a)).catch(() => {});
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update payment status');

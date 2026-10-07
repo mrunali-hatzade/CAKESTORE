@@ -1,0 +1,691 @@
+=== BACKEND TENANCY ANALYSIS ===
+
+--- CONTROLLER: GlobalExceptionHandler.java ---
+--- SERVICE: AdminDashboardService.java ---
+  -> Contains shopId or Security checks
+  Shop shop = shopRepository.findById(shopId)
+  return shopRepository.findById(shopId).orElseThrow();
+  return shopRepository.findById(shopId).orElseThrow();
+  Shop shop = shopRepository.findById(shopId)
+--- CONTROLLER: AdminSubscriptionPlanController.java ---
+  @GetMapping
+  @PostMapping
+  @PutMapping("/{id}")
+  @PutMapping("/reorder")
+--- CONTROLLER: AdminDashboardController.java ---
+  @GetMapping("/dashboard/stats/activity")
+  @GetMapping("/dashboard/stats/analytics/revenue")
+  @GetMapping("/dashboard/stats")
+  @GetMapping("/shops")
+  @GetMapping("/shops/counts")
+  @GetMapping("/shops/{shopId}")
+--- ENTITY: ActivityLog.java ---
+  -> Contains Shop reference
+--- SERVICE: ActivityLoggerService.java ---
+  -> Contains shopId or Security checks
+--- REPOSITORY: ActivityLogRepository.java ---
+  List<ActivityLog> findByShopIdOrderByTimestampDesc(Long shopId);
+  List<ActivityLog> findByShopIdAndEntityTypeInOrderByTimestampDesc(Long shopId, java.util.Collection<String> entityTypes);
+--- CONTROLLER: AuthController.java ---
+  @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PostMapping("/login")
+  @PostMapping("/forgot-password")
+  @PostMapping("/reset-password")
+  @PostMapping("/change-password")
+--- ENTITY: OtpVerification.java ---
+  -> No direct Shop reference
+--- ENTITY: PasswordResetToken.java ---
+  -> No direct Shop reference
+--- REPOSITORY: OtpVerificationRepository.java ---
+--- REPOSITORY: PasswordResetTokenRepository.java ---
+  Optional<PasswordResetToken> findByTokenHash(String tokenHash);
+  @Query("UPDATE PasswordResetToken t SET t.used = true WHERE t.user = :user AND t.used = false")
+--- SERVICE: AuthService.java ---
+  User user = userRepository.findById(userId)
+--- SERVICE: GuestOtpService.java ---
+--- SERVICE: SystemAutomationsScheduler.java ---
+--- CONTROLLER: AdminChatController.java ---
+  @GetMapping("/conversations")
+  @GetMapping("/conversations/{ownerId}/messages")
+  @PostMapping("/conversations/{ownerId}/messages")
+  @GetMapping("/unread-count")
+--- SERVICE: ChatService.java ---
+  User owner = userRepository.findById(ownerId)
+  User owner = userRepository.findById(ownerId)
+  User sender = userRepository.findById(senderId)
+--- ENTITY: Conversation.java ---
+  -> No direct Shop reference
+--- REPOSITORY: ConversationRepository.java ---
+  Optional<Conversation> findByOwnerIdAndStatus(Long ownerId, ConversationStatus status);
+--- ENTITY: Message.java ---
+  -> No direct Shop reference
+--- REPOSITORY: MessageRepository.java ---
+  List<Message> findByConversationIdOrderByCreatedAtAsc(Long conversationId);
+  @Query("SELECT COUNT(m) FROM Message m WHERE m.conversation.owner.id = :ownerId AND m.senderRole = 'ADMIN' AND m.isRead = false")
+  @Query("SELECT COUNT(m) FROM Message m WHERE m.senderRole = 'SHOP_OWNER' AND m.isRead = false")
+  @Query("UPDATE Message m SET m.isRead = true WHERE m.conversation.id = :conversationId AND m.senderRole = :senderRole AND m.isRead = false")
+--- CONTROLLER: OwnerChatController.java ---
+  @GetMapping("/conversations")
+  @PostMapping("/conversations")
+  @GetMapping("/messages")
+  @PostMapping("/messages")
+  @GetMapping("/unread-count")
+--- CONTROLLER: HealthController.java ---
+  @GetMapping("/health")
+--- ENTITY: ContactEnquiry.java ---
+  -> No direct Shop reference
+--- REPOSITORY: ContactEnquiryRepository.java ---
+  @Query("SELECT e FROM ContactEnquiry e " +
+--- SERVICE: ContactEnquiryService.java ---
+  user = userRepository.findById(optionalUserId).orElse(null);
+  ContactEnquiry enquiry = enquiryRepository.findById(id)
+  ContactEnquiry enquiry = enquiryRepository.findById(id)
+--- ENTITY: PlatformFeedback.java ---
+  -> Contains Shop reference
+--- REPOSITORY: PlatformFeedbackRepository.java ---
+  @Query("SELECT f FROM PlatformFeedback f LEFT JOIN f.shop s LEFT JOIN f.owner o " +
+  @Query("DELETE FROM PlatformFeedback f WHERE f.owner.id = :ownerId")
+  void deleteByOwnerId(@Param("ownerId") Long ownerId);
+  @Query("DELETE FROM PlatformFeedback f WHERE f.shop.id = :shopId")
+  void deleteByShopId(@Param("shopId") Long shopId);
+--- SERVICE: PlatformFeedbackService.java ---
+  -> Contains shopId or Security checks
+  User owner = userRepository.findById(ownerId)
+  PlatformFeedback feedback = feedbackRepository.findById(id)
+  Shop shop = shopRepository.findById(feedback.getShopId()).orElse(null);
+  PlatformFeedback feedback = feedbackRepository.findById(id)
+--- CONTROLLER: AdminCommunicationController.java ---
+  @GetMapping("/feedback")
+  @GetMapping("/enquiries")
+  @PostMapping("/feedback/{id}/reply")
+  @PostMapping("/enquiries/{id}/reply")
+  @GetMapping("/communication/summary")
+--- CONTROLLER: OwnerFeedbackController.java ---
+  @PostMapping
+--- CONTROLLER: PublicContactController.java ---
+  @PostMapping
+--- CONTROLLER: DevEmailController.java ---
+  @GetMapping
+--- SERVICE: EmailService.java ---
+--- SERVICE: EmailServiceImpl.java ---
+--- ENTITY: CustomCakeRequest.java ---
+  -> Contains Shop reference
+--- ENTITY: CustomCakeRequestFieldValue.java ---
+  -> No direct Shop reference
+--- REPOSITORY: CustomCakeRequestFieldValueRepository.java ---
+  List<CustomCakeRequestFieldValue> findByRequestId(Long requestId);
+  void deleteByRequestId(Long requestId);
+--- REPOSITORY: CustomCakeRequestRepository.java ---
+  List<CustomCakeRequest> findByShopIdOrderByCreatedAtDesc(Long shopId);
+  Optional<CustomCakeRequest> findByIdAndShopId(Long id, Long shopId);
+  void deleteByShopId(Long shopId);
+  @Query("SELECT c FROM CustomCakeRequest c WHERE c.shop.id = :shopId " +
+--- ENTITY: Enquiry.java ---
+  -> Contains Shop reference
+--- REPOSITORY: EnquiryRepository.java ---
+  List<Enquiry> findByShopIdOrderByCreatedAtDesc(Long shopId);
+  Optional<Enquiry> findByIdAndShopId(Long id, Long shopId);
+  void deleteByShopId(Long shopId);
+  @Query("SELECT e FROM Enquiry e WHERE e.shop.id = :shopId " +
+--- ENTITY: Feedback.java ---
+  -> Contains Shop reference
+--- REPOSITORY: FeedbackRepository.java ---
+  List<Feedback> findByShopIdAndDeletedAtIsNullOrderByCreatedAtDesc(Long shopId);
+  List<Feedback> findByShopIdAndIsApprovedTrueAndDeletedAtIsNullOrderByCreatedAtDesc(Long shopId);
+  Optional<Feedback> findByIdAndShopId(Long id, Long shopId);
+  void deleteByShopId(Long shopId);
+--- CONTROLLER: CustomerInteractionController.java ---
+  @GetMapping("/feedback")
+  @PostMapping("/feedback")
+  @PutMapping("/feedback/{feedbackId}")
+  @DeleteMapping("/feedback/{feedbackId}")
+  @PostMapping("/enquiries")
+  @PostMapping("/custom-cakes")
+--- CONTROLLER: OwnerInteractionController.java ---
+  @GetMapping("/feedback")
+  @PostMapping("/feedback/{id}/reply")
+  @DeleteMapping("/feedback/{id}")
+  @GetMapping("/enquiries")
+  @PostMapping("/enquiries/{id}/reply")
+  @DeleteMapping("/enquiries/{id}")
+  @GetMapping("/custom-cakes")
+  @PostMapping("/custom-cakes/{id}/respond")
+  @PostMapping("/custom-cakes/{id}/convert-to-order")
+--- SERVICE: InteractionService.java ---
+  -> Contains shopId or Security checks
+  Shop shop = shopRepository.findById(shopId)
+  com.cakeplatform.api.modules.product.Product product = productRepository.findById(request.getProductId())
+  Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+  Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+--- SERVICE: OwnerInteractionService.java ---
+  Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+  Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+  Feedback feedback = feedbackRepository.findByIdAndShopId(feedbackId, shop.getId())
+  Enquiry enquiry = enquiryRepository.findByIdAndShopId(enquiryId, shop.getId())
+  Enquiry enquiry = enquiryRepository.findByIdAndShopId(enquiryId, shop.getId())
+  Enquiry enquiry = enquiryRepository.findByIdAndShopId(enquiryId, shop.getId())
+  CustomCakeRequest cakeReq = customCakeRequestRepository.findByIdAndShopId(requestId, shop.getId())
+  CustomCakeRequest cakeReq = customCakeRequestRepository.findByIdAndShopId(requestId, shop.getId())
+  Optional<Order> existing = orderRepository.findById(cakeReq.getConvertedOrderId());
+  slot = deliverySlotRepository.findByIdAndShopId(request.getDeliverySlotId(), shop.getId()).orElse(null);
+--- CONTROLLER: LocationReferenceController.java ---
+  @GetMapping({"/api/locations/readiness", "/api/customer/storefront/locations/readiness"})
+  @GetMapping({"/api/locations/countries", "/api/customer/storefront/locations/countries"})
+  @GetMapping({"/api/locations/states", "/api/customer/storefront/locations/states"})
+  @GetMapping({"/api/locations/districts", "/api/customer/storefront/locations/districts"})
+  @GetMapping({"/api/locations/cities", "/api/customer/storefront/locations/cities"})
+  @GetMapping({"/api/locations/localities", "/api/customer/storefront/locations/localities"})
+  @GetMapping({"/api/locations/pincodes", "/api/customer/storefront/locations/pincodes"})
+  @GetMapping({"/api/locations/pincodes/{pincode}", "/api/customer/storefront/locations/pincodes/{pincode}"})
+  @PostMapping({"/api/locations/validate", "/api/customer/storefront/locations/validate"})
+--- ENTITY: LocationCity.java ---
+  -> No direct Shop reference
+--- ENTITY: LocationCountry.java ---
+  -> No direct Shop reference
+--- ENTITY: LocationDatasetMetadata.java ---
+  -> No direct Shop reference
+--- ENTITY: LocationDistrict.java ---
+  -> No direct Shop reference
+--- ENTITY: LocationLocality.java ---
+  -> No direct Shop reference
+--- ENTITY: LocationPincode.java ---
+  -> No direct Shop reference
+--- ENTITY: LocationState.java ---
+  -> No direct Shop reference
+--- SERVICE: LocationServiceUnavailableException.java ---
+--- REPOSITORY: LocationCityRepository.java ---
+  List<LocationCity> findByDistrictIdAndIsActiveTrueOrderByNameAsc(Integer districtId);
+  Optional<LocationCity> findByDistrictIdAndNormalizedName(Integer districtId, String normalizedName);
+  Optional<LocationCity> findByNormalizedName(String normalizedName);
+--- REPOSITORY: LocationCountryRepository.java ---
+  List<LocationCountry> findByIsActiveTrueOrderByNameAsc();
+  Optional<LocationCountry> findByCodeIgnoreCase(String code);
+  Optional<LocationCountry> findByNameIgnoreCase(String name);
+--- REPOSITORY: LocationDatasetMetadataDao.java ---
+  public Optional<LocationDatasetMetadata> findByName(String datasetName) {
+--- REPOSITORY: LocationDistrictRepository.java ---
+  List<LocationDistrict> findByStateIdAndIsActiveTrueOrderByNameAsc(Integer stateId);
+  Optional<LocationDistrict> findByStateIdAndNormalizedName(Integer stateId, String normalizedName);
+  Optional<LocationDistrict> findByLgdCode(Integer lgdCode);
+--- REPOSITORY: LocationLocalityRepository.java ---
+  List<LocationLocality> findByCityIdAndIsActiveTrueOrderByNameAsc(Integer cityId);
+  Optional<LocationLocality> findByCityIdAndNormalizedName(Integer cityId, String normalizedName);
+  @Query(value = "SELECT l.* FROM location_localities l " +
+  List<LocationLocality> findByPincode(@Param("pincode") String pincode);
+--- REPOSITORY: LocationPincodeRepository.java ---
+  List<LocationPincode> findByDistrictIdAndIsActiveTrueOrderByPincodeAsc(Integer districtId);
+  @Query("SELECT p FROM LocationPincode p JOIN FETCH p.district d JOIN FETCH d.state s WHERE p.pincode = :pincode AND p.isActive = true")
+  Optional<LocationPincode> findByPincodeWithDistrictAndState(@Param("pincode") String pincode);
+  @Query("SELECT COUNT(p) > 0 FROM LocationPincode p JOIN p.district d WHERE p.pincode = :pincode AND d.state.id = :stateId AND p.isActive = true")
+  @Query("SELECT COUNT(p) > 0 FROM LocationPincode p WHERE p.pincode = :pincode AND p.district.id = :districtId AND p.isActive = true")
+  @Query(value = "SELECT llp.pincode FROM location_locality_pincodes llp " +
+--- REPOSITORY: LocationStateRepository.java ---
+  List<LocationState> findByCountryIdAndIsActiveTrueOrderByNameAsc(Integer countryId);
+  List<LocationState> findByCountryCodeIgnoreCaseAndIsActiveTrueOrderByNameAsc(String countryCode);
+  Optional<LocationState> findByNormalizedName(String normalizedName);
+  Optional<LocationState> findByCodeIgnoreCase(String code);
+  Optional<LocationState> findByLgdCode(Integer lgdCode);
+--- SERVICE: LocationDataLoader.java ---
+--- SERVICE: LocationDataReconciliationEngine.java ---
+--- SERVICE: LocationService.java ---
+--- SERVICE: LocationValidationService.java ---
+  LocationPincode pinRecord = pincodeRepository.findById(pincode).orElse(null);
+--- SERVICE: AzureBlobStorageServiceImpl.java ---
+  -> Contains shopId or Security checks
+--- SERVICE: CloudinaryUploadServiceImpl.java ---
+--- SERVICE: LocalMediaUploadServiceImpl.java ---
+--- CONTROLLER: MediaController.java ---
+  @PostMapping("/upload")
+--- SERVICE: StorageService.java ---
+--- CONTROLLER: AdminMessageController.java ---
+  @PostMapping
+  @GetMapping("/history")
+--- ENTITY: AdminNotification.java ---
+  -> No direct Shop reference
+--- REPOSITORY: AdminNotificationRepository.java ---
+  @Query("SELECT n FROM AdminNotification n " +
+  @Query("SELECT COUNT(n) FROM AdminNotification n " +
+  @Query("UPDATE AdminNotification n SET n.isRead = true, n.readAt = CURRENT_TIMESTAMP " +
+  Optional<AdminNotification> findByIdAndRecipientId(Long id, Long recipientId);
+--- SERVICE: AdminNotificationService.java ---
+  AdminNotification notification = notificationRepository.findById(notificationId).orElse(null);
+--- ENTITY: BroadcastHistory.java ---
+  -> No direct Shop reference
+--- REPOSITORY: BroadcastHistoryRepository.java ---
+--- SERVICE: BroadcastService.java ---
+  User owner = userRepository.findById(request.getSpecificOwnerId()).orElse(null);
+--- SERVICE: EmailService.java ---
+--- ENTITY: Notification.java ---
+  -> No direct Shop reference
+--- CONTROLLER: NotificationController.java ---
+  @GetMapping
+  @GetMapping("/unread-count")
+  @GetMapping("/unread-summary")
+--- REPOSITORY: NotificationRepository.java ---
+  @Query("UPDATE Notification n SET n.isRead = true WHERE n.recipient.id = :recipientId AND n.isRead = false")
+  @Query("UPDATE Notification n SET n.isRead = true WHERE n.recipient.id = :recipientId AND n.type = :type AND n.isRead = false")
+  @Query("SELECT n.type, COUNT(n) FROM Notification n WHERE n.recipient.id = :recipientId AND n.isRead = false GROUP BY n.type")
+  void deleteByRecipientId(Long recipientId);
+--- SERVICE: NotificationService.java ---
+  Notification notification = notificationRepository.findById(notificationId)
+--- SERVICE: SmsService.java ---
+--- CONTROLLER: AdminNotificationController.java ---
+  @GetMapping
+  @GetMapping("/unread-count")
+  @PostMapping("/mark-all-read")
+--- SERVICE: InvoiceService.java ---
+  -> Contains shopId or Security checks
+--- ENTITY: Order.java ---
+  -> Contains Shop reference
+--- ENTITY: OrderItem.java ---
+  -> No direct Shop reference
+--- REPOSITORY: OrderItemRepository.java ---
+  List<OrderItem> findByOrderId(Long orderId);
+--- REPOSITORY: OrderRepository.java ---
+  List<Order> findByShopIdOrderByCreatedAtDesc(Long shopId);
+  org.springframework.data.domain.Page<Order> findByShopIdOrderByCreatedAtDesc(Long shopId, Pageable pageable);
+  Optional<Order> findByIdAndShopId(Long id, Long shopId);
+  Optional<Order> findByOrderNumber(String orderNumber);
+  @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT o FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+  @Query("SELECT o FROM Order o " +
+  @Query("SELECT o FROM Order o " +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+  @Query("SELECT oi.productNameSnapshot, SUM(oi.quantity) " +
+  @Query("SELECT oi.productNameSnapshot, SUM(oi.quantity), SUM(oi.totalPrice), MAX(oi.productImageUrl) " +
+  @Query("SELECT o.orderStatus, COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT COALESCE(o.paymentMethod, 'OTHER'), COUNT(o), SUM(o.totalAmount) FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o) FROM Order o WHERE o.shop.id = :shopId " +
+  org.springframework.data.domain.Page<Order> findByCustomerPhoneOrderByCreatedAtDesc(String customerPhone, Pageable pageable);
+  @Query("SELECT o FROM Order o WHERE o.customerPhone = :customerPhone " +
+  List<Order> findByShopIdAndCustomerEmailOrderByCreatedAtDesc(Long shopId, String customerEmail);
+  List<Order> findByShopIdAndCustomerPhoneOrderByCreatedAtDesc(Long shopId, String customerPhone);
+  List<Order> findByShopIdAndCustomerNameOrderByCreatedAtDesc(Long shopId, String customerName);
+  @Query("SELECT DISTINCT o.customerEmail FROM Order o WHERE o.shop.id = :shopId AND o.customerEmail IS NOT NULL")
+  @Query(value = "SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
+  @Query(value = "SELECT new com.cakeplatform.api.modules.shop.dto.CustomerProfileResponse(" +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+  @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o " +
+  @Query("SELECT COALESCE(SUM(o.discountAmount), 0) FROM Order o WHERE o.shop.id = :shopId AND o.orderStatus != 'CANCELLED'")
+  @Query("SELECT COUNT(o) FROM Order o WHERE o.shop.id = :shopId AND o.couponCode IS NOT NULL AND o.orderStatus != 'CANCELLED'")
+  @Query("SELECT COUNT(o) FROM Order o " +
+  @Query(value = "SELECT COALESCE(MAX(sub.cnt), 0) FROM (" +
+--- CONTROLLER: OwnerOrderController.java ---
+  @GetMapping
+  @GetMapping("/{id}")
+  @GetMapping("/{id}/invoice")
+--- CONTROLLER: WebhookController.java ---
+  @PostMapping("/razorpay")
+--- SERVICE: OrderService.java ---
+  -> Contains shopId or Security checks
+  return orderRepository.findByIdAndShopId(orderId, shop.getId())
+  Order order = orderRepository.findByIdAndShopId(orderId, shop.getId())
+  Order order = orderRepository.findByIdAndShopId(orderId, shop.getId())
+--- ENTITY: Payment.java ---
+  -> Contains Shop reference
+--- REPOSITORY: PaymentRepository.java ---
+  List<Payment> findByShopId(Long shopId);
+  List<Payment> findByShopIdOrderByCreatedAtDesc(Long shopId);
+  java.util.Optional<Payment> findByProviderPaymentId(String providerPaymentId);
+  java.util.Optional<Payment> findByProviderOrderId(String providerOrderId);
+  java.util.Optional<Payment> findByIdAndShopId(Long id, Long shopId);
+  void deleteByShopId(Long shopId);
+  @Query("SELECT p FROM Payment p WHERE p.id = :id")
+  java.util.Optional<Payment> findByIdWithLock(@org.springframework.data.repository.query.Param("id") Long id);
+  @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'COMPLETED'")
+  @Query("SELECT COUNT(p) FROM Payment p WHERE p.status = 'COMPLETED' AND (p.paidAt >= :startOfDay OR (p.paidAt IS NULL AND p.createdAt >= :startOfDay))")
+  @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'COMPLETED' AND (p.paidAt >= :startOfMonth OR (p.paidAt IS NULL AND p.createdAt >= :startOfMonth))")
+  @Query("SELECT COUNT(p) FROM Payment p WHERE p.status = 'COMPLETED' AND p.createdAt BETWEEN :start AND :end")
+  @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'COMPLETED' AND p.createdAt BETWEEN :start AND :end")
+--- SERVICE: RazorpayService.java ---
+  -> Contains shopId or Security checks
+--- ENTITY: WebhookEvent.java ---
+  -> No direct Shop reference
+--- REPOSITORY: WebhookEventRepository.java ---
+--- CONTROLLER: CustomerPaymentController.java ---
+  @PostMapping("/{orderNumber}/create-payment-order")
+  @PostMapping("/{orderNumber}/verify-payment")
+  @PostMapping("/{orderNumber}/cancel-payment")
+--- CONTROLLER: OwnerPaymentController.java ---
+  @GetMapping
+  @GetMapping("/{paymentId}/invoice")
+  @PostMapping("/initiate-subscription")
+  @PostMapping("/verify-subscription")
+  @PostMapping("/mock-checkout")
+--- CONTROLLER: RazorpayWebhookController.java ---
+  @PostMapping("/razorpay-v2")
+--- ENTITY: Product.java ---
+  -> Contains Shop reference
+--- ENTITY: ProductAddon.java ---
+  -> No direct Shop reference
+--- REPOSITORY: ProductAddonRepository.java ---
+--- ENTITY: ProductCategory.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ProductCategoryRepository.java ---
+  List<ProductCategory> findByShopIdOrderByDisplayOrderAscNameAsc(Long shopId);
+  Optional<ProductCategory> findByIdAndShopId(Long id, Long shopId);
+  @Query("SELECT new com.cakeplatform.api.modules.product.dto.CategoryResponse(" +
+  @Query("SELECT new com.cakeplatform.api.modules.product.dto.CategoryResponse(" +
+  @Query("SELECT COUNT(c) > 0 FROM ProductCategory c WHERE c.shop.id = :shopId AND LOWER(TRIM(c.name)) = LOWER(TRIM(:name))")
+  @Query("SELECT COUNT(c) > 0 FROM ProductCategory c WHERE c.shop.id = :shopId AND LOWER(TRIM(c.name)) = LOWER(TRIM(:name)) AND c.id != :excludeId")
+  void deleteByShopId(Long shopId);
+--- ENTITY: ProductHighlight.java ---
+  -> No direct Shop reference
+--- REPOSITORY: ProductHighlightRepository.java ---
+  List<ProductHighlight> findByProductIdOrderByDisplayOrderAscCreatedAtAsc(Long productId);
+  void deleteByProductId(Long productId);
+--- ENTITY: ProductImage.java ---
+  -> No direct Shop reference
+--- REPOSITORY: ProductImageRepository.java ---
+  List<ProductImage> findByProductIdOrderByDisplayOrderAscCreatedAtAsc(Long productId);
+  void deleteByProductId(Long productId);
+--- REPOSITORY: ProductRepository.java ---
+  @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId")
+  List<Product> findByShopId(@Param("shopId") Long shopId);
+  @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId " +
+  @Query("SELECT p FROM Product p WHERE p.id = :id AND p.shop.id = :shopId")
+  Optional<Product> findByIdAndShopId(@Param("id") Long id, @Param("shopId") Long shopId);
+  @Query("SELECT COUNT(p) FROM Product p WHERE p.shop.id = :shopId")
+  @Query("SELECT COUNT(p) FROM Product p WHERE p.shop.id = :shopId AND p.status = :status AND p.availability = :availability")
+  @Query("SELECT COUNT(p) FROM Product p WHERE p.category.id = :categoryId")
+  @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId AND p.category.id = :categoryId")
+  List<Product> findByShopIdAndCategoryId(@Param("shopId") Long shopId, @Param("categoryId") Long categoryId);
+  @Query("UPDATE Product p SET p.category.id = :targetId WHERE p.category.id = :sourceId AND p.shop.id = :shopId")
+--- ENTITY: ProductVariant.java ---
+  -> No direct Shop reference
+--- REPOSITORY: ProductVariantRepository.java ---
+--- CONTROLLER: OwnerCategoryController.java ---
+  @GetMapping
+  @PostMapping
+  @PutMapping("/{id}")
+  @DeleteMapping("/{id}")
+--- CONTROLLER: OwnerProductController.java ---
+  @GetMapping
+  @PostMapping
+  @PutMapping("/{id}")
+  @DeleteMapping("/{id}")
+--- SERVICE: CategoryService.java ---
+  -> Contains shopId or Security checks
+  ProductCategory category = categoryRepository.findByIdAndShopId(categoryId, shop.getId())
+  ProductCategory sourceCategory = categoryRepository.findByIdAndShopId(categoryId, shop.getId())
+  ProductCategory targetCategory = categoryRepository.findByIdAndShopId(reassignToCategoryId, shop.getId())
+--- SERVICE: ProductService.java ---
+  -> Contains shopId or Security checks
+  Product product = productRepository.findByIdAndShopId(productId, shop.getId())
+  com.cakeplatform.api.modules.product.ProductCategory category = categoryRepository.findByIdAndShopId(request.getCategoryId(), shop.getId())
+  Product product = productRepository.findByIdAndShopId(productId, shop.getId())
+--- ENTITY: ProductReview.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ProductReviewRepository.java ---
+  List<ProductReview> findByProductIdOrderByCreatedAtDesc(Long productId);
+  List<ProductReview> findByShopIdOrderByCreatedAtDesc(Long shopId);
+  Optional<ProductReview> findByOrderItemId(Long orderItemId);
+  @Query("SELECT AVG(r.rating) FROM ProductReview r WHERE r.product.id = :productId")
+  @Query("SELECT r.rating, COUNT(r) FROM ProductReview r WHERE r.product.id = :productId GROUP BY r.rating")
+  List<ProductReview> findByOrderId(Long orderId);
+--- CONTROLLER: CustomerProductReviewController.java ---
+  @GetMapping("/products/{productId}/reviews")
+  @PostMapping("/products/{productId}/reviews")
+  @GetMapping("/reviews/eligibility")
+  @PutMapping("/products/{productId}/reviews/{reviewId}")
+  @DeleteMapping("/products/{productId}/reviews/{reviewId}")
+--- CONTROLLER: OwnerProductReviewController.java ---
+  @GetMapping
+  @PostMapping("/{reviewId}/reply")
+--- SERVICE: ProductReviewService.java ---
+  -> Contains shopId or Security checks
+  Shop shop = shopRepository.findById(shopId)
+  Product product = productRepository.findById(productId)
+  OrderItem orderItem = orderItemRepository.findById(request.getOrderItemId())
+  Product product = productRepository.findById(productId)
+  ProductReview review = productReviewRepository.findById(reviewId)
+  ProductReview review = productReviewRepository.findById(reviewId)
+  ProductReview review = productReviewRepository.findById(reviewId)
+--- SERVICE: ShopAccessValidator.java ---
+  -> Contains shopId or Security checks
+--- ENTITY: GlobalSettings.java ---
+  -> No direct Shop reference
+--- REPOSITORY: GlobalSettingsRepository.java ---
+--- SERVICE: GlobalSettingsService.java ---
+  cachedSettings = repository.findById(1L).orElseGet(() -> {
+--- CONTROLLER: AdminSettingsController.java ---
+  @GetMapping
+  @PutMapping
+--- ENTITY: BusinessDocument.java ---
+  -> Contains Shop reference
+--- REPOSITORY: BusinessDocumentRepository.java ---
+  List<BusinessDocument> findByShopId(Long shopId);
+  void deleteByShopId(Long shopId);
+--- ENTITY: Coupon.java ---
+  -> Contains Shop reference
+--- REPOSITORY: CouponRepository.java ---
+  List<Coupon> findByShopId(Long shopId);
+  Optional<Coupon> findByShopIdAndCode(Long shopId, String code);
+  Optional<Coupon> findByShopIdAndCodeIgnoreCase(Long shopId, String code);
+  Optional<Coupon> findByIdAndShopId(Long id, Long shopId);
+  @Query("UPDATE Coupon c SET c.usedCount = c.usedCount + 1 WHERE c.id = :couponId AND (c.usageLimit IS NULL OR c.usedCount < c.usageLimit)")
+  @Query("UPDATE Coupon c SET c.usedCount = CASE WHEN c.usedCount > 0 THEN c.usedCount - 1 ELSE 0 END WHERE c.id = :couponId")
+  void deleteByShopId(Long shopId);
+--- ENTITY: Shop.java ---
+  -> No direct Shop reference
+--- ENTITY: ShopBanner.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopBannerRepository.java ---
+  List<ShopBanner> findByShopIdOrderByDisplayOrderAsc(Long shopId);
+  List<ShopBanner> findByShopIdAndIsActiveTrueOrderByDisplayOrderAsc(Long shopId);
+  Optional<ShopBanner> findByIdAndShopId(Long id, Long shopId);
+  void deleteByShopId(Long shopId);
+--- ENTITY: ShopBusinessHours.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopBusinessHoursRepository.java ---
+  List<ShopBusinessHours> findByShopId(Long shopId);
+  Optional<ShopBusinessHours> findByShopIdAndDayOfWeek(Long shopId, String dayOfWeek);
+  void deleteByShopId(Long shopId);
+--- ENTITY: ShopCustomFormField.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopCustomFormFieldRepository.java ---
+  List<ShopCustomFormField> findByShopIdOrderByDisplayOrderAsc(Long shopId);
+  List<ShopCustomFormField> findByShopIdAndIsEnabledTrueOrderByDisplayOrderAsc(Long shopId);
+  Optional<ShopCustomFormField> findByIdAndShopId(Long id, Long shopId);
+  Optional<ShopCustomFormField> findByShopIdAndFieldKey(Long shopId, String fieldKey);
+  void deleteByShopId(Long shopId);
+--- ENTITY: ShopDeliveryConfig.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopDeliveryConfigRepository.java ---
+  Optional<ShopDeliveryConfig> findByShopId(Long shopId);
+  void deleteByShopId(Long shopId);
+--- ENTITY: ShopDeliverySlot.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopDeliverySlotRepository.java ---
+  List<ShopDeliverySlot> findByShopIdAndIsActiveTrue(Long shopId);
+  List<ShopDeliverySlot> findByShopId(Long shopId);
+  Optional<ShopDeliverySlot> findByIdAndShopId(Long id, Long shopId);
+  @Query("SELECT s FROM ShopDeliverySlot s WHERE s.id = :id AND s.shop.id = :shopId")
+  Optional<ShopDeliverySlot> findByIdAndShopIdWithLock(@Param("id") Long id, @Param("shopId") Long shopId);
+  void deleteByShopId(Long shopId);
+--- ENTITY: ShopGalleryItem.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopGalleryItemRepository.java ---
+  List<ShopGalleryItem> findByShopIdAndIsActiveTrueOrderByDisplayOrderAscCreatedAtDesc(Long shopId);
+  List<ShopGalleryItem> findByShopIdOrderByDisplayOrderAscCreatedAtDesc(Long shopId);
+  Optional<ShopGalleryItem> findByIdAndShopId(Long id, Long shopId);
+--- ENTITY: ShopPayoutDetails.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopPayoutDetailsRepository.java ---
+  Optional<ShopPayoutDetails> findByShopId(Long shopId);
+  void deleteByShopId(Long shopId);
+--- REPOSITORY: ShopRepository.java ---
+  List<Shop> findByOwnerId(Long ownerId);
+  List<Shop> findByStatus(ShopStatus status);
+  @Query(value = "SELECT COUNT(*) FROM shops WHERE is_deleted = true", nativeQuery = true)
+  @Query("SELECT s FROM Shop s WHERE " +
+  @Query(value = "SELECT s.id as shopId, s.business_name as businessName, u.full_name as ownerName, u.email as ownerEmail, s.status as shopStatus, s.created_at as registeredAt " +
+  @Query("SELECT s FROM Shop s WHERE s.status = :status AND (" +
+  @Query(value = "SELECT s.city AS city_name, s.state AS state_name, COUNT(s.id) AS active_bakery_count " +
+  @Query(value = "SELECT " +
+  @Query(value = "SELECT " +
+  @Query(value = "SELECT " +
+  @Query(value = "SELECT COUNT(*) FROM ( " +
+  @Query(value = "SELECT " +
+  @Query(value = "SELECT " +
+  @Query(value = "SELECT COUNT(s.id) " +
+--- SERVICE: ShopStatusManager.java ---
+  -> Contains shopId or Security checks
+  Shop shop = shopRepository.findById(shopId)
+  User owner = userRepository.findById(shop.getOwner().getId()).orElse(null);
+--- ENTITY: ShopStorefrontSettings.java ---
+  -> Contains Shop reference
+--- REPOSITORY: ShopStorefrontSettingsRepository.java ---
+  Optional<ShopStorefrontSettings> findByShopId(Long shopId);
+  void deleteByShopId(Long shopId);
+--- CONTROLLER: CustomerGalleryController.java ---
+  @GetMapping
+--- CONTROLLER: DocumentAccessController.java ---
+  @GetMapping("/admin/documents/{id}/view")
+  @GetMapping("/owner/documents/{id}/view")
+--- CONTROLLER: OwnerAnalyticsController.java ---
+  @GetMapping("/dashboard")
+--- CONTROLLER: OwnerCouponController.java ---
+  @GetMapping
+  @PostMapping
+  @PutMapping("/{id}")
+  @DeleteMapping("/{id}")
+--- CONTROLLER: OwnerCustomerController.java ---
+  @GetMapping
+  @GetMapping("/{identifier}")
+--- CONTROLLER: OwnerDeliverySlotController.java ---
+  @GetMapping
+  @PostMapping
+  @PutMapping("/{id}")
+  @DeleteMapping("/{id}")
+--- CONTROLLER: OwnerGalleryController.java ---
+  @GetMapping
+  @PostMapping
+  @PutMapping("/{id}")
+  @DeleteMapping("/{id}")
+--- CONTROLLER: OwnerStorefrontController.java ---
+  @GetMapping("/banners")
+  @PostMapping("/banners")
+  @PutMapping("/banners/{id}")
+  @DeleteMapping("/banners/{id}")
+  @GetMapping("/business-hours")
+  @PostMapping("/business-hours")
+  @GetMapping("/delivery-config")
+  @PutMapping("/delivery-config")
+  @GetMapping("/settings")
+  @PutMapping("/settings")
+  @GetMapping("/custom-fields")
+  @PostMapping("/custom-fields")
+  @PutMapping("/custom-fields/{id}")
+  @DeleteMapping("/custom-fields/{id}")
+--- CONTROLLER: ShopController.java ---
+  @PutMapping("/my-shop/status")
+  @GetMapping("/my-shop")
+  @PutMapping("/my-shop")
+  @GetMapping("/my-shop/stats")
+  @GetMapping("/my-shop/search")
+--- CONTROLLER: ShopPayoutController.java ---
+  @GetMapping
+  @PostMapping
+--- CONTROLLER: VerificationController.java ---
+  @PostMapping("/documents")
+  @GetMapping("/documents")
+  @GetMapping("/status")
+--- SERVICE: AnalyticsService.java ---
+  -> Contains shopId or Security checks
+--- SERVICE: GalleryService.java ---
+  -> Contains shopId or Security checks
+  ShopGalleryItem item = galleryItemRepository.findByIdAndShopId(id, shop.getId())
+  ShopGalleryItem item = galleryItemRepository.findByIdAndShopId(id, shop.getId())
+--- SERVICE: OwnerDashboardService.java ---
+  -> Contains shopId or Security checks
+--- SERVICE: OwnerStorefrontService.java ---
+  ShopBanner banner = shopBannerRepository.findByIdAndShopId(bannerId, shop.getId())
+  ShopBanner banner = shopBannerRepository.findByIdAndShopId(bannerId, shop.getId())
+  ShopCustomFormField field = shopCustomFormFieldRepository.findByIdAndShopId(fieldId, shop.getId())
+  ShopCustomFormField field = shopCustomFormFieldRepository.findByIdAndShopId(fieldId, shop.getId())
+--- SERVICE: ShopService.java ---
+  -> Contains shopId or Security checks
+--- SERVICE: VerificationService.java ---
+  -> Contains shopId or Security checks
+--- CONTROLLER: CustomerMediaController.java ---
+  @PostMapping("/upload-reference")
+  @PostMapping("/upload-review-media")
+--- CONTROLLER: CustomerStorefrontController.java ---
+  @GetMapping("/locations/popular-cities")
+  @GetMapping("/{shopId}/categories")
+  @GetMapping("/{shopId}")
+  @GetMapping("/search")
+  @GetMapping("/{shopId}/delivery-slots")
+  @GetMapping("/{shopId}/products")
+  @GetMapping("/{shopId}/products/top-rated")
+  @GetMapping("/{shopId}/products/{productId}")
+  @PostMapping("/{shopId}/orders")
+  @PostMapping("/{shopId}/coupons/validate")
+  @GetMapping("/{shopId}/coupons")
+  @GetMapping("/orders/{orderNumber}")
+  @GetMapping("/orders/{orderNumber}/invoice")
+--- CONTROLLER: CustomerStorefrontEnquiryController.java ---
+  @PostMapping
+--- SERVICE: CustomerStorefrontService.java ---
+  -> Contains shopId or Security checks
+  Shop shop = shopRepository.findById(shopId)
+  slot = deliverySlotRepository.findByIdAndShopIdWithLock(request.getDeliverySlotId(), shopId).orElse(null);
+  Product product = productRepository.findByIdAndShopId(itemRequest.getProductId(), shopId)
+  Product product = productRepository.findById(productId)
+  Product product = productRepository.findById(request.getProductId())
+--- CONTROLLER: GuestTrackingController.java ---
+  @PostMapping("/request-otp")
+  @PostMapping("/verify-otp")
+  @GetMapping("/orders")
+--- CONTROLLER: PublicPlanController.java ---
+  @GetMapping
+--- SERVICE: StorefrontCacheService.java ---
+  -> Contains shopId or Security checks
+--- ENTITY: Subscription.java ---
+  -> Contains Shop reference
+--- ENTITY: SubscriptionPlan.java ---
+  -> No direct Shop reference
+--- REPOSITORY: SubscriptionPlanRepository.java ---
+  List<SubscriptionPlan> findByIsActiveTrue();
+  List<SubscriptionPlan> findByIsActiveTrueOrderByDisplayOrderAsc();
+--- REPOSITORY: SubscriptionRepository.java ---
+  List<Subscription> findByShopId(Long shopId);
+  List<Subscription> findByStatus(SubscriptionStatus status);
+  void deleteByShopId(Long shopId);
+  @Query("SELECT COUNT(DISTINCT s.shop.id) FROM Subscription s WHERE s.status = :status")
+  @Query("SELECT COUNT(DISTINCT s.shop.id) FROM Subscription s WHERE s.status = :status AND s.shop.id NOT IN (SELECT sub.shop.id FROM Subscription sub WHERE sub.status = 'ACTIVE')")
+  @Query("SELECT COUNT(DISTINCT s.shop.id) FROM Subscription s WHERE s.status = :status AND s.createdAt >= :startDate AND s.createdAt <= :endDate")
+  @Query("SELECT COUNT(DISTINCT s.shop.id) FROM Subscription s WHERE s.status = :status AND s.createdAt >= :startDate AND s.createdAt <= :endDate AND s.shop.id NOT IN (SELECT sub.shop.id FROM Subscription sub WHERE sub.status = 'ACTIVE')")
+--- SERVICE: SubscriptionScheduler.java ---
+  -> Contains shopId or Security checks
+--- SERVICE: SubscriptionService.java ---
+  -> Contains shopId or Security checks
+  Payment payment = paymentRepository.findByIdWithLock(paymentInfo.getId())
+  Subscription subscription = subscriptionRepository.findById(subscriptionId)
+--- CONTROLLER: OwnerSubscriptionController.java ---
+  @GetMapping("/current")
+--- CONTROLLER: PublicSubscriptionPlanController.java ---
+  @GetMapping
+--- ENTITY: User.java ---
+  -> No direct Shop reference
+--- REPOSITORY: UserRepository.java ---
+  Optional<User> findByEmail(String email);
+  Optional<User> findByEmailIgnoreCase(String email);
+  Optional<User> findByMobile(String mobile);
+  java.util.List<User> findByRole(UserRole role);
+--- CONTROLLER: OwnerAccountController.java ---
+  @PostMapping("/delete")
+  @DeleteMapping
+--- SERVICE: OwnerAccountDeletionService.java ---
+  -> Contains shopId or Security checks
+  User user = userRepository.findById(ownerId)
+--- SERVICE: CustomUserDetailsService.java ---
+--- SERVICE: JwtService.java ---

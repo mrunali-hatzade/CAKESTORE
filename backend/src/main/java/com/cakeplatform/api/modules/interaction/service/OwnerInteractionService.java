@@ -83,9 +83,9 @@ public class OwnerInteractionService {
         this(feedbackRepository, enquiryRepository, customCakeRequestRepository, shopAccessValidator, null, null, null, null, null, null);
     }
 
-    public List<Feedback> getMyFeedback(Long ownerId) {
+    public org.springframework.data.domain.Page<Feedback> getMyFeedback(Long ownerId, Integer rating, String query, org.springframework.data.domain.Pageable pageable) {
         Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
-        return feedbackRepository.findByShopIdAndDeletedAtIsNullOrderByCreatedAtDesc(shop.getId());
+        return feedbackRepository.searchFeedbackByShopId(shop.getId(), rating, query, pageable);
     }
 
     @Transactional
@@ -145,9 +145,9 @@ public class OwnerInteractionService {
         return feedbackRepository.save(feedback);
     }
 
-    public List<Enquiry> getMyEnquiries(Long ownerId) {
+    public org.springframework.data.domain.Page<Enquiry> getMyEnquiries(Long ownerId, String status, String type, String query, org.springframework.data.domain.Pageable pageable) {
         Shop shop = shopAccessValidator.getValidShopForOwner(ownerId);
-        return enquiryRepository.findByShopIdOrderByCreatedAtDesc(shop.getId());
+        return enquiryRepository.searchEnquiriesByShopId(shop.getId(), status, type, query, pageable);
     }
 
     @Transactional

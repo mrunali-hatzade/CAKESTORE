@@ -23,8 +23,7 @@ export const storefrontApi = {
       );
       return Array.isArray(data) ? data : [];
     } catch (err: any) {
-      console.error('[StorefrontAPI] getPopularCities error:', err);
-      return [];
+      throw err;
     }
   },
 
@@ -90,8 +89,7 @@ export const storefrontApi = {
       const prods = await apiClient.get<Product[]>(`/api/storefront/shops/${shopId}/products`);
       return Array.isArray(prods) ? prods : [];
     } catch (err: any) {
-      console.error(`[StorefrontAPI] getStorefrontProducts(${shopId}) error:`, err);
-      return [];
+      throw err;
     }
   },
 
@@ -107,8 +105,7 @@ export const storefrontApi = {
       const data = await apiClient.get<Category[]>(`/api/storefront/shops/${shopId}/categories`);
       return Array.isArray(data) ? data : [];
     } catch (err: any) {
-      console.error(`[StorefrontAPI] getStorefrontCategories(${shopId}) error:`, err);
-      return [];
+      throw err;
     }
   },
 
@@ -148,8 +145,8 @@ export const storefrontApi = {
     try {
       const data = await apiClient.get<any>(`/api/storefront/shops/${shopId}/coupons`);
       return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
+    } catch (err) {
+      throw err;
     }
   },
 
@@ -158,8 +155,7 @@ export const storefrontApi = {
       const prods = await apiClient.get<Product[]>(`/api/storefront/shops/${shopId}/products/top-rated?limit=${limit}`);
       return Array.isArray(prods) ? prods : [];
     } catch (err: any) {
-      console.error(`[StorefrontAPI] getTopRatedProducts(${shopId}) error:`, err);
-      return [];
+      throw err;
     }
   },
 
@@ -187,8 +183,8 @@ export const storefrontApi = {
     try {
       const data = await apiClient.get<any[]>(`/api/storefront/shops/${shopId}/feedback`);
       return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
+    } catch (err) {
+      throw err;
     }
   },
 

@@ -19,7 +19,7 @@ public class EncryptionConverter implements AttributeConverter<String, String> {
     // We inject a static key from config. Fallback to a hardcoded 16-byte key if missing.
     private static byte[] KEY;
 
-    @Value("")
+    @Value("${app.encryption.secret:${APP_ENCRYPTION_SECRET:}}")
     public void setSecretKey(String secret) {
         // Ensure key is exactly 16 bytes for AES-128
         String paddedKey = String.format("%-16s", secret).substring(0, 16);

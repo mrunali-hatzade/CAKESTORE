@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Truck,
   Search,
@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/common/Toast';
+import { useCustomerAuth } from '@/lib/auth/CustomerAuthContext';
 
 interface StorefrontTrackOrderTabProps {
   shop: Shop;
@@ -35,14 +36,14 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
   onOpenReviewModal,
 }) => {
   const toast = useToast();
+  const customerAuth = useCustomerAuth();
   
   // State for flow
   const [step, setStep] = useState<'PHONE' | 'OTP' | 'LIST' | 'DETAILS'>('PHONE');
   
   // State for forms
-  const [phone, setPhone] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [otp, setOtp] = useState('');
-  const [guestToken, setGuestToken] = useState<string | null>(null);
   
   // State for data
   const [orders, setOrders] = useState<Order[]>([]);
@@ -52,28 +53,75 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
-  // Use session storage for token persistence across refreshes (in same tab)
   useEffect(() => {
-    const savedToken = sessionStorage.getItem('cakeStoreGuestToken');
-    if (savedToken) {
-      setGuestToken(savedToken);
-      fetchOrders(savedToken);
+    let interval: NodeJS.Timeout;
+    if (step === 'OTP' && resendTimer > 0) {
+      interval = setInterval(() => setResendTimer((prev) => prev - 1), 1000);
     }
-  }, []);
+    return () => clearInterval(interval);
+  }, [step, resendTimer]);
 
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phone || phone.length < 10) return;
+  const fetchOrders = useCallback(async (token: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await ordersApi.getMyOrders(token, 0, 50);
+      setOrders(data.content);
+      setStep('LIST');
+    } catch (err: any) {
+      if (err.status === 401 || err.response?.status === 401) {
+        // Token expired
+        customerAuth.logout();
+        setStep('PHONE');
+        // Just log out quietly instead of showing a permanent error banner
+        toast.error('Session expired. Please verify your phone number again.');
+      } else {
+        setError(err.message || 'Failed to fetch orders');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [customerAuth]);
+
+  // Sync with context
+  useEffect(() => {
+    if (customerAuth.phone && !phoneInput) {
+      setPhoneInput(customerAuth.phone);
+    }
+    
+    // Only auto-fetch if we are just starting and already authenticated
+    if (customerAuth.isAuthenticated && customerAuth.token && step === 'PHONE') {
+      fetchOrders(customerAuth.token);
+    }
+  }, [customerAuth.isAuthenticated, customerAuth.token, customerAuth.phone, step, fetchOrders, phoneInput]);
+
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!phoneInput || phoneInput.length < 10) return;
     
     setIsLoading(true);
     setError(null);
     try {
-      await ordersApi.requestTrackingOtp(phone);
+      await customerAuth.requestOtp(phoneInput);
       setStep('OTP');
+      setResendTimer(60);
       toast.success('OTP sent successfully!');
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to request OTP');
+      const msg = err.response?.data?.message || err.message || '';
+      if (msg.includes('Please wait') && msg.includes('seconds')) {
+        setStep('OTP');
+        const match = msg.match(/wait (\d+) seconds/);
+        if (match) {
+          setResendTimer(parseInt(match[1]));
+        } else {
+          setResendTimer(60);
+        }
+        toast.info('You recently requested an OTP. Please enter it below.');
+      } else {
+        setError(msg || 'Failed to request OTP');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -86,34 +134,10 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
     setIsLoading(true);
     setError(null);
     try {
-      const { token } = await ordersApi.verifyTrackingOtp(phone, otp);
-      setGuestToken(token);
-      sessionStorage.setItem('cakeStoreGuestToken', token);
+      const token = await customerAuth.verifyOtp(phoneInput, otp);
       await fetchOrders(token);
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Invalid or expired OTP');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchOrders = async (token: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await ordersApi.getMyOrders(token, 0, 50);
-      setOrders(data.content);
-      setStep('LIST');
-    } catch (err: any) {
-      if (err.response?.status === 401) {
-        // Token expired
-        sessionStorage.removeItem('cakeStoreGuestToken');
-        setGuestToken(null);
-        setStep('PHONE');
-        setError('Your session has expired. Please request a new OTP.');
-      } else {
-        setError(err.message || 'Failed to fetch orders');
-      }
     } finally {
       setIsLoading(false);
     }
@@ -123,10 +147,6 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch details to ensure we have the latest and to verify token works for it
-      // Since getGuestOrderDetails requires the token now, we need to pass it or set it in axios.
-      // Wait, our frontend `apiClient` doesn't automatically attach `guestToken`.
-      // We already have the full order in the list, we can just display it!
       const order = orders.find(o => o.orderNumber === orderNumber);
       if (order) {
         setSelectedOrder(order);
@@ -201,8 +221,14 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
 
       {/* PHONE STEP */}
       {step === 'PHONE' && (
-        <Card className="max-w-md mx-auto p-6 border border-brand-border/80 shadow-soft">
-          <form onSubmit={handleRequestOtp} className="space-y-4">
+        <Card className="max-w-md mx-auto p-6 border border-brand-border/80 shadow-soft relative overflow-hidden">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+              <div className="w-8 h-8 border-4 border-brand-plum/30 border-t-brand-plum rounded-full animate-spin"></div>
+              <p className="text-xs font-bold text-brand-plum mt-3 animate-pulse">Loading...</p>
+            </div>
+          )}
+          <form onSubmit={handleRequestOtp} className="space-y-4 relative z-0">
             <div className="space-y-2">
               <label className="text-sm font-bold text-brand-espresso">Mobile Number</label>
               <div className="relative">
@@ -211,13 +237,13 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
                   type="tel"
                   required
                   placeholder="Enter 10-digit number"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, ''))}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border text-sm focus:outline-none focus:border-brand-plum focus:ring-1 focus:ring-brand-plum"
                 />
               </div>
             </div>
-            <Button type="submit" disabled={isLoading} className="w-full font-bold">
+            <Button type="submit" disabled={isLoading || phoneInput.length < 10} className="w-full font-bold">
               {isLoading ? 'Sending...' : 'Request OTP'}
             </Button>
           </form>
@@ -226,11 +252,17 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
 
       {/* OTP STEP */}
       {step === 'OTP' && (
-        <Card className="max-w-md mx-auto p-6 border border-brand-border/80 shadow-soft">
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
+        <Card className="max-w-md mx-auto p-6 border border-brand-border/80 shadow-soft relative overflow-hidden">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+              <div className="w-8 h-8 border-4 border-brand-plum/30 border-t-brand-plum rounded-full animate-spin"></div>
+              <p className="text-xs font-bold text-brand-plum mt-3 animate-pulse">Verifying...</p>
+            </div>
+          )}
+          <form onSubmit={handleVerifyOtp} className="space-y-4 relative z-0">
             <div className="space-y-2">
               <label className="text-sm font-bold text-brand-espresso">Enter OTP</label>
-              <p className="text-xs text-brand-muted">Sent to {phone}</p>
+              <p className="text-xs text-brand-muted">Sent to {phoneInput}</p>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-brand-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -239,16 +271,34 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
                   maxLength={6}
                   placeholder="6-digit code"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border text-center tracking-widest text-lg font-mono focus:outline-none focus:border-brand-plum focus:ring-1 focus:ring-brand-plum"
                 />
               </div>
             </div>
+            
+            <div className="flex justify-end items-center mt-1 mb-3">
+              {resendTimer > 0 ? (
+                <span className="text-xs text-brand-muted font-medium">
+                  Resend OTP in {resendTimer}s
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => handleRequestOtp()}
+                  disabled={isLoading}
+                  className="text-xs font-bold text-brand-plum hover:text-brand-plum-light transition-colors"
+                >
+                  Resend OTP
+                </button>
+              )}
+            </div>
+
             <div className="flex gap-3">
-              <Button type="button" variant="outline" onClick={() => setStep('PHONE')} className="w-1/3">
+              <Button type="button" variant="outline" onClick={() => setStep('PHONE')} className="w-1/3" disabled={isLoading}>
                 Back
               </Button>
-              <Button type="submit" disabled={isLoading} className="w-2/3 font-bold">
+              <Button type="submit" disabled={isLoading || otp.length !== 6} className="w-2/3 font-bold">
                 {isLoading ? 'Verifying...' : 'Verify Securely'}
               </Button>
             </div>
@@ -260,13 +310,25 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
       {step === 'LIST' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h3 className="font-bold text-brand-espresso">Orders for {phone}</h3>
-            <Button variant="outline" size="sm" onClick={() => { sessionStorage.removeItem('cakeStoreGuestToken'); setStep('PHONE'); }}>
+            <h3 className="font-bold text-brand-espresso">Orders for {customerAuth.phone || phoneInput}</h3>
+            <Button variant="outline" size="sm" onClick={() => { customerAuth.logout(); setStep('PHONE'); }}>
               Sign Out
             </Button>
           </div>
           
-          {orders.length === 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2].map((i) => (
+                <Card key={i} className="p-5 border border-brand-border/60 animate-pulse bg-brand-cream/30 h-36 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="h-3 w-16 bg-brand-border/50 rounded-full" />
+                    <div className="h-4 w-24 bg-brand-border/50 rounded-full" />
+                  </div>
+                  <div className="h-3 w-32 bg-brand-border/50 rounded-full" />
+                </Card>
+              ))}
+            </div>
+          ) : orders.length === 0 ? (
             <Card className="p-8 text-center border border-brand-border/80 shadow-soft">
               <Package className="w-12 h-12 text-brand-muted/50 mx-auto mb-3" />
               <p className="text-brand-muted text-sm">No orders found for this phone number.</p>

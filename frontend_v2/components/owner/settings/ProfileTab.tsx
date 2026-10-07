@@ -9,6 +9,7 @@ import { ownerApi } from '@/lib/api/owner';
 import { mediaApi } from '@/lib/api/media';
 import { ShopSettings } from '@/types/owner';
 import CascadingLocationSelector from '@/components/owner/CascadingLocationSelector';
+import { useUnsavedChanges } from '@/context/UnsavedChangesContext';
 
 interface ProfileTabProps {
   initialProfile: ShopSettings | null;
@@ -50,6 +51,26 @@ export default function ProfileTab({
   const [docUploadError, setDocUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileInputKey, setFileInputKey] = useState(Date.now());
+  const { setDirty } = useUnsavedChanges();
+
+  // Snapshot for dirty state tracking
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
+  const currentSnapshot = JSON.stringify({
+    businessName, description, phone, email, addressLine1, addressLine2,
+    state, district, city, area, pincode, fssaiRegistration
+  });
+
+  useEffect(() => {
+    if (initialSnapshot === null) {
+      setInitialSnapshot(currentSnapshot);
+    } else {
+      setDirty('settings-profile', currentSnapshot !== initialSnapshot);
+    }
+  }, [currentSnapshot, initialSnapshot, setDirty]);
+
+  useEffect(() => {
+    return () => setDirty('settings-profile', false);
+  }, [setDirty]);
 
   // Sync state if initialProfile updates
   useEffect(() => {
@@ -136,6 +157,8 @@ export default function ProfileTab({
       }
 
       updateShopContext(updated);
+      setInitialSnapshot(currentSnapshot);
+      setDirty('settings-profile', false);
       setSuccessMsg('Bakery profile settings saved successfully!');
       setTimeout(() => setSuccessMsg(null), 4000);
       onUpdate();

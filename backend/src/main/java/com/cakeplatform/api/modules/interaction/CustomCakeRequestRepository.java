@@ -12,8 +12,11 @@ import java.util.Optional;
 @Repository
 public interface CustomCakeRequestRepository extends JpaRepository<CustomCakeRequest, Long> {
     List<CustomCakeRequest> findByShopIdOrderByCreatedAtDesc(Long shopId);
+    @Query("SELECT COUNT(c) FROM CustomCakeRequest c WHERE c.shop.id = :shopId AND LOWER(c.status) = LOWER(:status)")
+    long countByShopIdAndStatus(@Param("shopId") Long shopId, @Param("status") String status);
     Optional<CustomCakeRequest> findByIdAndShopId(Long id, Long shopId);
     void deleteByShopId(Long shopId);
+    Optional<CustomCakeRequest> findByConvertedOrderId(Long convertedOrderId);
 
     @Query("SELECT c FROM CustomCakeRequest c WHERE c.shop.id = :shopId " +
            "AND (LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%')) " +

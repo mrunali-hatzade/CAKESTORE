@@ -39,7 +39,7 @@ public class PublicSubscriptionPlanControllerTest {
         plan.setDurationDays(30);
         plan.setIsActive(true);
 
-        when(planRepository.findByIsActiveTrue()).thenReturn(List.of(plan));
+        when(planRepository.findByIsActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of(plan));
 
         mockMvc.perform(get("/api/subscription-plans"))
                 .andExpect(status().isOk())

@@ -31,30 +31,36 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 function OwnerCustomersContent() {
   const searchParams = useSearchParams();
-  const { registerRefreshHandler, shop } = useOwner();
+  const { registerRefreshHandler, shop, dashboardStats } = useOwner();
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Search
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Pagination state
+  // Pagination
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
-  // Selected customer for modal
+  // Modal
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null);
   const [customerDetail, setCustomerDetail] = useState<CustomerProfile | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchCustomers = useCallback(async (isManual = false) => {
     if (!isManual) setLoading(true);
     setError(null);
 
     try {
-      const response = await ownerApi.getCustomers(page, 10);
+      const response = await ownerApi.getCustomers(page, 10, debouncedSearch);
       setCustomers(response.content || []);
       setTotalPages(response.totalPages || 0);
       setTotalElements(response.totalElements || 0);
@@ -63,13 +69,14 @@ function OwnerCustomersContent() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, debouncedSearch]);
 
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
 
   useEffect(() => {
+    if (!registerRefreshHandler) return;
     const unregister = registerRefreshHandler(async () => {
       await fetchCustomers(true);
     });
@@ -118,22 +125,13 @@ function OwnerCustomersContent() {
   }, [searchParams, customers]);
 
   // Filtered list
-  const filteredCustomers = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return customers;
-    return customers.filter(
-      (c) =>
-        (c.name && c.name.toLowerCase().includes(q)) ||
-        (c.email && c.email.toLowerCase().includes(q)) ||
-        (c.mobile && c.mobile.toLowerCase().includes(q))
-    );
-  }, [customers, searchQuery]);
+  const filteredCustomers = customers;
 
   // Derived KPIs
-  const totalCustomersCount = totalElements > 0 ? totalElements : customers.length;
-  const repeatCustomersCount = customers.filter((c) => (c.totalOrders || 0) > 1).length;
-  const totalOrdersCount = customers.reduce((sum, c) => sum + (c.totalOrders || 0), 0);
-  const totalRevenue = customers.reduce((sum, c) => sum + Number(c.totalSpent || 0), 0);
+  const totalCustomersCount = totalElements;
+  const repeatCustomersCount = customers.filter((c) => (c.totalOrders || 0) > 1).length; // Approximation for current page, ideally backed by real stats
+  const totalOrdersCount = dashboardStats?.totalOrders || 0;
+  const totalRevenue = dashboardStats?.totalRevenue || 0;
 
   const cleanPhone = (phone?: string) => {
     if (!phone) return '';
@@ -598,3 +596,7 @@ export default function OwnerCustomersPage() {
     </Suspense>
   );
 }
+
+
+
+

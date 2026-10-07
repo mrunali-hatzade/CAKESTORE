@@ -137,8 +137,11 @@ public class SubscriptionService {
         
         // Final CakeStore V1 Rule: shop.status becomes EXPIRED (unless SUSPENDED by admin)
         if (shop.getStatus() != com.cakeplatform.api.modules.shop.ShopStatus.SUSPENDED) {
-            shop.setStatus(com.cakeplatform.api.modules.shop.ShopStatus.EXPIRED);
-            shopRepository.save(shop);
+            boolean hasActiveSubscription = subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(shop.getId(), SubscriptionStatus.ACTIVE).isPresent();
+            if (!hasActiveSubscription) {
+                shop.setStatus(com.cakeplatform.api.modules.shop.ShopStatus.EXPIRED);
+                shopRepository.save(shop);
+            }
         }
         
         activityLogger.logActivity(null, shop.getId(), "SUBSCRIPTION_EXPIRED", "SUBSCRIPTION", subscription.getId(), "Daily scheduled or manual expiration");

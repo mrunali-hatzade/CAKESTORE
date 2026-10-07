@@ -16,15 +16,21 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner/products")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerProductController {
 
     private final ProductService productService;
 
     @GetMapping
-    public ResponseEntity<List<Product>> getProducts(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(productService.getProductsByUserId(userDetails.getId()));
+    public ResponseEntity<org.springframework.data.domain.Page<Product>> getProducts(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long categoryId) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        return ResponseEntity.ok(productService.getProductsByUserId(userDetails.getId(), search, categoryId, pageable));
     }
 
     @PostMapping

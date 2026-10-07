@@ -1,9 +1,17 @@
 import { apiClient } from './client';
 import { Product, CreateProductRequest } from '@/types/product';
+import { PaginatedResponse } from '@/types/order';
 
 export const productsApi = {
-  getOwnerProducts: async (): Promise<Product[]> => {
-    return apiClient.get<Product[]>('/api/owner/products');
+  getOwnerProducts: async (page = 0, size = 20, search?: string, categoryId?: string | number): Promise<PaginatedResponse<Product>> => {
+    return apiClient.get<PaginatedResponse<Product>>('/api/owner/products', {
+      params: { 
+        page, 
+        size, 
+        ...(search ? { search } : {}),
+        ...(categoryId && categoryId !== 'ALL' ? { categoryId } : {})
+      }
+    });
   },
 
   createProduct: async (product: CreateProductRequest): Promise<Product> => {

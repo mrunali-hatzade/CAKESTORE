@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   MessageSquare,
   Truck,
+  UserCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
@@ -24,6 +25,7 @@ export type StorefrontTab =
   | 'gallery'
   | 'contact'
   | 'track'
+  | 'profile'
   | 'checkout';
 
 interface StorefrontTabNavProps {

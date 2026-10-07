@@ -347,10 +347,8 @@ public class BakeryLifecyclePhase1Test {
     void testExpiredBakery_CustomerStorefrontAccessible() {
         shop1.setStatus(ShopStatus.EXPIRED);
         when(shopRepository.findById(shop1.getId())).thenReturn(Optional.of(shop1));
-
-        StorefrontShopResponse details = customerStorefrontService.getShopDetails(shop1.getId());
-        assertNotNull(details);
-        assertEquals("EXPIRED", details.getStatus());
+        RuntimeException exception = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> customerStorefrontService.getShopDetails(shop1.getId()));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("unavailable"));
     }
 
     // -------------------------------------------------------------------------
@@ -361,11 +359,6 @@ public class BakeryLifecyclePhase1Test {
     void testExpiredBakery_CustomerCanPlaceGuestOrder() {
         shop1.setStatus(ShopStatus.EXPIRED);
         when(shopRepository.findById(shop1.getId())).thenReturn(Optional.of(shop1));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
-            Order o = inv.getArgument(0);
-            o.setId(8801L);
-            return o;
-        });
 
         GuestOrderRequest req = new GuestOrderRequest();
         req.setCustomerName("Alice Customer");
@@ -376,10 +369,8 @@ public class BakeryLifecyclePhase1Test {
         req.setDeliveryDate(LocalDate.now().plusDays(2));
         req.setItems(new ArrayList<>());
 
-        Order placed = customerStorefrontService.placeGuestOrder(shop1.getId(), req);
-        assertNotNull(placed);
-        assertEquals(shop1.getId(), placed.getShop().getId());
-        verify(orderRepository).save(any(Order.class));
+        RuntimeException exception = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> customerStorefrontService.placeGuestOrder(shop1.getId(), req));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("unavailable"));
     }
 
     // -------------------------------------------------------------------------
@@ -430,5 +421,35 @@ public class BakeryLifecyclePhase1Test {
 
         // Should return early and not save again
         verify(subscriptionRepository, never()).save(any(Subscription.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // 17. Early renewal does not expire shop when old subscription expires
+    // -------------------------------------------------------------------------
+    @Test
+    @DisplayName("Req 17: Early renewal prevents shop expiration when old subscription expires")
+    void testEarlyRenewal_PreventsShopExpiration() {
+        shop1.setStatus(ShopStatus.ACTIVE);
+        
+        Subscription oldSub = new Subscription();
+        oldSub.setId(801L);
+        oldSub.setShop(shop1);
+        oldSub.setStatus(SubscriptionStatus.ACTIVE);
+        
+        Subscription newSub = new Subscription();
+        newSub.setId(802L);
+        newSub.setShop(shop1);
+        newSub.setStatus(SubscriptionStatus.ACTIVE);
+        
+        when(subscriptionRepository.findById(801L)).thenReturn(Optional.of(oldSub));
+        when(subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(shop1.getId(), SubscriptionStatus.ACTIVE))
+            .thenReturn(Optional.of(newSub)); // New subscription is active
+            
+        subscriptionService.expireSubscription(801L);
+        
+        assertEquals(SubscriptionStatus.EXPIRED, oldSub.getStatus());
+        // Shop status should NOT be changed to EXPIRED
+        assertEquals(ShopStatus.ACTIVE, shop1.getStatus());
+        verify(shopRepository, never()).save(shop1);
     }
 }

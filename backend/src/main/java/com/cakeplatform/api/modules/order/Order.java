@@ -58,7 +58,11 @@ public class Order {
     private String paymentStatus;
 
     @Column(name = "order_status", nullable = false)
-    private String orderStatus; // e.g., NEW, PREPARING, READY, COMPLETED, CANCELLED
+    @Enumerated(EnumType.STRING)
+    private OrderStatus orderStatus; // NEW, PENDING_PAYMENT, PAID, PAYMENT_FAILED, etc.
+
+    @Column(name = "razorpay_order_id")
+    private String razorpayOrderId;
 
     @Column(name = "delivery_address")
     private String deliveryAddress;
@@ -81,6 +85,7 @@ public class Order {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    @org.hibernate.annotations.BatchSize(size = 50)
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 

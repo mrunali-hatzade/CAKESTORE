@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth/AuthContext';
+import { CustomerAuthProvider } from '@/lib/auth/CustomerAuthContext';
 import { ToastProvider } from '@/components/common/Toast';
 import { CartProvider } from '@/context/CartContext';
 import { FavoritesProvider } from '@/context/FavoritesContext';
@@ -19,11 +20,13 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-brand-cream-light font-sans text-brand-espresso antialiased">
         <AuthProvider>
-          <ToastProvider>
-            <CartProvider>
-              <FavoritesProvider>{children}</FavoritesProvider>
-            </CartProvider>
-          </ToastProvider>
+          <CustomerAuthProvider>
+            <ToastProvider>
+              <CartProvider>
+                <FavoritesProvider>{children}</FavoritesProvider>
+              </CartProvider>
+            </ToastProvider>
+          </CustomerAuthProvider>
         </AuthProvider>
       </body>
     </html>

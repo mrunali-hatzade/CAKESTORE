@@ -12,6 +12,7 @@ import java.time.LocalTime;
 @Entity
 @Table(name = "shop_delivery_slots")
 @Data
+@org.hibernate.annotations.BatchSize(size = 50)
 public class ShopDeliverySlot {
 
     @Id

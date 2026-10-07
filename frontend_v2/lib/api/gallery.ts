@@ -1,9 +1,12 @@
 import { apiClient } from './client';
 import { GalleryItem, CreateGalleryItemRequest } from '@/types/gallery';
+import { PaginatedResponse } from '@/types/order';
 
 export const galleryApi = {
-  getOwnerGalleryItems: async (): Promise<GalleryItem[]> => {
-    return apiClient.get<GalleryItem[]>('/api/owner/gallery');
+  getOwnerGalleryItems: async (page = 0, size = 20, search?: string): Promise<PaginatedResponse<GalleryItem>> => {
+    return apiClient.get<PaginatedResponse<GalleryItem>>('/api/owner/gallery', {
+      params: { page, size, ...(search ? { search } : {}) }
+    });
   },
 
   createGalleryItem: async (request: CreateGalleryItemRequest): Promise<GalleryItem> => {

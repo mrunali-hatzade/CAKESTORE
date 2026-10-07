@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CategoryManagerModal } from '@/components/owner/CategoryManagerModal';
@@ -64,6 +65,12 @@ function OwnerProductsContent() {
   // Filter & Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const itemsPerPage = 20;
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -116,29 +123,35 @@ function OwnerProductsContent() {
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const data = await productsApi.getOwnerProducts();
-      setProducts(data || []);
-    } catch {
+      const catId = categoryFilter === 'UNCATEGORIZED' ? -1 : (categoryFilter !== 'ALL' ? categoryFilter : undefined);
+      const data = await productsApi.getOwnerProducts(currentPage, itemsPerPage, searchQuery || undefined, catId);
+      setProducts(data?.content || []);
+      setTotalPages(data?.totalPages || 1);
+      setTotalProducts(data?.totalElements || 0);
+    } catch (err: any) {
       setProducts([]);
+      setTotalPages(1);
+      setTotalProducts(0);
+      toast.error('Failed to load products: ' + (err.message || 'Unknown error'));
     }
-  };
+  }, [currentPage, searchQuery, categoryFilter, toast]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const data = await categoriesApi.getOwnerCategories();
       setCategories(data || []);
     } catch {
       setCategories([]);
     }
-  };
+  }, []);
 
   const { registerRefreshHandler } = useOwner();
 
   const refreshAll = useCallback(async () => {
     await Promise.all([fetchProducts(), fetchCategories()]);
-  }, []);
+  }, [fetchProducts, fetchCategories]);
 
   useEffect(() => {
     const init = async () => {
@@ -221,33 +234,13 @@ function OwnerProductsContent() {
     }
   };
 
-  const uncategorizedCount = useMemo(() => {
-    return products.filter((p) => p.categoryId == null).length;
-  }, [products]);
+  // Reset to page 0 when filters change
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchQuery, categoryFilter]);
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      // Category filter check
-      if (categoryFilter === 'UNCATEGORIZED') {
-        if (p.categoryId != null) return false;
-      } else if (categoryFilter !== 'ALL') {
-        if (p.categoryId !== Number(categoryFilter)) return false;
-      }
-
-      // Search query check
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
-      const catName = p.categoryId
-        ? categories.find((c) => c.id === p.categoryId)?.name || p.categoryName || ''
-        : 'uncategorized';
-
-      return (
-        p.name.toLowerCase().includes(q) ||
-        (p.description && p.description.toLowerCase().includes(q)) ||
-        catName.toLowerCase().includes(q)
-      );
-    });
-  }, [products, categoryFilter, searchQuery, categories]);
+  // Filtering is now done server-side
+  const filteredProducts = products;
 
   if (isLoading) return <LoadingState message="Loading bakery catalog & categories..." />;
 
@@ -306,7 +299,7 @@ function OwnerProductsContent() {
                   : 'bg-white text-owner-muted border border-owner-border hover:text-owner-heading hover:bg-owner-canvas'
               }`}
             >
-              All ({products.length})
+              All
             </button>
             <button
               type="button"
@@ -317,7 +310,7 @@ function OwnerProductsContent() {
                   : 'bg-white text-owner-muted border border-owner-border hover:text-owner-heading hover:bg-owner-canvas'
               }`}
             >
-              Uncategorized ({uncategorizedCount})
+              Uncategorized
             </button>
             {categories.map((c) => (
               <button
@@ -529,6 +522,35 @@ function OwnerProductsContent() {
         </Card>
       )}
 
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-4 border-t border-owner-border bg-white rounded-xl shadow-sm mt-4">
+          <span className="text-xs text-owner-muted">
+            Page {currentPage + 1} of {totalPages} ({totalProducts} total cakes)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="text-xs"
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="text-xs"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Add / Edit Cake Modal */}
       <ProductModal
         isOpen={isModalOpen}
@@ -592,3 +614,4 @@ export default function OwnerProductsPage() {
     </Suspense>
   );
 }
+

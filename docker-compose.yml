@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: cake-platform-api
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       - DB_URL=jdbc:postgresql://db:5432/cake_platform
       - DB_USERNAME=${DB_USERNAME:-postgres}
@@ -34,7 +34,7 @@ services:
     image: postgres:16-alpine
     container_name: cake-platform-db
     ports:
-      - "5432:5432"
+      - "5434:5432"
     environment:
       - POSTGRES_DB=cake_platform
       - POSTGRES_USER=postgres

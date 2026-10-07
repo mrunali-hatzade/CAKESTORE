@@ -55,6 +55,7 @@ public class CustomerStorefrontService {
     private final com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository;
     private final com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository;
     private final com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+    private final com.cakeplatform.api.modules.user.UserRepository userRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     public CustomerStorefrontService(
@@ -74,7 +75,8 @@ public class CustomerStorefrontService {
             com.cakeplatform.api.modules.shop.ShopCustomFormFieldRepository shopCustomFormFieldRepository,
             com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository,
             com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository,
-            com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository
+            com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository,
+            com.cakeplatform.api.modules.user.UserRepository userRepository
     ) {
         this.shopRepository = shopRepository;
         this.productRepository = productRepository;
@@ -93,6 +95,7 @@ public class CustomerStorefrontService {
         this.feedbackRepository = feedbackRepository;
         this.productReviewRepository = productReviewRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.userRepository = userRepository;
     }
 
     // Backward-compatible constructor for existing test suites
@@ -117,6 +120,7 @@ public class CustomerStorefrontService {
                 customCakeRequestRepository,
                 categoryRepository,
                 deliverySlotRepository,
+                null,
                 null,
                 null,
                 null,
@@ -538,38 +542,38 @@ public class CustomerStorefrontService {
         return getShopDeliverySlots(shopId, null);
     }
 
+    @Transactional(readOnly = true)
     @org.springframework.cache.annotation.Cacheable(value = "shopProducts", key = "#shopId")
     public List<Product> getShopProducts(Long shopId) {
         // Enforce active shop check
         getActiveShop(shopId);
         
         // Return only active products for the storefront
-        return productRepository.findByShopId(shopId).stream()
-                .filter(p -> p.getAvailability() && "ACTIVE".equals(p.getStatus()))
-                .collect(Collectors.toList());
-    }
-
-    public List<Product> getTopRatedProducts(Long shopId, int limit) {
-        getActiveShop(shopId);
         List<Product> products = productRepository.findByShopId(shopId).stream()
                 .filter(p -> p.getAvailability() && "ACTIVE".equals(p.getStatus()))
                 .collect(Collectors.toList());
+                
+        // Initialize lazy collections to avoid LazyInitializationException during JSON serialization
+        for (Product p : products) {
+            if (p.getVariants() != null) p.getVariants().size();
+            if (p.getAddons() != null) p.getAddons().size();
+        }
+        
+        return products;
+    }
 
-        // Sort by real average rating descending, then total reviews descending
-        return products.stream()
-                .sorted((p1, p2) -> {
-                    Double r1 = productReviewRepository.calculateAverageRatingByProductId(p1.getId());
-                    Double r2 = productReviewRepository.calculateAverageRatingByProductId(p2.getId());
-                    double score1 = r1 != null ? r1 : 0.0;
-                    double score2 = r2 != null ? r2 : 0.0;
-                    int cmp = Double.compare(score2, score1);
-                    if (cmp != 0) return cmp;
-                    long count1 = productReviewRepository.countByProductId(p1.getId());
-                    long count2 = productReviewRepository.countByProductId(p2.getId());
-                    return Long.compare(count2, count1);
-                })
-                .limit(limit > 0 ? limit : 8)
-                .collect(Collectors.toList());
+    @Transactional(readOnly = true)
+    public List<Product> getTopRatedProducts(Long shopId, int limit) {
+        getActiveShop(shopId);
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit > 0 ? limit : 8);
+        List<Product> products = productRepository.findTopRatedProducts(shopId, pageable);
+        
+        for (Product p : products) {
+            if (p.getVariants() != null) p.getVariants().size();
+            if (p.getAddons() != null) p.getAddons().size();
+        }
+        
+        return products;
     }
 
     @Transactional
@@ -632,6 +636,15 @@ public class CustomerStorefrontService {
         order.setCustomerName(request.getCustomerName());
         order.setCustomerEmail(request.getCustomerEmail());
         order.setCustomerPhone(request.getCustomerPhone());
+
+        // Hydrate/Link Order to Customer Account
+        if (userRepository != null) {
+            String normalizedPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(request.getCustomerPhone());
+            if (normalizedPhone != null) {
+                userRepository.findByMobile(normalizedPhone).ifPresent(order::setCustomer);
+            }
+        }
+
         order.setDeliveryAddress(request.getDeliveryAddress());
         order.setPaymentMethod(request.getPaymentMethod());
         order.setOrderNumber("ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
@@ -849,6 +862,7 @@ public class CustomerStorefrontService {
                 .orElseThrow(() -> new RuntimeException("Order not found or invalid order number"));
     }
 
+    @Transactional(readOnly = true)
     public Product getShopProductDetails(Long shopId, Long productId) {
         Shop shop = getActiveShop(shopId);
         Product product = productRepository.findById(productId)
@@ -861,6 +875,9 @@ public class CustomerStorefrontService {
         if (!Boolean.TRUE.equals(product.getAvailability()) || !"ACTIVE".equalsIgnoreCase(product.getStatus())) {
             throw new RuntimeException("Product is currently unavailable");
         }
+
+        if (product.getVariants() != null) product.getVariants().size();
+        if (product.getAddons() != null) product.getAddons().size();
 
         return product;
     }

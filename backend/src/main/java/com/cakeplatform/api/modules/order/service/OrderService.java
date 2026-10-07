@@ -1,6 +1,8 @@
 package com.cakeplatform.api.modules.order.service;
 
 import com.cakeplatform.api.modules.audit.ActivityLoggerService;
+import com.cakeplatform.api.modules.interaction.CustomCakeRequest;
+import com.cakeplatform.api.modules.interaction.CustomCakeRequestRepository;
 import com.cakeplatform.api.modules.notification.EmailService;
 import com.cakeplatform.api.modules.notification.SmsService;
 import com.cakeplatform.api.modules.order.Order;
@@ -11,9 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OrderService {
 
     private final OrderRepository orderRepository;
@@ -21,14 +25,20 @@ public class OrderService {
     private final ActivityLoggerService activityLogger;
     private final EmailService emailService;
     private final SmsService smsService;
+    private final CustomCakeRequestRepository customCakeRequestRepository;
 
     private Shop getShopByOwnerId(Long ownerId) {
         return shopAccessValidator.getValidShopForOwner(ownerId);
     }
 
-    public org.springframework.data.domain.Page<Order> getPaginatedOrdersByUserId(Long userId, org.springframework.data.domain.Pageable pageable) {
+    public org.springframework.data.domain.Page<Order> getPaginatedOrdersByUserId(
+            Long userId, 
+            String status, 
+            String paymentStatus, 
+            String query, 
+            org.springframework.data.domain.Pageable pageable) {
         Shop shop = getShopByOwnerId(userId);
-        return orderRepository.findVisibleOrdersByShopId(shop.getId(), pageable);
+        return orderRepository.findFilteredOrdersByShopId(shop.getId(), status, paymentStatus, query, pageable);
     }
 
     public List<Order> getOrdersByUserId(Long userId) {
@@ -43,6 +53,7 @@ public class OrderService {
     }
 
     private static final java.util.Map<String, java.util.List<String>> ALLOWED_TRANSITIONS = java.util.Map.of(
+        "PAYMENT_PENDING", java.util.List.of("NEW", "CONFIRMED", "CANCELLED"),
         "NEW", java.util.List.of("CONFIRMED", "PREPARING", "READY", "DELIVERED", "COMPLETED", "CANCELLED"),
         "CONFIRMED", java.util.List.of("NEW", "PREPARING", "READY", "DELIVERED", "COMPLETED", "CANCELLED"),
         "PREPARING", java.util.List.of("CONFIRMED", "READY", "DELIVERED", "COMPLETED", "CANCELLED"),
@@ -75,11 +86,41 @@ public class OrderService {
         order.setOrderStatus(newStatus);
         Order updated = orderRepository.save(order);
         
+        if ("CANCELLED".equals(newStatus)) {
+            syncCancelledCustomCake(updated);
+        }
+
         activityLogger.logActivity(userId, shop.getId(), "ORDER_STATUS_CHANGED", "ORDER", updated.getId(), "Status: " + newStatus);
 
-        notifyCustomer(shop, updated);
-
+        // Register post-commit notification to avoid rolling back transaction on failures
+        final Shop finalShop = shop;
+        final Order finalUpdated = updated;
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronizationAdapter() {
+                @Override
+                public void afterCommit() {
+                    notifyCustomer(finalShop, finalUpdated);
+                }
+            });
+        } else {
+            notifyCustomer(finalShop, finalUpdated);
+        }
         return updated;
+    }
+
+    private void syncCancelledCustomCake(Order order) {
+        customCakeRequestRepository.findByConvertedOrderId(order.getId()).ifPresent(cakeReq -> {
+            if (cakeReq.getShop().getId().equals(order.getShop().getId())) {
+                cakeReq.setConvertedOrderId(null);
+                cakeReq.setConvertedOrderNumber(null);
+                cakeReq.setStatus("REVIEWED");
+                customCakeRequestRepository.save(cakeReq);
+                log.info("Synchronized cancelled Order {} by resetting CustomCakeRequest {} to REVIEWED.", order.getId(), cakeReq.getId());
+            } else {
+                log.warn("Tenant mismatch during custom cake sync: CakeRequest {} belongs to shop {}, but Order {} belongs to shop {}",
+                        cakeReq.getId(), cakeReq.getShop().getId(), order.getId(), order.getShop().getId());
+            }
+        });
     }
 
     private void notifyCustomer(Shop shop, Order order) {
@@ -113,8 +154,21 @@ public class OrderService {
         Order order = orderRepository.findByIdAndShopId(orderId, shop.getId())
                 .orElseThrow(() -> new RuntimeException("Order not found or unauthorized"));
 
-        if (order.getPaymentStatus() != null && order.getPaymentStatus().equalsIgnoreCase(newStatus)) {
+        String currentPaymentStatus = order.getPaymentStatus() != null ? order.getPaymentStatus().toUpperCase() : "PENDING";
+        
+        if (currentPaymentStatus.equalsIgnoreCase(newStatus)) {
             return order;
+        }
+        
+        if ("REFUNDED".equals(currentPaymentStatus)) {
+            throw new IllegalStateException("Order is already REFUNDED and cannot be changed.");
+        }
+        
+        if ("PAID".equals(currentPaymentStatus) && "PENDING".equals(newStatus)) {
+            String method = order.getPaymentMethod() != null ? order.getPaymentMethod().toUpperCase() : "";
+            if (method.equals("RAZORPAY") || method.equals("ONLINE_PAYMENT")) {
+                throw new IllegalStateException("Online completed payments cannot be reverted to PENDING.");
+            }
         }
 
         order.setPaymentStatus(newStatus);
@@ -139,10 +193,26 @@ public class OrderService {
         activityLogger.logActivity(userId, shop.getId(), "ORDER_PAYMENT_STATUS_CHANGED", "ORDER", updated.getId(),
                 "Payment Status: " + newStatus + (paymentNote != null ? " (" + paymentNote + ")" : ""));
 
-        if ("REFUNDED".equalsIgnoreCase(updated.getPaymentStatus())) {
-            notifyCustomerRefundProcessed(shop, updated);
+        // Register email notifications to be sent after transaction commit
+        final Order finalUpdated = updated;
+        final Shop finalShop = shop;
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronizationAdapter() {
+                @Override
+                public void afterCommit() {
+                    if ("REFUNDED".equalsIgnoreCase(finalUpdated.getPaymentStatus())) {
+                        notifyCustomerRefundProcessed(finalShop, finalUpdated);
+                    } else {
+                        notifyCustomerPaymentReceived(finalShop, finalUpdated);
+                    }
+                }
+            });
         } else {
-            notifyCustomerPaymentReceived(shop, updated);
+            if ("REFUNDED".equalsIgnoreCase(finalUpdated.getPaymentStatus())) {
+                notifyCustomerRefundProcessed(finalShop, finalUpdated);
+            } else {
+                notifyCustomerPaymentReceived(finalShop, finalUpdated);
+            }
         }
 
         return updated;
@@ -197,6 +267,19 @@ public class OrderService {
             }
         } catch (Exception e) {
             // Non-blocking notification failsafe
+        }
+    }
+
+    @Transactional
+    public void cancelStalePaymentPendingOrders(java.time.LocalDateTime expiryTime) {
+        List<Order> staleOrders = orderRepository.findStalePaymentPendingOrders(expiryTime);
+        for (Order order : staleOrders) {
+            int updated = orderRepository.cancelIfPaymentPending(order.getId());
+            if (updated > 0) {
+                log.info("System automatic cancellation: Abandoned PAYMENT_PENDING order {} (Shop {}) has been CANCELLED to release delivery capacity.", order.getOrderNumber(), order.getShop().getId());
+                syncCancelledCustomCake(order);
+                // We do NOT send email to customer for automatic checkout cancellation to avoid spam.
+            }
         }
     }
 }

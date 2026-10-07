@@ -51,12 +51,12 @@ public class GlobalExceptionHandler {
             msg += " " + ex.getCause().getMessage().toLowerCase();
         }
 
-        if (msg.contains("idx_users_mobile") || msg.contains("uk_users_mobile") || msg.contains("mobile")) {
+        if (msg.contains("idx_users_mobile") || msg.contains("uk_users_mobile") || msg.contains("users_mobile_key") || msg.contains("Detail: Key (mobile)")) {
             String mobileMsg = "This phone number is already registered. Please use another number.";
             fieldErrors.put("mobile", mobileMsg);
             error.put("mobile", mobileMsg);
             error.put("error", mobileMsg);
-        } else if (msg.contains("email") || msg.contains("idx_users_email") || msg.contains("users_email_key")) {
+        } else if (msg.contains("idx_users_email") || msg.contains("uk_users_email") || msg.contains("users_email_key") || msg.contains("Detail: Key (email)")) {
             String emailMsg = "This email is already registered. Please login or use another email.";
             fieldErrors.put("email", emailMsg);
             error.put("email", emailMsg);
@@ -98,10 +98,14 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+        @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Map<String, String>> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException ex) {
         Map<String, String> error = new HashMap<>();
         error.put("error", ex.getMessage());
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth instanceof org.springframework.security.authentication.AnonymousAuthenticationToken) {
+            return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
+        }
         return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
     }
 

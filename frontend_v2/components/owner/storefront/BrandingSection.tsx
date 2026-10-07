@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { mediaApi } from '@/lib/api/media';
 
 interface BrandingSectionProps {
@@ -30,6 +31,9 @@ export const BrandingSection: React.FC<BrandingSectionProps> = ({
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const [confirmRemoveLogo, setConfirmRemoveLogo] = useState(false);
+  const [confirmRemoveCover, setConfirmRemoveCover] = useState(false);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -74,17 +78,15 @@ export const BrandingSection: React.FC<BrandingSectionProps> = ({
   };
 
   const handleRemoveLogo = () => {
-    if (window.confirm('Are you sure you want to remove the bakery logo?')) {
-      onLogoChange('');
-    }
+    onLogoChange('');
+    setConfirmRemoveLogo(false);
   };
 
   const handleRemoveCover = () => {
-    if (window.confirm('Are you sure you want to remove the storefront cover banner?')) {
-      if (onCoverImageChange) {
-        onCoverImageChange('');
-      }
+    if (onCoverImageChange) {
+      onCoverImageChange('');
     }
+    setConfirmRemoveCover(false);
   };
 
   return (
@@ -227,7 +229,7 @@ export const BrandingSection: React.FC<BrandingSectionProps> = ({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={handleRemoveCover}
+                    onClick={() => setConfirmRemoveCover(true)}
                     className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -239,6 +241,26 @@ export const BrandingSection: React.FC<BrandingSectionProps> = ({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmRemoveLogo}
+        onClose={() => setConfirmRemoveLogo(false)}
+        onConfirm={async () => handleRemoveLogo()}
+        title="Remove Logo"
+        description="Are you sure you want to remove the bakery logo?"
+        confirmLabel="Remove"
+        isDestructive={true}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmRemoveCover}
+        onClose={() => setConfirmRemoveCover(false)}
+        onConfirm={async () => handleRemoveCover()}
+        title="Remove Cover Banner"
+        description="Are you sure you want to remove the storefront cover banner?"
+        confirmLabel="Remove"
+        isDestructive={true}
+      />
     </Card>
   );
 };

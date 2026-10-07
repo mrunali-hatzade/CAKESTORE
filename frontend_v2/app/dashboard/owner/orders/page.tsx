@@ -28,6 +28,7 @@ import {
   RotateCcw,
   AlertTriangle,
 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ordersApi } from '@/lib/api/orders';
 import { notificationsApi } from '@/lib/api/notifications';
 import { useOwner } from '@/context/OwnerContext';
@@ -151,7 +152,7 @@ function formatOrderDate(dateStr?: string | null): string {
 
 function OwnerOrdersContent() {
   const searchParams = useSearchParams();
-  const { shop, registerRefreshHandler, refreshDashboard, refreshSidebarCounts } = useOwner();
+  const { shop, registerRefreshHandler, refreshDashboard, refreshSidebarCounts, dashboardStats } = useOwner();
   const toast = useToast();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -164,23 +165,37 @@ function OwnerOrdersContent() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'CANCEL' | 'REFUND';
+    orderId: number;
+    orderNumber?: string;
+  } | null>(null);
+
   // Pagination and Global Fetch State
-  // We fetch up to 1000 orders so the frontend can properly calculate Global KPIs
-  // (Total Sales, COD Due) and perform Search across all orders.
   const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 20;
+  
+  // Dashboard stats for KPIs
 
   const fetchOrders = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsLoading(true);
     try {
-      const data = await ordersApi.getOwnerOrders(undefined, 0, 1000);
+      const data = await ordersApi.getOwnerOrders(
+        filterStatus === 'ALL' ? undefined : filterStatus,
+        filterPayment === 'ALL' ? undefined : filterPayment,
+        currentPage, 
+        itemsPerPage,
+        search || undefined
+      );
       setOrders(data?.content || []);
+      setTotalPages(data?.totalPages || 1);
     } catch {
       setOrders([]);
     } finally {
       if (!isSilent) setIsLoading(false);
     }
-  }, []);
+  }, [filterStatus, filterPayment, currentPage, search]);
 
   useEffect(() => {
     fetchOrders();
@@ -226,18 +241,56 @@ function OwnerOrdersContent() {
     return unregister;
   }, [registerRefreshHandler, fetchOrders]);
 
+  const executeRefund = async () => {
+    if (!confirmAction) return;
+    setUpdatingPaymentId(confirmAction.orderId);
+    try {
+      const updated = await ordersApi.updatePaymentStatus(confirmAction.orderId, 'REFUNDED', 'REFUND_ISSUED');
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === confirmAction.orderId
+            ? {
+                ...o,
+                ...updated,
+                paymentStatus: 'REFUNDED',
+              }
+            : o
+        )
+      );
+      if (selectedOrder && selectedOrder.id === confirmAction.orderId) {
+        setSelectedOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...updated,
+                paymentStatus: 'REFUNDED',
+              }
+            : null
+        );
+      }
+      toast.success(`Refund processed for order #${updated.orderNumber || confirmAction.orderId}`);
+      refreshDashboard().catch(() => {});
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update payment status');
+    } finally {
+      setUpdatingPaymentId(null);
+      setConfirmAction(null);
+    }
+  };
+
   const handlePaymentStatusChange = async (
     orderId: number,
     targetStatus: 'PAID' | 'PENDING' | 'REFUNDED'
   ) => {
+    if (targetStatus === 'REFUNDED') {
+      const order = orders.find((o) => o.id === orderId);
+      setConfirmAction({ type: 'REFUND', orderId, orderNumber: order?.orderNumber });
+      return;
+    }
+
     setUpdatingPaymentId(orderId);
     try {
-      const note =
-        targetStatus === 'PAID'
-          ? 'CASH_COLLECTED'
-          : targetStatus === 'REFUNDED'
-          ? 'REFUND_ISSUED'
-          : 'PENDING';
+      const note = targetStatus === 'PAID' ? 'CASH_COLLECTED' : 'PENDING';
       const updated = await ordersApi.updatePaymentStatus(orderId, targetStatus, note);
       setOrders((prev) =>
         prev.map((o) =>
@@ -266,8 +319,6 @@ function OwnerOrdersContent() {
       toast.success(
         targetStatus === 'PAID'
           ? `Payment for order #${updated.orderNumber || orderId} marked as PAID`
-          : targetStatus === 'REFUNDED'
-          ? `Refund processed for order #${updated.orderNumber || orderId}`
           : `Payment for order #${updated.orderNumber || orderId} reset to PENDING`
       );
       refreshDashboard().catch(() => {});
@@ -278,7 +329,36 @@ function OwnerOrdersContent() {
     }
   };
 
+  const executeStatusChange = async () => {
+    if (!confirmAction) return;
+    setUpdatingId(confirmAction.orderId);
+    try {
+      const updated = await ordersApi.updateOrderStatus(confirmAction.orderId, 'CANCELLED');
+      const newStatus = (updated.orderStatus || updated.status || 'CANCELLED') as OrderStatus;
+      setOrders((prev) =>
+        prev.map((o) => (o.id === confirmAction.orderId ? { ...o, ...updated, status: newStatus } : o))
+      );
+      if (selectedOrder && selectedOrder.id === confirmAction.orderId) {
+        setSelectedOrder({ ...selectedOrder, ...updated, status: newStatus });
+      }
+      toast.success(`Order #${updated.orderNumber || confirmAction.orderId} moved to Cancelled`);
+      refreshDashboard().catch(() => {});
+      refreshSidebarCounts?.();
+    } catch (err: any) {
+      toast.error(err?.message || err?.response?.data?.message || 'Failed to update status. Invalid transition.');
+    } finally {
+      setUpdatingId(null);
+      setConfirmAction(null);
+    }
+  };
+
   const handleStatusChange = async (orderId: number, status: string) => {
+    if (status === 'CANCELLED') {
+      const order = orders.find((o) => o.id === orderId);
+      setConfirmAction({ type: 'CANCEL', orderId, orderNumber: order?.orderNumber });
+      return;
+    }
+
     setUpdatingId(orderId);
     try {
       const updated = await ordersApi.updateOrderStatus(orderId, status);
@@ -381,117 +461,24 @@ function OwnerOrdersContent() {
     setTimeout(() => win.print(), 400);
   };
 
-  // KPI Calculations
-  const visibleOrders = useMemo(() => {
-    return orders.filter((o) => {
-      const isCod =
-        (o.paymentMethod || '').toUpperCase() === 'COD' ||
-        (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
-      const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
-      const isRefunded = (o.paymentStatus || '').toUpperCase() === 'REFUNDED';
-      return isCod || isPaid || isRefunded;
-    });
-  }, [orders]);
-
-  const totalOrdersCount = useMemo(() => {
-    return visibleOrders.length;
-  }, [visibleOrders]);
-
-  const totalOrderPayment = useMemo(() => {
-    return visibleOrders
-      .filter((o) => (o.orderStatus || o.status || '').toUpperCase() !== 'CANCELLED')
-      .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-  }, [visibleOrders]);
-
-  const totalCollectedPayment = useMemo(() => {
-    return visibleOrders
-      .filter(
-        (o) =>
-          (o.paymentStatus || '').toUpperCase() === 'PAID' &&
-          (o.orderStatus || o.status || '').toUpperCase() !== 'CANCELLED'
-      )
-      .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-  }, [visibleOrders]);
-
-  const codPendingCount = useMemo(() => {
-    return visibleOrders.filter(
-      (o) =>
-        ((o.paymentMethod || '').toUpperCase() === 'COD' ||
-          (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') &&
-        (o.paymentStatus || '').toUpperCase() !== 'PAID' &&
-        (o.paymentStatus || '').toUpperCase() !== 'REFUNDED' &&
-        (o.orderStatus || o.status || '').toUpperCase() !== 'CANCELLED'
-    ).length;
-  }, [visibleOrders]);
-
-  const codPendingAmount = useMemo(() => {
-    return visibleOrders
-      .filter(
-        (o) =>
-          ((o.paymentMethod || '').toUpperCase() === 'COD' ||
-            (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY') &&
-          (o.paymentStatus || '').toUpperCase() !== 'PAID' &&
-          (o.paymentStatus || '').toUpperCase() !== 'REFUNDED' &&
-          (o.orderStatus || o.status || '').toUpperCase() !== 'CANCELLED'
-      )
-      .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-  }, [visibleOrders]);
-
-  const newOrConfirmedCount = useMemo(() => {
-    return visibleOrders.filter((o) => {
-      const s = (o.orderStatus || o.status || '').toUpperCase();
-      return s === 'NEW' || s === 'CONFIRMED' || s === 'PENDING';
-    }).length;
-  }, [visibleOrders]);
-
+  // Use dashboardStats for global KPIs instead of current page
+  const totalOrdersCount = dashboardStats?.totalOrders ?? 0;
+  const totalOrderPayment = dashboardStats?.totalRevenue ?? 0; // Using realized revenue for simplicity
+  const totalCollectedPayment = dashboardStats?.totalRevenue ?? 0;
+  const codPendingCount = dashboardStats?.pendingCodOrders ?? 0;
+  const codPendingAmount = dashboardStats?.pendingCodAmount ?? 0;
+  const newOrConfirmedCount = dashboardStats?.pendingOrders ?? 0;
+  
+  // As a fallback for currently baking, use a rough estimate if not provided by stats
   const currentlyBakingCount = useMemo(() => {
-    return visibleOrders.filter((o) => {
+    return orders.filter((o) => {
       const s = (o.orderStatus || o.status || '').toUpperCase();
       return s === 'PREPARING';
-    }).length;
-  }, [visibleOrders]);
+    }).length; // Only counts current page
+  }, [orders]);
 
-  // Filtered Orders
-  const filtered = useMemo(() => {
-    return orders.filter((o) => {
-      const isCod =
-        (o.paymentMethod || '').toUpperCase() === 'COD' ||
-        (o.paymentMethod || '').toUpperCase() === 'CASH_ON_DELIVERY';
-      const isPaid = (o.paymentStatus || '').toUpperCase() === 'PAID';
-
-      const isRefunded = (o.paymentStatus || '').toUpperCase() === 'REFUNDED';
-      // Only show completed/paid, refunded or COD orders
-      if (!isCod && !isPaid && !isRefunded) {
-        return false;
-      }
-
-      const s = (o.orderStatus || o.status || '').toUpperCase();
-      const matchesFilter =
-        filterStatus === 'ALL' ||
-        s === filterStatus ||
-        (filterStatus === 'NEW' && s === 'PENDING');
-
-      let matchesPayment = true;
-      if (filterPayment === 'COD_PENDING') matchesPayment = isCod && !isPaid && !isRefunded;
-      else if (filterPayment === 'PAID') matchesPayment = isPaid;
-      else if (filterPayment === 'REFUND_DUE') matchesPayment = s === 'CANCELLED' && isPaid;
-      else if (filterPayment === 'REFUNDED') matchesPayment = isRefunded;
-      else if (filterPayment === 'COD') matchesPayment = isCod;
-      else if (filterPayment === 'ONLINE') matchesPayment = !isCod;
-
-      const q = search.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        o.orderNumber?.toLowerCase().includes(q) ||
-        o.customerName?.toLowerCase().includes(q) ||
-        o.customerPhone?.includes(q) ||
-        o.items?.some((it) =>
-          (it.productName || it.productNameSnapshot || '').toLowerCase().includes(q)
-        );
-
-      return matchesFilter && matchesPayment && matchesSearch;
-    });
-  }, [orders, filterStatus, filterPayment, search]);
+  // Orders are pre-filtered by the backend
+  const filtered = orders;
 
   // Reset to page 0 whenever filters change
   useEffect(() => {
@@ -670,7 +657,7 @@ function OwnerOrdersContent() {
               </thead>
               <tbody className="divide-y divide-owner-border">
                 {filtered
-                  .slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage)
+                  
                   .map((ord) => {
                   const currentStatus = (ord.orderStatus || ord.status || 'NEW').toUpperCase();
                   const customerDigits = (ord.customerPhone || '').replace(/\D/g, '');
@@ -878,10 +865,10 @@ function OwnerOrdersContent() {
           </div>
 
           {/* Pagination Controls */}
-          {Math.ceil(filtered.length / itemsPerPage) > 1 && (
+          {totalPages > 1 && (
             <div className="flex items-center justify-between p-4 border-t border-owner-border bg-white">
               <span className="text-xs text-owner-muted">
-                Showing {Math.min(filtered.length, (currentPage + 1) * itemsPerPage)} of {filtered.length} matched orders
+                Showing {filtered.length} of total matched orders
               </span>
               <div className="flex gap-2">
                 <Button
@@ -894,13 +881,13 @@ function OwnerOrdersContent() {
                   Previous
                 </Button>
                 <span className="px-3 py-1.5 text-xs font-semibold text-owner-heading flex items-center">
-                  Page {currentPage + 1} of {Math.ceil(filtered.length / itemsPerPage)}
+                  Page {currentPage + 1} of {totalPages}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(Math.ceil(filtered.length / itemsPerPage) - 1, p + 1))}
-                  disabled={currentPage >= Math.ceil(filtered.length / itemsPerPage) - 1}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={currentPage >= totalPages - 1}
                   className="text-xs"
                 >
                   Next
@@ -926,6 +913,21 @@ function OwnerOrdersContent() {
         ALLOWED_TRANSITIONS={ALLOWED_TRANSITIONS}
         STATUS_LABELS={STATUS_LABELS}
       />
+
+      {/* Shared Confirmation Dialog for Orders */}
+      <ConfirmDialog
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={confirmAction?.type === 'CANCEL' ? executeStatusChange : executeRefund}
+        title={confirmAction?.type === 'CANCEL' ? 'Cancel Order' : 'Issue Refund'}
+        description={
+          confirmAction?.type === 'CANCEL'
+            ? `Are you sure you want to cancel order #${confirmAction?.orderNumber}? This action cannot be undone.`
+            : `Are you sure you want to mark order #${confirmAction?.orderNumber} as refunded? This indicates you have returned the customer's payment.`
+        }
+        confirmLabel={confirmAction?.type === 'CANCEL' ? 'Confirm Cancellation' : 'Confirm Refund'}
+        isDestructive={true}
+      />
     </div>
   );
 }
@@ -937,3 +939,5 @@ export default function OwnerOrdersPage() {
     </Suspense>
   );
 }
+
+

@@ -222,7 +222,7 @@ function ProductDetailContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [shopId, productId]);
+  }, [shopId, productId, loadReviews]);
 
   useEffect(() => {
     loadData();

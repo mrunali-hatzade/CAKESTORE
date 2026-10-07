@@ -3,6 +3,7 @@ import { Image as ImageIcon, Plus, Trash2, ArrowUp, ArrowDown, ExternalLink, Upl
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ShopBanner } from '@/types/storefrontManagement';
 import { ownerStorefrontApi } from '@/lib/api/ownerStorefront';
 import { mediaApi } from '@/lib/api/media';
@@ -20,6 +21,7 @@ export const HeroBannersSection: React.FC<HeroBannersSectionProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [bannerToDelete, setBannerToDelete] = useState<number | null>(null);
 
   // New banner form state
   const [newTitle, setNewTitle] = useState('');
@@ -95,14 +97,16 @@ export const HeroBannersSection: React.FC<HeroBannersSectionProps> = ({
     }
   };
 
-  const handleDeleteBanner = async (bannerId: number) => {
-    if (!confirm('Are you sure you want to remove this banner?')) return;
+  const handleDeleteBanner = async () => {
+    if (!bannerToDelete) return;
     try {
-      await ownerStorefrontApi.deleteBanner(bannerId);
-      onChange(banners.filter((b) => b.id !== bannerId));
+      await ownerStorefrontApi.deleteBanner(bannerToDelete);
+      onChange(banners.filter((b) => b.id !== bannerToDelete));
+      setBannerToDelete(null);
     } catch (err: any) {
       console.error('Failed to delete banner', err);
       setErrorMessage(err.message || 'Failed to delete banner');
+      throw err; // throw so ConfirmDialog stops loading and handles it
     }
   };
 
@@ -345,7 +349,7 @@ export const HeroBannersSection: React.FC<HeroBannersSectionProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDeleteBanner(banner.id)}
+                  onClick={() => setBannerToDelete(banner.id)}
                   className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all"
                   title="Delete Banner"
                 >
@@ -356,6 +360,16 @@ export const HeroBannersSection: React.FC<HeroBannersSectionProps> = ({
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={bannerToDelete !== null}
+        onClose={() => setBannerToDelete(null)}
+        onConfirm={handleDeleteBanner}
+        title="Remove Banner"
+        description="Are you sure you want to remove this banner? This action cannot be undone."
+        confirmLabel="Remove"
+        isDestructive={true}
+      />
     </Card>
   );
 };

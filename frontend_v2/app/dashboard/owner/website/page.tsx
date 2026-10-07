@@ -18,6 +18,7 @@ import {
 import { useOwner } from '@/context/OwnerContext';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { useUnsavedChanges } from '@/context/UnsavedChangesContext';
 
 // Modular Storefront Sections
 import { BrandingSection } from '@/components/owner/storefront/BrandingSection';
@@ -32,6 +33,7 @@ import { CustomCakeFormBuilder } from '@/components/owner/storefront/CustomCakeF
 
 export default function OwnerWebsitePage() {
   const { shop, registerRefreshHandler } = useOwner();
+  const { setDirty } = useUnsavedChanges();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -89,6 +91,28 @@ export default function OwnerWebsitePage() {
 
   // 6. Custom Cake Form Fields
   const [customFields, setCustomFields] = useState<ShopCustomFormField[]>([]);
+
+  // Snapshot for dirty state tracking
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
+  const currentSnapshot = JSON.stringify({
+    logoUrl, coverImageUrl, businessName, aboutStory, aboutImageUrl, showAboutImage,
+    whatsappNumber, phone, email, address, mapLocationUrl,
+    banners, businessHours, deliveryConfig, storefrontSettings, customFields
+  });
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (initialSnapshot === null) {
+      setInitialSnapshot(currentSnapshot);
+    } else {
+      setDirty('website-management', currentSnapshot !== initialSnapshot);
+    }
+  }, [currentSnapshot, isLoading, initialSnapshot, setDirty]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => setDirty('website-management', false);
+  }, [setDirty]);
 
   const fetchAllData = useCallback(async (isManual = false) => {
     if (!isManual) setIsLoading(true);
@@ -180,9 +204,8 @@ export default function OwnerWebsitePage() {
     }
 
     try {
-      await Promise.all([
-        // 1. Update Shop branding & contact fields
-        ownerApi.updateShopSettings({
+      await ownerStorefrontApi.updateWebsiteConfiguration({
+        shopProfile: {
           businessName,
           logoUrl,
           coverImageUrl,
@@ -194,17 +217,18 @@ export default function OwnerWebsitePage() {
           email,
           address,
           mapLocationUrl,
-        }),
-        // 2. Update Delivery Config
-        ownerStorefrontApi.updateDeliveryConfig({
+        },
+        deliveryConfig: {
           deliveryChargeType: deliveryConfig.deliveryChargeType,
           fixedChargeAmount: deliveryConfig.fixedChargeAmount,
           minOrderForFreeDelivery: deliveryConfig.minOrderForFreeDelivery,
           deliveryNotes: deliveryConfig.deliveryNotes,
-        }),
-        // 3. Update Storefront Visibility & Fulfillment Settings
-        ownerStorefrontApi.updateStorefrontSettings(storefrontSettings),
-      ]);
+        },
+        storefrontSettings,
+      });
+
+      setInitialSnapshot(currentSnapshot);
+      setDirty('website-management', false);
 
       setSuccessMsg('All storefront configurations saved and published successfully!');
       setTimeout(() => setSuccessMsg(null), 4000);

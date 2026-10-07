@@ -15,6 +15,20 @@ public interface ProductReviewRepository extends JpaRepository<ProductReview, Lo
 
     List<ProductReview> findByShopIdOrderByCreatedAtDesc(Long shopId);
 
+    @Query("SELECT r FROM ProductReview r WHERE r.shop.id = :shopId " +
+           "AND (:rating IS NULL OR r.rating = :rating) " +
+           "AND (:query IS NULL OR :query = '' " +
+           "  OR LOWER(r.customerName) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(r.reviewText) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(r.product.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "  OR LOWER(r.order.orderNumber) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "ORDER BY r.createdAt DESC")
+    org.springframework.data.domain.Page<ProductReview> searchProductReviewsByShopId(
+            @Param("shopId") Long shopId, 
+            @Param("rating") Integer rating, 
+            @Param("query") String query, 
+            org.springframework.data.domain.Pageable pageable);
+
     Optional<ProductReview> findByOrderItemId(Long orderItemId);
 
     boolean existsByOrderItemId(Long orderItemId);

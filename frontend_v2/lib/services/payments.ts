@@ -165,13 +165,8 @@ export const paymentsService = {
       return;
     }
 
-    // Pilot / Staging Mode: Simulated instant approval
-    console.info(
-      `[PaymentGateway:Staged] Razorpay Key not detected in environment. Simulating instant approval for Order #${options.orderId} (₹${options.amount}).`
-    );
-    setTimeout(() => {
-      const mockPaymentId = `pay_mock_${Date.now().toString(36)}`;
-      options.onSuccess(mockPaymentId);
-    }, 600);
+    // Pilot / Staging Mode is no longer supported in production code
+    console.error(`[PaymentGateway] Razorpay Key not detected in environment for Order #${options.orderId}.`);
+    options.onFailure('Payment gateway public key is missing. Cannot process payment.');
   },
 };

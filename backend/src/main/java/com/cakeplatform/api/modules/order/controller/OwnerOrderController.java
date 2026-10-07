@@ -14,7 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner/orders")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerOrderController {
 
@@ -25,14 +25,17 @@ public class OwnerOrderController {
     public ResponseEntity<org.springframework.data.domain.Page<Order>> getOrders(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String paymentStatus,
+            @RequestParam(required = false) String search) {
         
         if (size > 100) size = 100;
         if (size < 1) size = 20;
         if (page < 0) page = 0;
         
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        return ResponseEntity.ok(orderService.getPaginatedOrdersByUserId(userDetails.getId(), pageable));
+        return ResponseEntity.ok(orderService.getPaginatedOrdersByUserId(userDetails.getId(), status, paymentStatus, search, pageable));
     }
 
     @GetMapping("/{id}")

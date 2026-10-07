@@ -27,8 +27,6 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
-    detect-encoding: true
-
   # Allow uploads up to 25MB for review videos (controller validates images at 5MB and videos at 25MB)
   servlet:
     multipart:
@@ -43,10 +41,14 @@ server:
   port: 8080
 
 jwt:
-  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-  expiration: 86400000 # 24 hours in ms
+  secret: ${JWT_SECRET:45f4f9e809b96ece4dc9605067190fe487d40b41e2f701098420bdfa4739f82b}
+  expiration: ${JWT_EXPIRATION_MS:86400000}
 
 app:
+  sms:
+    log-payloads: true
+  demo-data:
+    enabled: ${APP_DEMO_DATA_ENABLED:false}
   business:
     default-timezone: ${APP_TIMEZONE:Asia/Kolkata}
   storage:
@@ -65,9 +67,9 @@ azure:
   client-id: ${AZURE_CLIENT_ID:}
 
 razorpay:
-  key-id: ${RAZORPAY_KEY_ID:rzp_test_TdPzvNBScn0bGP}
-  key-secret: ${RAZORPAY_KEY_SECRET:Jmo03m2bhD23IoG1Xe0m2ffu}
-  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:f0de5f0c082e3cf16acfafb2251f427b81518df5fb12eb66ce95a3970ef05188}
+  key-id: ${RAZORPAY_KEY_ID:}
+  key-secret: ${RAZORPAY_KEY_SECRET:}
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
 
 mail:
   admin-notification-email: ${APP_ADMIN_DEFAULT_EMAIL:admin@cakeplatform.com}

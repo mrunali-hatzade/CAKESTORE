@@ -18,7 +18,7 @@ import NotificationBell from '@/components/owner/NotificationBell';
 import OwnerFeedbackModal from '@/components/owner/OwnerFeedbackModal';
 import { OwnerCommandPalette } from '@/components/owner/OwnerCommandPalette';
 import { MessageCircle, Sparkles, ShieldCheck } from 'lucide-react';
-
+import { UnsavedChangesProvider } from '@/context/UnsavedChangesContext';
 function OwnerLayoutContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -459,7 +459,9 @@ function OwnerLayoutContent({ children }: { children: ReactNode }) {
 export default function OwnerLayout({ children }: { children: ReactNode }) {
   return (
     <OwnerProvider>
-      <OwnerLayoutContent>{children}</OwnerLayoutContent>
+      <UnsavedChangesProvider>
+        <OwnerLayoutContent>{children}</OwnerLayoutContent>
+      </UnsavedChangesProvider>
     </OwnerProvider>
   );
 }

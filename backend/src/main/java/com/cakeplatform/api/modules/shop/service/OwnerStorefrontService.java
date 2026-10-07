@@ -22,6 +22,9 @@ public class OwnerStorefrontService {
     private final com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
 
     @org.springframework.beans.factory.annotation.Autowired
+    private ShopService shopService;
+
+    @org.springframework.beans.factory.annotation.Autowired
     public OwnerStorefrontService(
             ShopAccessValidator shopAccessValidator,
             ShopBannerRepository shopBannerRepository,
@@ -258,5 +261,15 @@ public class OwnerStorefrontService {
                 .orElseThrow(() -> new RuntimeException("Custom form field not found or unauthorized"));
         shopCustomFormFieldRepository.delete(field);
         if (storefrontCacheService != null) storefrontCacheService.evictShopDetails(shop.getId());
+    }
+
+    @Transactional
+    public void saveWebsiteConfiguration(Long ownerId, WebsiteConfigurationRequest request) {
+        // Validation occurs inside these individual service methods.
+        // If any of them throw an exception, the entire transaction rolls back.
+        
+        shopService.updateMyShopProfile(ownerId, request.getShopProfile());
+        updateDeliveryConfig(ownerId, request.getDeliveryConfig());
+        updateStorefrontSettings(ownerId, request.getStorefrontSettings());
     }
 }

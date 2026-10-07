@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { ShopSettings, SubscriptionRecord } from '@/types/owner';
+import { ShopSettings, SubscriptionRecord, OwnerDashboardStats } from '@/types/owner';
 import { ownerApi } from '@/lib/api/owner';
 import { notificationsApi } from '@/lib/api/notifications';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -25,6 +25,9 @@ interface OwnerContextType {
   pendingEnquiriesCount: number;
   pendingReviewsCount: number;
   refreshSidebarCounts: () => Promise<void>;
+  dashboardStats: OwnerDashboardStats | null;
+  isLoadingStats: boolean;
+  refreshDashboardStats: () => Promise<OwnerDashboardStats | null>;
 }
 
 const OwnerContext = createContext<OwnerContextType | undefined>(undefined);
@@ -43,6 +46,8 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
   const [pendingInquiriesCount, setPendingInquiriesCount] = useState<number>(0);
   const [pendingEnquiriesCount, setPendingEnquiriesCount] = useState<number>(0);
   const [pendingReviewsCount, setPendingReviewsCount] = useState<number>(0);
+  const [dashboardStats, setDashboardStats] = useState<OwnerDashboardStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
 
   // Active page-level refresh handler (e.g. registered by OwnerOverviewPage)
   const refreshHandlerRef = useRef<(() => Promise<void>) | null>(null);
@@ -51,6 +56,16 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
     try {
       const data = await ownerApi.getShopSettings();
       setShop(data);
+      return data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const fetchDashboardStats = useCallback(async (): Promise<OwnerDashboardStats | null> => {
+    try {
+      const data = await ownerApi.getDashboardStats();
+      setDashboardStats(data);
       return data;
     } catch {
       return null;
@@ -92,10 +107,12 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
     if (!authLoading && isAuthenticated) {
       setIsLoadingShop(true);
       setIsLoadingSubscription(true);
+      setIsLoadingStats(true);
       Promise.allSettled([
         fetchShop().finally(() => setIsLoadingShop(false)),
         fetchSubscription().finally(() => setIsLoadingSubscription(false)),
         fetchSidebarCounts(),
+        fetchDashboardStats().finally(() => setIsLoadingStats(false)),
       ]);
     } else if (!authLoading && !isAuthenticated) {
       setShop(null);
@@ -107,8 +124,10 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
       setPendingInquiriesCount(0);
       setPendingEnquiriesCount(0);
       setPendingReviewsCount(0);
+      setDashboardStats(null);
+      setIsLoadingStats(false);
     }
-  }, [authLoading, isAuthenticated, fetchShop, fetchSubscription, fetchSidebarCounts]);
+  }, [authLoading, isAuthenticated, fetchShop, fetchSubscription, fetchSidebarCounts, fetchDashboardStats]);
 
   // Periodic live background poll for sidebar badges every 20s
   useEffect(() => {
@@ -135,6 +154,7 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
       fetchShop().catch(() => {});
       fetchSubscription().catch(() => {});
       fetchSidebarCounts().catch(() => {});
+      fetchDashboardStats().catch(() => {});
       if (refreshHandlerRef.current) {
         refreshHandlerRef.current().catch(() => {});
       }
@@ -147,7 +167,7 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
     };
-  }, [isAuthenticated, authLoading, fetchShop, fetchSubscription, fetchSidebarCounts]);
+  }, [isAuthenticated, authLoading, fetchShop, fetchSubscription, fetchSidebarCounts, fetchDashboardStats]);
 
   const updateShop = useCallback((newShop: ShopSettings) => {
     setShop(newShop);
@@ -170,7 +190,7 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
 
     try {
       // Execute the active page handler if present AND refresh authoritative shop profile, subscription, and counts
-      const promises: Promise<any>[] = [fetchShop(), fetchSubscription(), fetchSidebarCounts()];
+      const promises: Promise<any>[] = [fetchShop(), fetchSubscription(), fetchSidebarCounts(), fetchDashboardStats()];
       if (refreshHandlerRef.current) {
         promises.push(refreshHandlerRef.current());
       }
@@ -189,7 +209,7 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsRefreshing(false);
     }
-  }, [isRefreshing, fetchShop, fetchSubscription, fetchSidebarCounts]);
+  }, [isRefreshing, fetchShop, fetchSubscription, fetchSidebarCounts, fetchDashboardStats]);
 
   return (
     <OwnerContext.Provider
@@ -212,6 +232,9 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
         pendingEnquiriesCount,
         pendingReviewsCount,
         refreshSidebarCounts: fetchSidebarCounts,
+        dashboardStats,
+        isLoadingStats,
+        refreshDashboardStats: fetchDashboardStats,
       }}
     >
       {children}

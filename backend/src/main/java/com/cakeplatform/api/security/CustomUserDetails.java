@@ -35,7 +35,10 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public String getUsername() {
-        return user.getEmail();
+        if (user.getEmail() != null && !user.getEmail().trim().isEmpty()) {
+            return user.getEmail();
+        }
+        return user.getMobile();
     }
 
     @Override

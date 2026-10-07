@@ -91,7 +91,7 @@ export default function AdminShopsPage() {
       setTotalElements(response.totalElements || 0);
     } catch (err: any) {
       console.error('Failed to fetch shops:', err);
-      setError('Failed to load shops. Please try again.');
+      setError(err?.message || 'Failed to load shops. Please try again.');
       toast.error('Failed to load shops');
     } finally {
       setIsLoading(false);
@@ -295,6 +295,8 @@ export default function AdminShopsPage() {
           </div>
         </Card>
       )}
+
+      {error && (<div className='p-4 m-4 bg-red-100 text-red-800 border border-red-300 rounded-lg whitespace-pre-wrap'><h3 className='font-bold'>Error loading shops:</h3><p>{error}</p></div>)}
 
       {/* Bakeries Table */}
       {shops.length === 0 ? (

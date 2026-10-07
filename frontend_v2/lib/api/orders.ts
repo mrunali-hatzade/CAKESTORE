@@ -2,8 +2,8 @@ import { apiClient } from './client';
 import { Order, GuestOrderRequest, OrderStatus, PaginatedResponse } from '@/types/order';
 
 export const ordersApi = {
-  createGuestOrder: async (shopId: number | string, orderData: GuestOrderRequest): Promise<Order> => {
-    return apiClient.post<Order>(`/api/storefront/shops/${shopId}/orders`, orderData);
+  createGuestOrder: async (shopId: number | string, orderData: GuestOrderRequest, token?: string | null): Promise<Order> => {
+    return apiClient.post<Order>(`/api/storefront/shops/${shopId}/orders`, orderData, { token });
   },
 
   getOrderByNumber: async (orderNumber: string): Promise<Order> => {
@@ -52,8 +52,16 @@ export const ordersApi = {
     return apiClient.post(`/api/storefront/orders/${orderNumber}/cancel-payment`, { reason });
   },
 
-  getOwnerOrders: async (status?: string, page = 0, size = 20): Promise<PaginatedResponse<Order>> => {
-    return apiClient.get<PaginatedResponse<Order>>('/api/owner/orders', { params: { status, page, size } });
+  getOwnerOrders: async (status?: string, paymentStatus?: string, page = 0, size = 20, search?: string): Promise<PaginatedResponse<Order>> => {
+    return apiClient.get<PaginatedResponse<Order>>('/api/owner/orders', { 
+      params: { 
+        ...(status ? { status } : {}),
+        ...(paymentStatus ? { paymentStatus } : {}),
+        page, 
+        size, 
+        ...(search ? { search } : {}) 
+      } 
+    });
   },
 
   updateOrderStatus: async (orderId: number, status: string): Promise<Order> => {

@@ -532,7 +532,7 @@ public class PhaseGCommunicationTest {
                 .isRead(false)
                 .build();
 
-        when(adminNotificationRepository.findWithFilters(eq(1L), eq("BAKERY"), eq(AdminNotificationCategory.BAKERY), eq(false), isNull(), org.springframework.data.domain.PageRequest.of(0, 20)))
+        when(adminNotificationRepository.findWithFilters(eq(1L), eq("BAKERY"), eq(AdminNotificationCategory.BAKERY), eq(false), isNull(), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(n1)));
 
         ResponseEntity<org.springframework.data.domain.Page<AdminNotification>> response = adminNotificationController.getNotifications(

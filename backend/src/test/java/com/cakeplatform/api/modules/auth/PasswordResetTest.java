@@ -28,12 +28,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@org.springframework.transaction.annotation.Transactional
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public class PasswordResetTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Autowired
     private UserRepository userRepository;
@@ -53,13 +57,19 @@ public class PasswordResetTest {
     @Autowired
     private com.cakeplatform.api.modules.email.DevEmailSink devEmailSink;
 
+    
+    
+
     @BeforeEach
     void setUp() {
         passwordResetTokenRepository.deleteAll();
+        jdbcTemplate.execute("DELETE FROM password_reset_tokens"); jdbcTemplate.execute("DELETE FROM users WHERE email LIKE '%test.reset%'");
+
+        passwordResetTokenRepository.deleteAll();
         if (devEmailSink != null) devEmailSink.clear();
         
-        testUser = setupUser("test.reset@example.com", "Test User");
-        testUser2 = setupUser("test.reset2@example.com", "Test User 2");
+        testUser = setupUser("test.reset_java_uuid_randomUUID_toString_substring_0_8@example.com", "Test User");
+        testUser2 = setupUser("test.reset@example.com", "Test User 2");
     }
 
     private User setupUser(String email, String name) {
@@ -112,7 +122,7 @@ public class PasswordResetTest {
     // A. FORGOT PASSWORD
     @Test
     void testA_ForgotPassword_ExistingEmail_GenericResponse() throws Exception {
-        ForgotPasswordRequest req = new ForgotPasswordRequest("test.reset@example.com");
+        ForgotPasswordRequest req = new ForgotPasswordRequest("test.reset_java_uuid_randomUUID_toString_substring_0_8@example.com");
         mockMvc.perform(post("/api/auth/forgot-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))

@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/owner/customers")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 public class OwnerCustomerController {
 
@@ -31,7 +31,8 @@ public class OwnerCustomerController {
     public ResponseEntity<org.springframework.data.domain.Page<CustomerProfileResponse>> getMyCustomers(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search) {
             
         // Enforce maximum page size
         if (size > 50) {
@@ -44,8 +45,12 @@ public class OwnerCustomerController {
         org.springframework.data.domain.Pageable pageable = 
             org.springframework.data.domain.PageRequest.of(page, size);
 
-        org.springframework.data.domain.Page<CustomerProfileResponse> profiles = 
-            orderRepository.findCustomerProfilesByShopId(shop.getId(), pageable);
+        org.springframework.data.domain.Page<CustomerProfileResponse> profiles;
+        if (search != null && !search.trim().isEmpty()) {
+            profiles = orderRepository.searchCustomerProfilesByShopId(shop.getId(), search.trim(), pageable);
+        } else {
+            profiles = orderRepository.findCustomerProfilesByShopId(shop.getId(), pageable);
+        }
 
         return ResponseEntity.ok(profiles);
     }

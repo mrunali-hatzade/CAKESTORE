@@ -17,6 +17,7 @@ import { StorefrontCustomCakesTab } from '@/components/customer/storefront/tabs/
 import { StorefrontGalleryTab } from '@/components/customer/storefront/tabs/StorefrontGalleryTab';
 import { StorefrontContactTab } from '@/components/customer/storefront/tabs/StorefrontContactTab';
 import { StorefrontTrackOrderTab } from '@/components/customer/storefront/tabs/StorefrontTrackOrderTab';
+import { StorefrontProfileTab } from '@/components/customer/storefront/tabs/StorefrontProfileTab';
 import { StorefrontCheckoutTab } from '@/components/customer/storefront/tabs/StorefrontCheckoutTab';
 import { ProductDetailModal } from '@/components/customer/storefront/ProductDetailModal';
 import { CustomCakeInquiryModal } from '@/components/customer/storefront/CustomCakeInquiryModal';
@@ -243,6 +244,10 @@ function StorefrontContent() {
           />
         )}
 
+        {activeTab === 'profile' && (
+          <StorefrontProfileTab shop={shop} />
+        )}
+        
         {activeTab === 'checkout' && (
           <StorefrontCheckoutTab
             shop={shop}

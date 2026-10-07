@@ -60,10 +60,11 @@ class OwnerCustomerControllerTest {
 
         when(orderRepository.findCustomerProfilesByShopId(eq(10L), any())).thenReturn(page);
 
-        ResponseEntity<Page<CustomerProfileResponse>> response = controller.getMyCustomers(userDetails, 0, 10);
+        ResponseEntity<Page<CustomerProfileResponse>> response = controller.getMyCustomers(userDetails, 0, 10, null);
         
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, Objects.requireNonNull(response.getBody()).getTotalElements());
         assertEquals("Test User", response.getBody().getContent().get(0).getName());
     }
 }
+

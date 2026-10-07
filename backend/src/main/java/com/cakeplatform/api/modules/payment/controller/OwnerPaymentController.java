@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,10 +29,13 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/owner/payments")
-@PreAuthorize("hasRole('SHOP_OWNER')")
+@PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
 @RequiredArgsConstructor
 @Slf4j
 public class OwnerPaymentController {
+
+    @Value("${spring.profiles.active:}")
+    private String activeProfiles;
 
     private final SubscriptionService subscriptionService;
     private final PaymentRepository paymentRepository;
@@ -236,55 +240,4 @@ public class OwnerPaymentController {
         ));
     }
 
-    /**
-     * Preserved mock checkout for offline testing / sandbox simulation.
-     * Uses authoritative pricing and respects suspension & KYC precedence.
-     */
-    @PostMapping("/mock-checkout")
-    public ResponseEntity<?> processMockCheckout(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestBody Map<String, Object> payload) {
-        
-        Number planIdNum = (Number) payload.get("planId");
-        if (planIdNum == null) {
-            throw new IllegalArgumentException("planId is required for mock checkout");
-        }
-
-        SubscriptionPlan plan = subscriptionPlanRepository.findById(planIdNum.longValue())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid subscription plan"));
-
-        if (!plan.getIsActive()) {
-            throw new IllegalStateException("Selected subscription plan is no longer active");
-        }
-
-        String mockOrderId = "order_mock_" + UUID.randomUUID().toString().substring(0, 8);
-        String mockPaymentId = "pay_mock_" + UUID.randomUUID().toString().substring(0, 8);
-
-        Shop shop = shopAccessValidator.getShopByOwnerId(userDetails.getId());
-        Payment payment = new Payment();
-        payment.setShop(shop);
-        payment.setPlan(plan);
-        payment.setAmount(plan.getPrice());
-        payment.setCurrency("INR");
-        payment.setProvider("MOCK");
-        payment.setProviderOrderId(mockOrderId);
-        payment.setStatus("PENDING");
-        payment = paymentRepository.save(payment);
-
-        payment = subscriptionService.processSuccessfulPayment(
-                userDetails.getId(),
-                plan,
-                mockOrderId,
-                mockPaymentId,
-                payment
-        );
-
-        return ResponseEntity.ok(Map.of(
-                "message", "Payment processed successfully. Subscription updated.",
-                "orderId", mockOrderId,
-                "paymentId", mockPaymentId,
-                "recordId", payment.getId()
-        ));
-    }
 }
-

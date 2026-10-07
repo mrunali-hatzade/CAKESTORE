@@ -85,3 +85,9 @@ export interface ShopCustomFormField {
   optionsJson?: string | null;
   displayOrder: number;
 }
+
+export interface WebsiteConfigurationRequest {
+  shopProfile: Partial<import('./owner').ShopSettings>;
+  deliveryConfig: Partial<ShopDeliveryConfig>;
+  storefrontSettings: Partial<ShopStorefrontSettings>;
+}

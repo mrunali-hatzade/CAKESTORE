@@ -1,5 +1,6 @@
 package com.cakeplatform.api.modules.payment.controller;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,11 +12,11 @@ public class RazorpayWebhookController {
     public ResponseEntity<Void> handleRazorpayWebhook(
             @RequestHeader("X-Razorpay-Signature") String signature,
             @RequestBody String payload) {
-        
-        System.out.println("Received Razorpay Webhook: " + payload);
-        
-        // TODO: Inject SubscriptionService or equivalent and verify signature + handle event
-        
-        return ResponseEntity.ok().build();
+
+        // This legacy v2 endpoint never verified signatures or processed events.
+        // Reject it explicitly so callers cannot mistake an accepted request for a
+        // successfully processed payment webhook. The validated implementation is
+        // exposed by WebhookController.
+        return ResponseEntity.status(HttpStatus.GONE).build();
     }
 }
