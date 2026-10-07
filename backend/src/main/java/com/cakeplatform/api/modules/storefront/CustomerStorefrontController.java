@@ -166,21 +166,6 @@ public class CustomerStorefrontController {
             @PathVariable String orderNumber
     ) {
         Order order = storefrontService.getGuestOrder(orderNumber);
-
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
-        }
-        boolean isCustomer = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"));
-        if (!isCustomer) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
-        }
-
-        String guestPhone = auth.getName();
-        if (!guestPhone.equals(order.getCustomerPhone())) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
-        }
-
         return ResponseEntity.ok(order);
     }
 
@@ -189,20 +174,6 @@ public class CustomerStorefrontController {
             @PathVariable String orderNumber
     ) throws Exception {
         Order order = storefrontService.getGuestOrder(orderNumber);
-
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
-        }
-        boolean isCustomer = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"));
-        if (!isCustomer) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
-        }
-
-        String guestPhone = auth.getName();
-        if (!guestPhone.equals(order.getCustomerPhone())) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
-        }
 
         if (invoiceService == null) {
             throw new IllegalStateException("Invoice service is currently unavailable");

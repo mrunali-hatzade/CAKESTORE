@@ -28,6 +28,8 @@ public class GuestOrderRequest {
     @NotBlank(message = "Delivery address is required")
     private String deliveryAddress;
 
+    private String specialInstructions;
+
     @NotEmpty(message = "Order must contain at least one item")
     private List<StorefrontOrderItem> items;
 

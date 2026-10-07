@@ -66,6 +66,9 @@ public class Order {
     @Column(name = "delivery_address")
     private String deliveryAddress;
 
+    @Column(name = "special_instructions", columnDefinition = "TEXT")
+    private String specialInstructions;
+
     @Column(name = "customer_name")
     private String customerName;
 

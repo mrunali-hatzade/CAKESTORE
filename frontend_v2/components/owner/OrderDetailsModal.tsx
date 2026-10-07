@@ -202,6 +202,14 @@ export function OrderDetailsModal({
                     {order.deliveryAddress || 'Self Pickup directly at Bakery Store Counter'}
                   </span>
                 </p>
+                <div className="pt-2 border-t border-owner-border/40">
+                  <span className="text-[10px] text-owner-muted font-bold uppercase tracking-wider block mb-1">
+                    Special Delivery Instructions
+                  </span>
+                  <span className="text-xs text-owner-heading italic whitespace-pre-wrap">
+                    {order.specialInstructions || 'None'}
+                  </span>
+                </div>
               </div>
             </div>
 

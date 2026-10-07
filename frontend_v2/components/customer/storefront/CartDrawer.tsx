@@ -415,6 +415,7 @@ export const CartDrawer: React.FC = () => {
                   </span>
                 </div>
               </div>
+              </div>
               </>
             )}
           </div>

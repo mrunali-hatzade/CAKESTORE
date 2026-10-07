@@ -66,6 +66,7 @@ export interface Order {
   createdAt: string;
   updatedAt?: string;
   couponCode?: string;
+  specialInstructions?: string;
   items?: OrderItem[];
 }
 

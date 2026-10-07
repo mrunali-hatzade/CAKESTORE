@@ -646,6 +646,7 @@ public class CustomerStorefrontService {
         }
 
         order.setDeliveryAddress(request.getDeliveryAddress());
+        order.setSpecialInstructions(request.getSpecialInstructions());
         order.setPaymentMethod(request.getPaymentMethod());
         order.setOrderNumber("ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         order.setPaymentStatus("PENDING");
