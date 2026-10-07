@@ -119,8 +119,11 @@ export const ordersApi = {
 
   downloadStorefrontInvoice: async (orderNumber: string): Promise<void> => {
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('cakeStoreGuestToken') : null;
+    
     const response = await fetch(`${API_BASE_URL}/api/storefront/shops/orders/${orderNumber}/invoice`, {
       method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
 
     if (!response.ok) {

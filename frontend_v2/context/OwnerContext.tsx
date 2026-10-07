@@ -154,7 +154,6 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
       fetchShop().catch(() => {});
       fetchSubscription().catch(() => {});
       fetchSidebarCounts().catch(() => {});
-      fetchDashboardStats().catch(() => {});
       if (refreshHandlerRef.current) {
         refreshHandlerRef.current().catch(() => {});
       }
@@ -167,8 +166,7 @@ export function OwnerProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
     };
-  }, [isAuthenticated, authLoading, fetchShop, fetchSubscription, fetchSidebarCounts, fetchDashboardStats]);
-
+  }, [isAuthenticated, authLoading, fetchShop, fetchSubscription, fetchSidebarCounts]);
   const updateShop = useCallback((newShop: ShopSettings) => {
     setShop(newShop);
   }, []);

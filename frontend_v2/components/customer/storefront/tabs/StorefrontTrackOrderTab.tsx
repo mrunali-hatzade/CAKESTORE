@@ -350,7 +350,7 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
                   </div>
                   
                   <div className="text-xs text-brand-muted space-y-1 mb-4">
-                    <p className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5"/> Placed: {new Date(order.createdAt).toLocaleDateString()}</p>
+                    <p className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5"/> Placed: {new Date(order.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</p>
                     <p className="flex items-center gap-1.5"><Truck className="w-3.5 h-3.5"/> Total: ₹{order.totalAmount} • {order.paymentMethod}</p>
                   </div>
                   
@@ -384,7 +384,7 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
                   Order #{selectedOrder.orderNumber}
                 </h2>
                 <p className="text-xs text-brand-muted mt-1">
-                  Placed on {new Date(selectedOrder.createdAt).toLocaleString()}
+                  Placed on {new Date(selectedOrder.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -495,11 +495,36 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
                 <p>Contact: {selectedOrder.customerPhone}</p>
               </div>
               <div className="space-y-1 text-brand-muted sm:text-right">
-                <span className="font-bold text-brand-espresso block">Payment &amp; Total</span>
-                <p>Method: <strong>{selectedOrder.paymentMethod || 'COD'}</strong></p>
-                <p className="text-base font-serif font-bold text-brand-espresso pt-1">
-                  Total: ₹{selectedOrder.totalAmount}
-                </p>
+                <span className="font-bold text-brand-espresso block mb-2">Payment Breakdown</span>
+                
+                <div className="flex justify-between sm:justify-end sm:gap-8 mb-1">
+                  <span>Subtotal:</span>
+                  <span className="font-semibold text-brand-espresso">₹{selectedOrder.subtotal || 0}</span>
+                </div>
+                
+                {selectedOrder.deliveryCharge === 0 ? (
+                  <div className="flex justify-between sm:justify-end sm:gap-8 mb-1 text-emerald-600">
+                    <span>Delivery Fee:</span>
+                    <span className="font-semibold">{selectedOrder.deliveryAddress?.toLowerCase().includes('takeaway') || selectedOrder.deliveryAddress?.toLowerCase().includes('pickup') ? 'Takeaway (Free)' : 'Free Delivery'}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between sm:justify-end sm:gap-8 mb-1">
+                    <span>Delivery Fee:</span>
+                    <span className="font-semibold text-brand-espresso">+₹{selectedOrder.deliveryCharge}</span>
+                  </div>
+                )}
+                
+                {selectedOrder.discountAmount > 0 && (
+                  <div className="flex justify-between sm:justify-end sm:gap-8 mb-1 text-emerald-600">
+                    <span>Discount {selectedOrder.couponCode ? `(${selectedOrder.couponCode})` : ''}:</span>
+                    <span className="font-semibold">-₹{selectedOrder.discountAmount}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between sm:justify-end sm:gap-8 pt-2 mt-2 border-t border-brand-border/40">
+                  <span className="font-bold text-brand-espresso">Total ({selectedOrder.paymentMethod || 'COD'}):</span>
+                  <span className="text-base font-serif font-bold text-brand-espresso">₹{selectedOrder.totalAmount}</span>
+                </div>
               </div>
             </div>
           </Card>

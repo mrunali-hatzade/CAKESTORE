@@ -55,7 +55,7 @@ public class RateLimitingFilter implements Filter {
         }
 
         // 2. Auth Endpoints: Strict 10 req/min
-        if (uri.startsWith("/api/auth/") || uri.startsWith("/api/customer/storefront/tracking/")) {
+        if (uri.startsWith("/api/auth/") || (uri.startsWith("/api/customer/storefront/tracking/") && !uri.contains("/orders"))) {
             String ip = getClientIp(httpRequest);
             Bucket bucket = authBuckets.computeIfAbsent(ip, k -> createBucket(10, Duration.ofMinutes(1)));
             if (!bucket.tryConsume(1)) {

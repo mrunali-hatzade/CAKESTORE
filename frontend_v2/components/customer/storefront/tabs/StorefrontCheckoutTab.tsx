@@ -93,7 +93,7 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
   onNavigateTab,
 }) => {
   const router = useRouter();
-  const { items, totalPrice, clearCart, appliedCoupon, setAppliedCoupon } = useCart();
+  const { items, totalPrice, clearCart, appliedCoupon, setAppliedCoupon, updateQuantity, removeItem } = useCart();
   const toast = useToast();
   const customerAuth = useCustomerAuth();
 
@@ -1071,13 +1071,42 @@ export const StorefrontCheckoutTab: React.FC<StorefrontCheckoutTabProps> = ({
                         )}
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="font-serif font-bold text-brand-espresso block">
+                    <div className="flex flex-col items-end shrink-0 gap-1.5">
+                      <span className="font-serif font-bold text-brand-espresso">
                         ₹{i.price * i.quantity}
                       </span>
-                      <span className="text-[10px] text-brand-plum font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                        View Details &rarr;
-                      </span>
+                      <div 
+                        className="flex items-center bg-white border border-brand-border/80 rounded-md overflow-hidden shadow-2xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (i.cartLineId) {
+                              updateQuantity(i.cartLineId, i.quantity - 1);
+                            }
+                          }}
+                          className="px-2 py-0.5 text-brand-muted hover:text-brand-plum hover:bg-brand-cream/50 transition-colors font-bold text-xs"
+                          aria-label="Decrease quantity"
+                        >
+                          -
+                        </button>
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold text-brand-espresso border-x border-brand-border/40 min-w-[20px] text-center">
+                          {i.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (i.cartLineId) {
+                              updateQuantity(i.cartLineId, i.quantity + 1);
+                            }
+                          }}
+                          className="px-2 py-0.5 text-brand-muted hover:text-brand-plum hover:bg-brand-cream/50 transition-colors font-bold text-xs"
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

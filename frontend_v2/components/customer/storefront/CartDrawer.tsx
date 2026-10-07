@@ -188,8 +188,9 @@ export const CartDrawer: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {items.map((item) => (
+              <>
+                <div className="space-y-3">
+                  {items.map((item) => (
                   <div
                     key={item.cartLineId}
                     className="p-4 rounded-2xl border border-brand-border/80 bg-white shadow-subtle space-y-2.5"
@@ -271,13 +272,9 @@ export const CartDrawer: React.FC = () => {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
 
-          {/* Drawer Footer */}
-          {items.length > 0 && (
-            <div className="p-5 sm:p-6 border-t border-brand-border/80 bg-brand-cream-light/30 space-y-4">
-              {/* Coupon Validation Block */}
+              <div className="border-t border-brand-border/80 pt-6 mt-6 space-y-4">
+                {/* Coupon Validation Block */}
               <div className="space-y-2">
                 {appliedCoupon ? (
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
@@ -418,7 +415,13 @@ export const CartDrawer: React.FC = () => {
                   </span>
                 </div>
               </div>
+              </>
+            )}
+          </div>
 
+          {/* Drawer Footer */}
+          {items.length > 0 && (
+            <div className="p-5 sm:p-6 border-t border-brand-border/80 bg-white shrink-0">
               {/* Checkout Action */}
               <div className="space-y-2">
                 <Button onClick={handleProceedToCheckout} className="w-full rounded-2xl h-11 font-bold shadow-sm" size="lg">

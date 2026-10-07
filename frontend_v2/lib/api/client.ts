@@ -118,18 +118,10 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
         }
       }
 
-      // Auto-logout on token expiry or unauthorized access
+      // Removed aggressive auto-logout and redirect on 401 per user request
       if (response.status === 401) {
-        clearStoredToken();
-        if (typeof sessionStorage !== 'undefined') {
-          sessionStorage.removeItem('cakeStoreGuestToken');
-          sessionStorage.removeItem('cakeStoreGuestPhone');
-        }
-        
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          // Notify the user that the session has expired and ask them to refresh manually
-          alert('Your session has expired. Please refresh the page to log in again.');
-        }
+        // Just pass the error back without forcing a redirect
+        console.warn('API returned 401 Unauthorized for', endpoint);
       }
 
       throw new ApiError(response.status, errorMessage, responseData);

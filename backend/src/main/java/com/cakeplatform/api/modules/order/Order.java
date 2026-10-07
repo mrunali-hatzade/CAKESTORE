@@ -58,8 +58,7 @@ public class Order {
     private String paymentStatus;
 
     @Column(name = "order_status", nullable = false)
-    @Enumerated(EnumType.STRING)
-    private OrderStatus orderStatus; // NEW, PENDING_PAYMENT, PAID, PAYMENT_FAILED, etc.
+    private String orderStatus; // NEW, PENDING_PAYMENT, PAID, PAYMENT_FAILED, etc.
 
     @Column(name = "razorpay_order_id")
     private String razorpayOrderId;
