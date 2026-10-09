@@ -5,4 +5,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface WebhookEventRepository extends JpaRepository<WebhookEvent, Long> {
+    boolean existsByEventId(String eventId);
 }

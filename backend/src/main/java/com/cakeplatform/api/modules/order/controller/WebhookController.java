@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -50,6 +51,7 @@ public class WebhookController {
      * C2: Secure Razorpay Webhook Handler.
      * Computes HMAC-SHA256 signature against the exact unmodified raw request body.
      */
+    @Transactional
     @PostMapping("/razorpay")
     public ResponseEntity<String> handleRazorpayWebhook(
             @RequestHeader(value = "X-Razorpay-Signature", required = false) String signature,
@@ -85,15 +87,16 @@ public class WebhookController {
             Map<String, Object> payload = objectMapper.readValue(rawPayload, new TypeReference<Map<String, Object>>() {});
             String event = (String) payload.get("event");
             
-            try {
-                WebhookEvent webhookEvent = new WebhookEvent();
-                webhookEvent.setEventId(eventIdHeader);
-                webhookEvent.setEventType(event);
-                webhookEventRepository.save(webhookEvent);
-            } catch (DataIntegrityViolationException ex) {
+            // Idempotency: check if event already processed
+            if (webhookEventRepository.existsByEventId(eventIdHeader)) {
                 log.info("Webhook idempotency: Event {} already processed. Skipping duplicate.", eventIdHeader);
                 return ResponseEntity.ok("Webhook processed (idempotent duplicate)");
             }
+            // Save event record atomically
+            WebhookEvent webhookEvent = new WebhookEvent();
+            webhookEvent.setEventId(eventIdHeader);
+            webhookEvent.setEventType(event);
+            webhookEventRepository.saveAndFlush(webhookEvent);
 
             @SuppressWarnings("unchecked")
             Map<String, Object> payloadData = (Map<String, Object>) payload.get("payload");
@@ -324,6 +327,9 @@ public class WebhookController {
             return ResponseEntity.ok("Webhook processed");
         } catch (Exception e) {
             log.error("Error processing Razorpay webhook: {}", e.getMessage(), e);
+            try {
+                org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            } catch (org.springframework.transaction.NoTransactionException ignored) {}
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Webhook processing error");
         }
     }

@@ -514,7 +514,7 @@ export const StorefrontTrackOrderTab: React.FC<StorefrontTrackOrderTabProps> = (
                   </div>
                 )}
                 
-                {selectedOrder.discountAmount > 0 && (
+                {(selectedOrder.discountAmount ?? 0) > 0 && (
                   <div className="flex justify-between sm:justify-end sm:gap-8 mb-1 text-emerald-600">
                     <span>Discount {selectedOrder.couponCode ? `(${selectedOrder.couponCode})` : ''}:</span>
                     <span className="font-semibold">-₹{selectedOrder.discountAmount}</span>

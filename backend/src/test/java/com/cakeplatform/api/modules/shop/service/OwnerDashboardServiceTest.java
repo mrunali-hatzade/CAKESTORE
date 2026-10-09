@@ -9,6 +9,8 @@ import com.cakeplatform.api.modules.shop.Shop;
 import com.cakeplatform.api.modules.shop.ShopRepository;
 import com.cakeplatform.api.modules.shop.dto.OwnerDashboardStatsResponse;
 import com.cakeplatform.api.modules.subscription.SubscriptionRepository;
+import com.cakeplatform.api.modules.subscription.Subscription;
+import com.cakeplatform.api.modules.subscription.SubscriptionStatus;
 import com.cakeplatform.api.modules.security.ShopAccessValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -98,6 +100,13 @@ class OwnerDashboardServiceTest {
         when(orderRepository.sumPendingCodForShop(shop.getId())).thenReturn(java.util.Collections.singletonList(new Object[]{new BigDecimal("500"), 1L}));
         when(orderRepository.countDeliveriesForShopByDateRange(eq(shop.getId()), any(), any())).thenReturn(1L);
         when(orderRepository.countUnscheduledDeliveriesForShopByDateRange(eq(shop.getId()), any(), any())).thenReturn(2L);
+        // Mock subscription data
+        Subscription subscription = new Subscription();
+        subscription.setStatus(SubscriptionStatus.ACTIVE);
+        when(subscriptionRepository.findByShopId(shop.getId())).thenReturn(java.util.Collections.singletonList(subscription));
+
+        // Mock pending custom enquiries
+        when(customCakeRequestRepository.countByShopIdAndStatus(shop.getId(), "PENDING")).thenReturn(2L);
 
         OwnerDashboardStatsResponse stats = ownerDashboardService.getDashboardStats(1L);
 
@@ -114,7 +123,14 @@ class OwnerDashboardServiceTest {
         assertEquals(0, new BigDecimal("500").compareTo(stats.getPendingCodAmount()));
 
         // Assert Action Items (1 Pending COD + 1 Pending Conf Order + 2 Inactive Catalog)
-        assertEquals(6, stats.getTotalActionItems());
+        // Original action items count (pending COD + pending confirmation + inactive catalog)
+        // Updated expectations with pending custom enquiries and today deliveries
+        assertEquals(SubscriptionStatus.ACTIVE.name(), stats.getSubscriptionStatus());
+        assertEquals(2L, stats.getPendingCustomEnquiries());
+        assertEquals(1L, stats.getPendingConfirmationOrders());
+        assertEquals(1L, stats.getTodayDeliveries());
+        // Updated total action items count (1 pending COD + 1 pending confirmation + 2 unscheduled deliveries + 2 pending custom + 2 inactive catalog = 8)
+        assertEquals(8, stats.getTotalActionItems());
 
         // Assert Unscheduled Deliveries
         assertEquals(2, stats.getUnscheduledTodayDeliveries());
