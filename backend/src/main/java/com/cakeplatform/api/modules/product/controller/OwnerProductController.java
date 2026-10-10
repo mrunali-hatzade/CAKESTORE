@@ -34,7 +34,6 @@ public class OwnerProductController {
     }
 
     @PostMapping
-    @org.springframework.cache.annotation.CacheEvict(value = "shopProducts", allEntries = true)
     public ResponseEntity<Product> createProduct(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody ProductRequest request) {
@@ -44,7 +43,6 @@ public class OwnerProductController {
     }
 
     @PutMapping("/{id}")
-    @org.springframework.cache.annotation.CacheEvict(value = "shopProducts", allEntries = true)
     public ResponseEntity<Product> updateProduct(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -55,7 +53,6 @@ public class OwnerProductController {
     }
 
     @DeleteMapping("/{id}")
-    @org.springframework.cache.annotation.CacheEvict(value = "shopProducts", allEntries = true)
     public ResponseEntity<?> deleteProduct(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails userDetails) {

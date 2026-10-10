@@ -56,7 +56,7 @@ public class CustomerAccountHydrationTest {
         when(otpRepository.findTopByPhoneNumberOrderByCreatedAtDesc("9876543210"))
                 .thenReturn(Optional.of(verification));
         when(passwordEncoder.matches("123456", "hashed_otp")).thenReturn(true);
-        when(userRepository.findByMobile("9876543210")).thenReturn(Optional.empty());
+        when(userRepository.findByMobileIncludingDeleted("9876543210")).thenReturn(Optional.empty());
         
         User savedUser = new User();
         savedUser.setMobile("9876543210");
@@ -87,7 +87,7 @@ public class CustomerAccountHydrationTest {
         existingUser.setMobile("9876543210");
         existingUser.setRole(UserRole.CUSTOMER);
         
-        when(userRepository.findByMobile("9876543210")).thenReturn(Optional.of(existingUser));
+        when(userRepository.findByMobileIncludingDeleted("9876543210")).thenReturn(Optional.of(existingUser));
         when(jwtService.generateToken(any(), any())).thenReturn("existing_jwt_token");
 
         String token = otpService.verifyOtp("9876543210", "123456");

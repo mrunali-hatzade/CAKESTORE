@@ -20,6 +20,8 @@ public class NotificationService {
     private final SimpMessagingTemplate messagingTemplate;
     private final EmailService emailService;
 
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     @Transactional
     public void createNotification(User recipient, NotificationType type, String title, String message, String referenceId, boolean sendEmail) {
         
@@ -34,7 +36,13 @@ public class NotificationService {
                 
         notification = notificationRepository.save(notification);
         
-        String destination = "/queue/notifications-" + recipient.getId();
+        eventPublisher.publishEvent(new NotificationCreatedEvent(notification, sendEmail));
+    }
+
+    @org.springframework.transaction.event.TransactionalEventListener(phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void handleNotificationCreatedEvent(NotificationCreatedEvent event) {
+        Notification notification = event.getNotification();
+        String destination = "/queue/notifications-" + notification.getRecipient().getId();
         try {
             messagingTemplate.convertAndSend(destination, notification);
             log.info("Pushed notification to WebSocket {}", destination);
@@ -42,9 +50,15 @@ public class NotificationService {
             log.error("Failed to push websocket notification: {}", e.getMessage());
         }
 
-        if (sendEmail) {
-            emailService.sendEmail(recipient.getEmail(), title, message);
+        if (event.isSendEmail()) {
+            emailService.sendEmail(notification.getRecipient().getEmail(), notification.getTitle(), notification.getMessage());
         }
+    }
+
+    @lombok.Value
+    public static class NotificationCreatedEvent {
+        Notification notification;
+        boolean sendEmail;
     }
 
     @Transactional(readOnly = true)

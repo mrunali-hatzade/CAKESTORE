@@ -166,6 +166,26 @@ public class CustomerStorefrontController {
             @PathVariable String orderNumber
     ) {
         Order order = storefrontService.getGuestOrder(orderNumber);
+        
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+        
+        Object principal = auth.getPrincipal();
+        if (!(principal instanceof com.cakeplatform.api.security.CustomUserDetails)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+        com.cakeplatform.api.security.CustomUserDetails userDetails = (com.cakeplatform.api.security.CustomUserDetails) principal;
+        String userPhone = userDetails.getUser().getMobile();
+        
+        String normalizedUserPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(userPhone);
+        String normalizedOrderPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(order.getCustomerPhone());
+
+        if (normalizedUserPhone == null || !normalizedUserPhone.equals(normalizedOrderPhone)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+
         return ResponseEntity.ok(order);
     }
 
@@ -174,6 +194,25 @@ public class CustomerStorefrontController {
             @PathVariable String orderNumber
     ) throws Exception {
         Order order = storefrontService.getGuestOrder(orderNumber);
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Object principal = auth.getPrincipal();
+        if (!(principal instanceof com.cakeplatform.api.security.CustomUserDetails)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+        com.cakeplatform.api.security.CustomUserDetails userDetails = (com.cakeplatform.api.security.CustomUserDetails) principal;
+        String userPhone = userDetails.getUser().getMobile();
+        
+        String normalizedUserPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(userPhone);
+        String normalizedOrderPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(order.getCustomerPhone());
+
+        if (normalizedUserPhone == null || !normalizedUserPhone.equals(normalizedOrderPhone)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
 
         if (invoiceService == null) {
             throw new IllegalStateException("Invoice service is currently unavailable");

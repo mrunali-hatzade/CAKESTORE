@@ -94,6 +94,9 @@ public class WebhookControllerIntegrationTest {
         Mockito.when(razorpayService.verifyWebhookSignature(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(true);
 
+        webhookEventRepository.deleteAll();
+        paymentRepository.deleteAll();
+        orderRepository.deleteAll();
         userRepository.deleteAll();
         shopRepository.deleteAll();
 
@@ -249,8 +252,9 @@ public class WebhookControllerIntegrationTest {
                 .content(payload))
                 .andExpect(status().isInternalServerError());
 
-        // Verify that neither order nor payment nor webhook event persisted.
-        org.assertj.core.api.Assertions.assertThat(orderRepository.findByOrderNumber(orderNumber)).isEmpty();
+        // Verify that the order update, payment, and webhook event rolled back.
+        Order savedOrder = orderRepository.findByOrderNumber(orderNumber).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(savedOrder.getPaymentStatus()).isEqualTo("PENDING");
         org.assertj.core.api.Assertions.assertThat(paymentRepository.count()).isZero();
         org.assertj.core.api.Assertions.assertThat(webhookEventRepository.existsByEventId(eventId)).isFalse();
     }

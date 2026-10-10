@@ -33,6 +33,9 @@ public class NotificationServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private NotificationService notificationService;
 
@@ -66,6 +69,12 @@ public class NotificationServiceTest {
     @DisplayName("createNotification - creates unread notification and dispatches websocket & email")
     void testCreateNotification() {
         when(notificationRepository.save(any(Notification.class))).thenReturn(notif1);
+        
+        doAnswer(invocation -> {
+            NotificationService.NotificationCreatedEvent event = invocation.getArgument(0);
+            notificationService.handleNotificationCreatedEvent(event);
+            return null;
+        }).when(eventPublisher).publishEvent(any(NotificationService.NotificationCreatedEvent.class));
 
         notificationService.createNotification(
                 ownerA,

@@ -65,9 +65,13 @@ public class CustomerPrivacySecurityTest {
     }
 
     private void setupSecurityContext(String phone, String role) {
+        com.cakeplatform.api.modules.user.User mockUser = new com.cakeplatform.api.modules.user.User();
+        mockUser.setMobile(phone);
+        mockUser.setRole(com.cakeplatform.api.modules.user.UserRole.valueOf(role.replace("ROLE_", "")));
+        com.cakeplatform.api.security.CustomUserDetails mockPrincipal = new com.cakeplatform.api.security.CustomUserDetails(mockUser);
         org.springframework.security.authentication.UsernamePasswordAuthenticationToken auth = 
             new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                phone, null, java.util.Collections.singletonList(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))
+                mockPrincipal, null, java.util.Collections.singletonList(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))
         );
         org.springframework.security.core.context.SecurityContext context = org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);
