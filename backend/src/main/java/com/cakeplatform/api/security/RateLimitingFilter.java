@@ -34,10 +34,6 @@ public class RateLimitingFilter implements Filter {
     }
 
     private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
         return request.getRemoteAddr();
     }
 
@@ -92,7 +88,13 @@ public class RateLimitingFilter implements Filter {
                 || uri.endsWith("/enquiry")
                 || uri.startsWith("/api/contact/enquiries")
                 || uri.startsWith("/api/owner/feedback")
-                || uri.startsWith("/api/owner/media/upload");
+                || uri.startsWith("/api/owner/media/upload")
+                || isGuestOrderTrackingEndpoint(uri);
+    }
+
+    private boolean isGuestOrderTrackingEndpoint(String uri) {
+        return (uri.startsWith("/api/storefront/shops/orders/") || uri.startsWith("/api/customer/storefront/orders/"))
+                && uri.contains("ORD-");
     }
 
     private void sendRateLimitResponse(HttpServletResponse response) throws IOException {

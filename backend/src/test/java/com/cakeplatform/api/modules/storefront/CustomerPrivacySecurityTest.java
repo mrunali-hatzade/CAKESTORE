@@ -41,26 +41,23 @@ public class CustomerPrivacySecurityTest {
 
     @Test
     void testUnauthenticatedOrderLookup_Returns401() {
-        when(storefrontService.getGuestOrder("ORD-12345")).thenReturn(mockOrder);
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
-        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345");
+        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345", null);
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 
     @Test
     void testUnauthenticatedInvoiceLookup_Returns401() throws Exception {
-        when(storefrontService.getGuestOrder("ORD-12345")).thenReturn(mockOrder);
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
-        ResponseEntity<byte[]> response = controller.downloadInvoice("ORD-12345");
+        ResponseEntity<byte[]> response = controller.downloadInvoice("ORD-12345", null);
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 
     @Test
     void testInvalidJwtOrderLookup_Returns401() {
-        when(storefrontService.getGuestOrder("ORD-12345")).thenReturn(mockOrder);
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
         // Simulating invalid JWT by having an empty security context
-        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345");
+        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345", null);
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 
@@ -83,7 +80,7 @@ public class CustomerPrivacySecurityTest {
         when(storefrontService.getGuestOrder("ORD-12345")).thenReturn(mockOrder);
         setupSecurityContext("1111111111", "ROLE_CUSTOMER");
 
-        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345");
+        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345", null);
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode()); // Order belongs to "9876543210"
     }
     
@@ -92,7 +89,7 @@ public class CustomerPrivacySecurityTest {
         when(storefrontService.getGuestOrder("ORD-12345")).thenReturn(mockOrder);
         setupSecurityContext("1111111111", "ROLE_CUSTOMER");
 
-        ResponseEntity<byte[]> response = controller.downloadInvoice("ORD-12345");
+        ResponseEntity<byte[]> response = controller.downloadInvoice("ORD-12345", null);
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
     }
 
@@ -101,7 +98,7 @@ public class CustomerPrivacySecurityTest {
         when(storefrontService.getGuestOrder("ORD-12345")).thenReturn(mockOrder);
         setupSecurityContext("9876543210", "ROLE_CUSTOMER");
 
-        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345");
+        ResponseEntity<Order> response = controller.getGuestOrderDetails("ORD-12345", null);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(mockOrder, response.getBody());
     }
@@ -112,7 +109,7 @@ public class CustomerPrivacySecurityTest {
         setupSecurityContext("9876543210", "ROLE_CUSTOMER");
         when(invoiceService.generateInvoice(mockOrder)).thenReturn(new byte[]{1, 2, 3});
 
-        ResponseEntity<byte[]> response = controller.downloadInvoice("ORD-12345");
+        ResponseEntity<byte[]> response = controller.downloadInvoice("ORD-12345", null);
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
 }

@@ -57,6 +57,9 @@ public class StorefrontCapacityTest {
     @Autowired
     private com.cakeplatform.api.modules.user.UserRepository userRepository;
 
+    @Autowired
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+
     @BeforeEach
     public void setup() {
         com.cakeplatform.api.modules.user.User user = new com.cakeplatform.api.modules.user.User();
@@ -72,6 +75,13 @@ public class StorefrontCapacityTest {
         shop.setBusinessName("Test Bakery");
         shop.setStatus(com.cakeplatform.api.modules.shop.ShopStatus.ACTIVE);
         shop = shopRepository.save(shop);
+        
+        com.cakeplatform.api.modules.subscription.Subscription sub = new com.cakeplatform.api.modules.subscription.Subscription();
+        sub.setShop(shop);
+        sub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        sub.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        sub.setAmount(java.math.BigDecimal.ZERO);
+        subscriptionRepository.save(sub);
 
         slot = new ShopDeliverySlot();
         slot.setShop(shop);

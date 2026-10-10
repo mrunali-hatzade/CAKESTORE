@@ -62,6 +62,9 @@ public class StageDCouponAndDiscountTest {
     @Mock
     private ShopDeliverySlotRepository deliverySlotRepository;
 
+    @Mock
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+
     private OwnerCouponController ownerCouponController;
     private CustomerStorefrontService storefrontService;
     private AnalyticsService analyticsService;
@@ -84,6 +87,12 @@ public class StageDCouponAndDiscountTest {
         shopA.setBusinessName("Sweet Delights");
         shopA.setStatus(ShopStatus.ACTIVE);
         shopA.setOwner(ownerA);
+        
+        com.cakeplatform.api.modules.subscription.Subscription subA = new com.cakeplatform.api.modules.subscription.Subscription();
+        subA.setId(1L);
+        subA.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        subA.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(101L)).thenReturn(java.util.Optional.of(subA));
 
         ShopDeliverySlot slot1 = new ShopDeliverySlot();
         slot1.setId(1L);
@@ -95,6 +104,12 @@ public class StageDCouponAndDiscountTest {
         shopB.setId(202L);
         shopB.setBusinessName("City Bakeries");
         shopB.setStatus(ShopStatus.ACTIVE);
+        
+        com.cakeplatform.api.modules.subscription.Subscription subB = new com.cakeplatform.api.modules.subscription.Subscription();
+        subB.setId(2L);
+        subB.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        subB.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(202L)).thenReturn(java.util.Optional.of(subB));
 
         userDetailsA = new CustomUserDetails(ownerA);
 
@@ -109,7 +124,10 @@ public class StageDCouponAndDiscountTest {
                 adminNotificationService,
                 customCakeRequestRepository,
                 categoryRepository,
-                deliverySlotRepository
+                deliverySlotRepository,
+                null, null, null, null, null, null, null,
+                subscriptionRepository,
+                null
         );
 
         analyticsService = new AnalyticsService(orderRepository, couponRepository, shopAccessValidator);

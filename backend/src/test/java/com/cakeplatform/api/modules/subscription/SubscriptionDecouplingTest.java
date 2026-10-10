@@ -115,7 +115,16 @@ public class SubscriptionDecouplingTest {
                 adminNotificationService,
                 null,
                 categoryRepository,
-                deliverySlotRepository
+                deliverySlotRepository,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                subscriptionRepository,
+                null
         );
 
         // Setup Shop A: Sweet Delights (Subscription Expired)
@@ -126,7 +135,7 @@ public class SubscriptionDecouplingTest {
         shopA = new Shop();
         shopA.setId(1L);
         shopA.setBusinessName("Shop A - Sweet Delights");
-        shopA.setStatus(ShopStatus.EXPIRED); // Under V1 rule, shop status is EXPIRED upon subscription expiration
+        shopA.setStatus(ShopStatus.ACTIVE); // Decoupled: Shop status remains ACTIVE, relying on subscription check
         shopA.setVerificationStatus(VerificationStatus.VERIFIED);
         shopA.setOwner(ownerA);
 
@@ -260,17 +269,17 @@ public class SubscriptionDecouplingTest {
     // =========================================================================
 
     @Test
-    @DisplayName("D5: Expired bakery customer storefront remains LIVE and accessible")
-    void testExpiredBakery_CustomerStorefrontRemainsLive() {
+    @DisplayName("D5: Expired bakery customer storefront is BLOCKED by subscription check")
+    void testExpiredBakery_CustomerStorefrontIsBlocked() {
         when(shopRepository.findById(shopA.getId())).thenReturn(Optional.of(shopA));
 
         RuntimeException exception = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> customerStorefrontService.getShopDetails(shopA.getId()));
-        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("unavailable"));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("expired subscription"));
     }
 
     @Test
-    @DisplayName("D6: Expired bakery customers CAN place guest orders")
-    void testExpiredBakery_CustomerCanPlaceOrder() {
+    @DisplayName("D6: Expired bakery customers CANNOT place guest orders")
+    void testExpiredBakery_CustomerCannotPlaceOrder() {
         when(shopRepository.findById(shopA.getId())).thenReturn(Optional.of(shopA));
 
         GuestOrderRequest request = new GuestOrderRequest();
@@ -283,7 +292,7 @@ public class SubscriptionDecouplingTest {
         request.setItems(new ArrayList<>());
 
         RuntimeException exception = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> customerStorefrontService.placeGuestOrder(shopA.getId(), request));
-        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("unavailable"));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("expired subscription"));
 
     }
 
@@ -378,7 +387,7 @@ public class SubscriptionDecouplingTest {
         when(shopRepository.findById(shopB.getId())).thenReturn(Optional.of(shopB));
         when(shopRepository.findById(shopC.getId())).thenReturn(Optional.of(shopC));
 
-        // 1. Shop A owner is blocked; Shop A customer storefront is LIVE
+        // 1. Shop A owner is blocked; Shop A customer storefront is BLOCKED
         assertThrows(SubscriptionExpiredException.class, () -> shopAccessValidator.getValidShopForOwner(ownerA.getId()));
         assertThrows(RuntimeException.class, () -> customerStorefrontService.getShopDetails(shopA.getId()));
 

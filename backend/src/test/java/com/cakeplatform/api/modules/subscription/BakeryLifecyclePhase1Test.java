@@ -111,7 +111,16 @@ public class BakeryLifecyclePhase1Test {
                 adminNotificationService,
                 null,
                 categoryRepository,
-                deliverySlotRepository
+                deliverySlotRepository,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                subscriptionRepository,
+                null
         );
 
         owner1 = new User();

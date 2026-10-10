@@ -57,6 +57,10 @@ public class ShopService {
             shop.setInactiveReason(null);
         }
         shop = shopRepository.save(shop);
+        if (storefrontCacheService != null) {
+            storefrontCacheService.evictShopDetails(shop.getId());
+            storefrontCacheService.evictShopProducts(shop.getId());
+        }
         
         // Notify admin if going inactive
         if (status == com.cakeplatform.api.modules.shop.ShopStatus.INACTIVE) {

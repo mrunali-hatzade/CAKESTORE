@@ -27,6 +27,13 @@ public class SubscriptionService {
     private final com.cakeplatform.api.modules.notification.NotificationService notificationService;
     private final com.cakeplatform.api.modules.notification.AdminNotificationService adminNotificationService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService;
+
+    public void setStorefrontCacheService(com.cakeplatform.api.modules.storefront.StorefrontCacheService storefrontCacheService) {
+        this.storefrontCacheService = storefrontCacheService;
+    }
+
     private Shop getShopByOwnerId(Long ownerId) {
         List<Shop> shops = shopRepository.findByOwnerId(ownerId);
         if (shops.isEmpty()) {
@@ -89,6 +96,11 @@ public class SubscriptionService {
             shopStatusManager.activateShop(shop.getId(), userId);
         }
 
+        if (storefrontCacheService != null && shop.getId() != null) {
+            storefrontCacheService.evictShopDetails(shop.getId());
+            storefrontCacheService.evictShopProducts(shop.getId());
+        }
+
         // Notify owner of successful subscription renewal
         if (shop.getOwner() != null && notificationService != null) {
             notificationService.createNotification(
@@ -142,6 +154,11 @@ public class SubscriptionService {
                 shop.setStatus(com.cakeplatform.api.modules.shop.ShopStatus.EXPIRED);
                 shopRepository.save(shop);
             }
+        }
+
+        if (storefrontCacheService != null && shop != null && shop.getId() != null) {
+            storefrontCacheService.evictShopDetails(shop.getId());
+            storefrontCacheService.evictShopProducts(shop.getId());
         }
         
         activityLogger.logActivity(null, shop.getId(), "SUBSCRIPTION_EXPIRED", "SUBSCRIPTION", subscription.getId(), "Daily scheduled or manual expiration");

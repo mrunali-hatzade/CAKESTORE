@@ -103,12 +103,23 @@ public class OwnerInteractionController {
         return ResponseEntity.ok(ownerInteractionService.getMyCustomCakeRequests(userDetails.getId()));
     }
 
+    @PreAuthorize("hasAuthority('ROLE_SHOP_OWNER')")
     @PostMapping("/custom-cakes/{id}/respond")
     public ResponseEntity<CustomCakeRequest> respondToCustomCakeRequest(
             @PathVariable Long id,
-            @RequestParam String status,
-            @RequestBody(required = false) ReplyRequest request,
+            @RequestParam(required = false) String status,
+            @Valid @RequestBody(required = false) ReplyRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
+        // Validate status parameter against allowed enum values
+        if (status == null || status.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            CustomCakeStatus.valueOf(status);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().build();
+        }
+        // At this point, request body (if present) will be validated by @Valid annotation
         return ResponseEntity.ok(ownerInteractionService.updateCustomCakeRequestStatus(userDetails.getId(), id, status, request));
     }
 

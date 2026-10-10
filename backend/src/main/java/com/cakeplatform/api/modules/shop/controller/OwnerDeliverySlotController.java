@@ -49,7 +49,7 @@ public class OwnerDeliverySlotController {
         
         ShopDeliverySlot slot = new ShopDeliverySlot();
         slot.setShop(shop);
-        slot.setDayOfWeek(request.getDayOfWeek());
+        slot.setDayOfWeek(request.getDayOfWeek() != null ? request.getDayOfWeek().trim().toUpperCase() : null);
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
         slot.setMaxOrders(request.getMaxOrders() != null ? request.getMaxOrders() : 10);
@@ -92,7 +92,7 @@ public class OwnerDeliverySlotController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start time must be before end time");
         }
         
-        slot.setDayOfWeek(request.getDayOfWeek());
+                slot.setDayOfWeek(request.getDayOfWeek() != null ? request.getDayOfWeek().trim().toUpperCase() : null);
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
 

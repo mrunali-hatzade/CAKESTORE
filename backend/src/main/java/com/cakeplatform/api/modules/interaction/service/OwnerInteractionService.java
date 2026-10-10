@@ -210,6 +210,15 @@ public class OwnerInteractionService {
         CustomCakeRequest cakeReq = customCakeRequestRepository.findByIdAndShopId(requestId, shop.getId())
                 .orElseThrow(() -> new RuntimeException("Custom cake request not found"));
         
+        // Validate status
+        if (status == null || status.isBlank()) {
+            throw new IllegalArgumentException("Status must be provided");
+        }
+        try {
+            com.cakeplatform.api.modules.interaction.CustomCakeStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid status: " + status);
+        }
         cakeReq.setStatus(status);
         if (request != null && request.getReply() != null) {
             cakeReq.setOwnerResponse(request.getReply());

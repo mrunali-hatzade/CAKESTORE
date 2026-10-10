@@ -42,6 +42,9 @@ public class CustomerStorefrontSearchTest {
     @Mock
     private com.cakeplatform.api.modules.notification.NotificationService notificationService;
 
+    @Mock
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+
     @InjectMocks
     private CustomerStorefrontService storefrontService;
 
@@ -66,6 +69,16 @@ public class CustomerStorefrontSearchTest {
         activeShop1.setAddress("Near Railway Station, Akurdi");
         activeShop1.setPincode("411035");
         activeShop1.setStatus(ShopStatus.ACTIVE);
+
+        com.cakeplatform.api.modules.subscription.Subscription activeSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        activeSub.setId(100L);
+        activeSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        activeSub.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+
+        lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(1L))
+                .thenReturn(java.util.Optional.of(activeSub));
+        lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(2L))
+                .thenReturn(java.util.Optional.of(activeSub));
 
         activeShop2 = new Shop();
         activeShop2.setId(2L);
@@ -279,5 +292,81 @@ public class CustomerStorefrontSearchTest {
         var invalidResponse = controller.searchShops(null, null, null, null, "INVALID_TYPE_XYZ", null, null);
         assertNotNull(invalidResponse.getBody());
         assertTrue(invalidResponse.getBody().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Subscription: Search excludes shops without valid subscription (missing subscription)")
+    void testSearch_ExcludesShopWithoutSubscription() {
+        when(shopRepository.findAll(any(Specification.class))).thenReturn(List.of(activeShop1, activeShop2));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(1L)).thenReturn(java.util.Optional.empty());
+
+        List<StorefrontShopResponse> results = storefrontService.searchShops(null, null, null, null, null, null, null);
+
+        assertEquals(1, results.size());
+        assertEquals(2L, results.get(0).getId());
+    }
+
+    @Test
+    @DisplayName("Subscription: Expired subscription excluded even if status is ACTIVE")
+    void testSearch_ExcludesExpiredSubscriptionWithActiveStatus() {
+        when(shopRepository.findAll(any(Specification.class))).thenReturn(List.of(activeShop1));
+
+        com.cakeplatform.api.modules.subscription.Subscription expiredSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        expiredSub.setId(101L);
+        expiredSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        expiredSub.setExpiryDate(java.time.LocalDateTime.now().minusMinutes(5));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(1L)).thenReturn(java.util.Optional.of(expiredSub));
+
+        List<StorefrontShopResponse> results = storefrontService.searchShops(null, null, null, null, null, null, null);
+
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Subscription: Expiry equal to current time is treated as expired")
+    void testSearch_ExcludesSubscriptionWhenExpiryEqualsCurrentTime() {
+        when(shopRepository.findAll(any(Specification.class))).thenReturn(List.of(activeShop1));
+
+        java.time.Instant fixedInstant = java.time.Instant.parse("2026-10-10T12:00:00Z");
+        java.time.ZoneId zone = java.time.ZoneId.of("UTC");
+        java.time.Clock fixedClock = java.time.Clock.fixed(fixedInstant, zone);
+        storefrontService.setClock(fixedClock);
+
+        com.cakeplatform.api.modules.subscription.Subscription exactExpirySub = new com.cakeplatform.api.modules.subscription.Subscription();
+        exactExpirySub.setId(102L);
+        exactExpirySub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        exactExpirySub.setExpiryDate(java.time.LocalDateTime.ofInstant(fixedInstant, zone));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(1L)).thenReturn(java.util.Optional.of(exactExpirySub));
+
+        List<StorefrontShopResponse> results = storefrontService.searchShops(null, null, null, null, null, null, null);
+
+        assertTrue(results.isEmpty(), "Expiry equal to current time must be treated as expired");
+    }
+
+    @Test
+    @DisplayName("Subscription: Test with fixed Clock boundary transitions")
+    void testSearch_FixedClockTransition() {
+        when(shopRepository.findAll(any(Specification.class))).thenReturn(List.of(activeShop1));
+
+        java.time.Instant baseInstant = java.time.Instant.parse("2026-10-10T12:00:00Z");
+        java.time.ZoneId zone = java.time.ZoneId.of("UTC");
+        java.time.Clock fixedClock = java.time.Clock.fixed(baseInstant, zone);
+        storefrontService.setClock(fixedClock);
+
+        com.cakeplatform.api.modules.subscription.Subscription sub = new com.cakeplatform.api.modules.subscription.Subscription();
+        sub.setId(103L);
+        sub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        // Expiry is 1 second after base instant
+        sub.setExpiryDate(java.time.LocalDateTime.ofInstant(baseInstant.plusSeconds(1), zone));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(1L)).thenReturn(java.util.Optional.of(sub));
+
+        // 1 second before expiry: active
+        List<StorefrontShopResponse> beforeExpiry = storefrontService.searchShops(null, null, null, null, null, null, null);
+        assertEquals(1, beforeExpiry.size());
+
+        // Fast-forward clock by 1 second to exact expiry time: expired
+        storefrontService.setClock(java.time.Clock.fixed(baseInstant.plusSeconds(1), zone));
+        List<StorefrontShopResponse> atExpiry = storefrontService.searchShops(null, null, null, null, null, null, null);
+        assertTrue(atExpiry.isEmpty(), "At expiry time, shop must be excluded");
     }
 }

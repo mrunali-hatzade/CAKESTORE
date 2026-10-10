@@ -59,6 +59,9 @@ public class DeliverySlotCapacityTest {
     @Mock
     private ShopAccessValidator shopAccessValidator;
 
+    @Mock
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+
     private CustomerStorefrontService storefrontService;
     private OwnerDeliverySlotController ownerDeliverySlotController;
 
@@ -79,7 +82,10 @@ public class DeliverySlotCapacityTest {
                 null,
                 null,
                 categoryRepository,
-                deliverySlotRepository
+                deliverySlotRepository,
+                null, null, null, null, null, null, null,
+                subscriptionRepository,
+                null
         );
 
         ownerDeliverySlotController = new OwnerDeliverySlotController(
@@ -98,6 +104,12 @@ public class DeliverySlotCapacityTest {
         testShop.setBusinessName("Sweet Delights");
         testShop.setStatus(ShopStatus.ACTIVE);
         testShop.setOwner(testOwner);
+        
+        com.cakeplatform.api.modules.subscription.Subscription sub = new com.cakeplatform.api.modules.subscription.Subscription();
+        sub.setId(1L);
+        sub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        sub.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(10L)).thenReturn(java.util.Optional.of(sub));
 
         // Find a future Saturday to test dayOfWeek logic
         LocalDate d = LocalDate.now().plusDays(1);

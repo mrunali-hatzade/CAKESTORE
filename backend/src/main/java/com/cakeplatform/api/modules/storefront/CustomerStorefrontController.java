@@ -163,27 +163,46 @@ public class CustomerStorefrontController {
 
     @GetMapping("/orders/{orderNumber}")
     public ResponseEntity<Order> getGuestOrderDetails(
-            @PathVariable String orderNumber
+            @PathVariable String orderNumber,
+            @RequestParam(required = false) String trackPhone
     ) {
-        Order order = storefrontService.getGuestOrder(orderNumber);
-        
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+        boolean isAuthenticated = auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal());
+        
+        if (!isAuthenticated && (trackPhone == null || trackPhone.isBlank())) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
         }
-        
-        Object principal = auth.getPrincipal();
-        if (!(principal instanceof com.cakeplatform.api.security.CustomUserDetails)) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+
+        Order order;
+        try {
+            order = storefrontService.getGuestOrder(orderNumber);
+        } catch (RuntimeException e) {
+            if ("Order not found or invalid order number".equals(e.getMessage())) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).build();
+            }
+            throw e;
         }
-        com.cakeplatform.api.security.CustomUserDetails userDetails = (com.cakeplatform.api.security.CustomUserDetails) principal;
-        String userPhone = userDetails.getUser().getMobile();
         
-        String normalizedUserPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(userPhone);
         String normalizedOrderPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(order.getCustomerPhone());
 
-        if (normalizedUserPhone == null || !normalizedUserPhone.equals(normalizedOrderPhone)) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        if (isAuthenticated) {
+            Object principal = auth.getPrincipal();
+            if (!(principal instanceof com.cakeplatform.api.security.CustomUserDetails)) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+            }
+            com.cakeplatform.api.security.CustomUserDetails userDetails = (com.cakeplatform.api.security.CustomUserDetails) principal;
+            String userPhone = userDetails.getUser().getMobile();
+            
+            String normalizedUserPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(userPhone);
+
+            if (normalizedUserPhone == null || !normalizedUserPhone.equals(normalizedOrderPhone)) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+            }
+        } else {
+            String normalizedTrackPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(trackPhone);
+            if (normalizedTrackPhone == null || !normalizedTrackPhone.equals(normalizedOrderPhone)) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).build();
+            }
         }
 
         return ResponseEntity.ok(order);
@@ -191,27 +210,46 @@ public class CustomerStorefrontController {
 
     @GetMapping("/orders/{orderNumber}/invoice")
     public ResponseEntity<byte[]> downloadInvoice(
-            @PathVariable String orderNumber
+            @PathVariable String orderNumber,
+            @RequestParam(required = false) String trackPhone
     ) throws Exception {
-        Order order = storefrontService.getGuestOrder(orderNumber);
-
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+        boolean isAuthenticated = auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal());
+        
+        if (!isAuthenticated && (trackPhone == null || trackPhone.isBlank())) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
         }
 
-        Object principal = auth.getPrincipal();
-        if (!(principal instanceof com.cakeplatform.api.security.CustomUserDetails)) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        Order order;
+        try {
+            order = storefrontService.getGuestOrder(orderNumber);
+        } catch (RuntimeException e) {
+            if ("Order not found or invalid order number".equals(e.getMessage())) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).build();
+            }
+            throw e;
         }
-        com.cakeplatform.api.security.CustomUserDetails userDetails = (com.cakeplatform.api.security.CustomUserDetails) principal;
-        String userPhone = userDetails.getUser().getMobile();
-        
-        String normalizedUserPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(userPhone);
+
         String normalizedOrderPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(order.getCustomerPhone());
 
-        if (normalizedUserPhone == null || !normalizedUserPhone.equals(normalizedOrderPhone)) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        if (isAuthenticated) {
+            Object principal = auth.getPrincipal();
+            if (!(principal instanceof com.cakeplatform.api.security.CustomUserDetails)) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+            }
+            com.cakeplatform.api.security.CustomUserDetails userDetails = (com.cakeplatform.api.security.CustomUserDetails) principal;
+            String userPhone = userDetails.getUser().getMobile();
+            
+            String normalizedUserPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(userPhone);
+
+            if (normalizedUserPhone == null || !normalizedUserPhone.equals(normalizedOrderPhone)) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+            }
+        } else {
+            String normalizedTrackPhone = com.cakeplatform.api.modules.auth.service.AuthService.normalizeIndianMobile(trackPhone);
+            if (normalizedTrackPhone == null || !normalizedTrackPhone.equals(normalizedOrderPhone)) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).build();
+            }
         }
 
         if (invoiceService == null) {

@@ -86,6 +86,21 @@ public class Day3Phase2E2ETest {
         
         when(shopRepository.findById(1L)).thenReturn(Optional.of(shopA));
         when(shopRepository.findById(2L)).thenReturn(Optional.of(shopB));
+        
+        Subscription activeSubA = new Subscription();
+        activeSubA.setId(1L);
+        activeSubA.setShop(shopA);
+        activeSubA.setStatus(SubscriptionStatus.ACTIVE);
+        activeSubA.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(activeSubA));
+        
+        Subscription activeSubB = new Subscription();
+        activeSubB.setId(2L);
+        activeSubB.setShop(shopB);
+        activeSubB.setStatus(SubscriptionStatus.ACTIVE);
+        activeSubB.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(2L)).thenReturn(Optional.of(activeSubB));
+
         when(productRepository.findByShopId(1L)).thenReturn(List.of(productA));
         when(productRepository.findByIdAndShopId(10L, 1L)).thenReturn(Optional.of(productA));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));

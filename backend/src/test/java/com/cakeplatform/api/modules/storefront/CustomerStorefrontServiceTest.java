@@ -50,6 +50,9 @@ public class CustomerStorefrontServiceTest {
     @Mock
     private com.cakeplatform.api.modules.shop.ShopDeliverySlotRepository deliverySlotRepository;
 
+    @Mock
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+
     @InjectMocks
     private CustomerStorefrontService storefrontService;
 
@@ -67,6 +70,13 @@ public class CustomerStorefrontServiceTest {
         mockSlot.setId(10L);
         mockSlot.setIsActive(true);
         mockShop.getDeliverySlots().add(mockSlot);
+        
+        com.cakeplatform.api.modules.subscription.Subscription activeSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        activeSub.setId(1L);
+        activeSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        activeSub.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(1L))
+                 .thenReturn(Optional.of(activeSub));
 
         mockProduct = new Product();
         mockProduct.setId(100L);

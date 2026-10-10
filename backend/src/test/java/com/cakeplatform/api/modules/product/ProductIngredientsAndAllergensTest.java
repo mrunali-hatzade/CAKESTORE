@@ -46,6 +46,9 @@ public class ProductIngredientsAndAllergensTest {
     @Mock
     private ShopRepository shopRepository;
 
+    @Mock
+    private com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+
     @InjectMocks
     private ProductService productService;
 
@@ -76,6 +79,15 @@ public class ProductIngredientsAndAllergensTest {
         existingProduct.setPrice(BigDecimal.valueOf(850));
         existingProduct.setAvailability(true);
         existingProduct.setStatus("ACTIVE");
+
+        com.cakeplatform.api.modules.subscription.Subscription activeSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        activeSub.setId(1L);
+        activeSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        activeSub.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        org.mockito.Mockito.lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(101L))
+                 .thenReturn(java.util.Optional.of(activeSub));
+        org.mockito.Mockito.lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(202L))
+                 .thenReturn(java.util.Optional.of(activeSub));
 
         // By default, productRepository.save returns whatever was passed
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));

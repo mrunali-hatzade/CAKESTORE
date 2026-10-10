@@ -106,6 +106,15 @@ public class CustomerStorefrontDetailsTest {
         suspendedShop.setBusinessName("Suspended Cakes Wakad");
         suspendedShop.setStatus(ShopStatus.SUSPENDED);
 
+        com.cakeplatform.api.modules.subscription.Subscription activeSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        activeSub.setId(1L);
+        activeSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        activeSub.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        org.mockito.Mockito.lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(6L))
+                 .thenReturn(java.util.Optional.of(activeSub));
+        org.mockito.Mockito.lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(7L))
+                 .thenReturn(java.util.Optional.of(activeSub));
+
         product1 = new Product();
         product1.setId(101L);
         product1.setShop(activeShop1);
@@ -482,5 +491,97 @@ public class CustomerStorefrontDetailsTest {
         ResponseEntity<CustomCakeRequest> enquiryResp = enquiryController.submitEnquiry(req);
         assertNotNull(enquiryResp.getBody());
         assertEquals("Rahul Verma", enquiryResp.getBody().getCustomerName());
+    }
+
+    // ==========================================
+    // Subscription Enforcement & Expiry Tests
+    // ==========================================
+
+    @Test
+    @DisplayName("Subscription: Expired subscription blocks getShopDetails even if shop status is ACTIVE")
+    void testGetShopDetails_ExpiredSubscription_ThrowsException() {
+        when(shopRepository.findById(6L)).thenReturn(Optional.of(activeShop1));
+
+        com.cakeplatform.api.modules.subscription.Subscription expiredSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        expiredSub.setId(99L);
+        expiredSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        expiredSub.setExpiryDate(java.time.LocalDateTime.now().minusMinutes(10));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(6L)).thenReturn(Optional.of(expiredSub));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> storefrontService.getShopDetails(6L));
+        assertTrue(ex.getMessage().contains("expired subscription"), "Expected expired subscription message but got: " + ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("Subscription: Cancelled or Suspended subscription blocks getShopDetails")
+    void testGetShopDetails_CancelledOrSuspended_ThrowsException() {
+        when(shopRepository.findById(6L)).thenReturn(Optional.of(activeShop1));
+
+        com.cakeplatform.api.modules.subscription.Subscription cancelledSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        cancelledSub.setId(100L);
+        cancelledSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.CANCELLED);
+        cancelledSub.setExpiryDate(java.time.LocalDateTime.now().plusDays(10));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(6L)).thenReturn(Optional.of(cancelledSub));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> storefrontService.getShopDetails(6L));
+        assertTrue(ex.getMessage().contains("expired subscription"));
+    }
+
+    @Test
+    @DisplayName("Subscription: Expiry equal to current time is treated as expired")
+    void testGetShopDetails_ExpiryEqualsCurrentTime_TreatedAsExpired() {
+        when(shopRepository.findById(6L)).thenReturn(Optional.of(activeShop1));
+
+        java.time.Instant fixedInstant = java.time.Instant.parse("2026-10-10T15:30:00Z");
+        java.time.ZoneId zone = java.time.ZoneId.of("UTC");
+        java.time.Clock fixedClock = java.time.Clock.fixed(fixedInstant, zone);
+        storefrontService.setClock(fixedClock);
+
+        com.cakeplatform.api.modules.subscription.Subscription exactSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        exactSub.setId(101L);
+        exactSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        exactSub.setExpiryDate(java.time.LocalDateTime.ofInstant(fixedInstant, zone));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(6L)).thenReturn(Optional.of(exactSub));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> storefrontService.getShopDetails(6L));
+        assertTrue(ex.getMessage().contains("expired subscription"), "Expiry equal to now must be treated as expired");
+    }
+
+    @Test
+    @DisplayName("Subscription: Expired subscription blocks getShopProducts")
+    void testGetShopProducts_ExpiredSubscription_ThrowsException() {
+        when(shopRepository.findById(6L)).thenReturn(Optional.of(activeShop1));
+
+        com.cakeplatform.api.modules.subscription.Subscription expiredSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        expiredSub.setId(102L);
+        expiredSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        expiredSub.setExpiryDate(java.time.LocalDateTime.now().minusDays(1));
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(6L)).thenReturn(Optional.of(expiredSub));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> storefrontService.getShopProducts(6L));
+        assertTrue(ex.getMessage().contains("expired subscription"));
+    }
+
+    @Test
+    @DisplayName("Subscription: isShopSubscriptionValid helper correctly handles all lifecycle states")
+    void testIsShopSubscriptionValid_LifecycleStates() {
+        // Missing subscription
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(6L)).thenReturn(Optional.empty());
+        assertFalse(storefrontService.isShopSubscriptionValid(6L));
+
+        // Expired status
+        com.cakeplatform.api.modules.subscription.Subscription sub = new com.cakeplatform.api.modules.subscription.Subscription();
+        sub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.EXPIRED);
+        when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(6L)).thenReturn(Optional.of(sub));
+        assertFalse(storefrontService.isShopSubscriptionValid(6L));
+
+        // Suspended status
+        sub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.SUSPENDED);
+        assertFalse(storefrontService.isShopSubscriptionValid(6L));
+
+        // Active status with future expiry
+        sub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        sub.setExpiryDate(java.time.LocalDateTime.now().plusDays(5));
+        assertTrue(storefrontService.isShopSubscriptionValid(6L));
     }
 }

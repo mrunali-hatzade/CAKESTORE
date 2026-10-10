@@ -188,9 +188,9 @@ public class StageEProductionHardeningTest {
     }
 
     @Test
-    @DisplayName("X-Forwarded-For header is used to discriminate client IPs behind reverse proxy")
-    void testRateLimiting_UsesXForwardedForHeader() throws ServletException, IOException {
-        // Client A consumes 10 auth tokens
+    @DisplayName("X-Forwarded-For header is ignored by default to prevent rate limit spoofing")
+    void testRateLimiting_IgnoresUntrustedXForwardedForHeader() throws ServletException, IOException {
+        // Client A consumes 10 auth tokens with a spoofed XFF
         for (int i = 0; i < 10; i++) {
             MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/auth/login");
             req.setRemoteAddr("10.0.0.1"); // Load balancer IP
@@ -199,21 +199,15 @@ public class StageEProductionHardeningTest {
             rateLimitingFilter.doFilter(req, res, filterChain);
         }
 
-        // Client A's 11th request is blocked
+        // Client A tries an 11th request with a DIFFERENT spoofed XFF, but SAME remoteAddr
         MockHttpServletRequest clientAReq = new MockHttpServletRequest("POST", "/api/auth/login");
         clientAReq.setRemoteAddr("10.0.0.1");
-        clientAReq.addHeader("X-Forwarded-For", "203.0.113.10, 10.0.0.1");
+        clientAReq.addHeader("X-Forwarded-For", "203.0.113.20, 10.0.0.1"); // Attempt to spoof a new IP
         MockHttpServletResponse clientARes = new MockHttpServletResponse();
         rateLimitingFilter.doFilter(clientAReq, clientARes, filterChain);
+        
+        // Should still be blocked because remoteAddr (10.0.0.1) is the same, preventing bypass
         assertEquals(429, clientARes.getStatus());
-
-        // Client B from different IP behind SAME proxy is NOT blocked
-        MockHttpServletRequest clientBReq = new MockHttpServletRequest("POST", "/api/auth/login");
-        clientBReq.setRemoteAddr("10.0.0.1");
-        clientBReq.addHeader("X-Forwarded-For", "203.0.113.20, 10.0.0.1");
-        MockHttpServletResponse clientBRes = new MockHttpServletResponse();
-        rateLimitingFilter.doFilter(clientBReq, clientBRes, filterChain);
-        assertEquals(200, clientBRes.getStatus());
     }
 
     // =========================================================================

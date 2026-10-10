@@ -48,7 +48,7 @@ app:
   sms:
     log-payloads: true
   demo-data:
-    enabled: ${APP_DEMO_DATA_ENABLED:false}
+    enabled: ${APP_DEMO_DATA_ENABLED:true}
   business:
     default-timezone: ${APP_TIMEZONE:Asia/Kolkata}
   storage:

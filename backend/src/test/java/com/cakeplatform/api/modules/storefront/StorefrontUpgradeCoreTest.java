@@ -123,6 +123,14 @@ class StorefrontUpgradeCoreTest {
         product.setHighlights(new ArrayList<>());
         product.setVariants(new ArrayList<>());
         product.setAddons(new ArrayList<>());
+        
+        com.cakeplatform.api.modules.subscription.Subscription activeSub = new com.cakeplatform.api.modules.subscription.Subscription();
+        activeSub.setId(999L);
+        activeSub.setShop(shop);
+        activeSub.setStatus(com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE);
+        activeSub.setExpiryDate(java.time.LocalDateTime.now().plusDays(30));
+        lenient().when(subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(101L))
+                 .thenReturn(Optional.of(activeSub));
     }
 
     @Test

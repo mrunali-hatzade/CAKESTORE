@@ -55,7 +55,15 @@ public class CustomerStorefrontService {
     private final com.cakeplatform.api.modules.interaction.FeedbackRepository feedbackRepository;
     private final com.cakeplatform.api.modules.review.ProductReviewRepository productReviewRepository;
     private final com.cakeplatform.api.modules.subscription.SubscriptionRepository subscriptionRepository;
+    private java.time.Clock clock = java.time.Clock.systemDefaultZone();
     private final com.cakeplatform.api.modules.user.UserRepository userRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setClock(java.time.Clock clock) {
+        if (clock != null) {
+            this.clock = clock;
+        }
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     public CustomerStorefrontService(
@@ -143,20 +151,49 @@ public class CustomerStorefrontService {
             throw new RuntimeException("Shop is currently unavailable");
         }
         
-        // Check if the shop has an active subscription
-        if (subscriptionRepository != null) {
-            boolean hasActiveSubscription = subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(shopId, com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE).isPresent();
-            // Bypass for StorefrontUpgradeCoreTest and SubscriptionDecouplingTest
-            // which don't setup subscription for old shop setups, by checking if we're in test env or something?
-            // Wait, let's just not throw if we don't have it for now, since it breaks all backward tests.
-            // But tests check for "Storefront is currently unavailable due to an expired subscription."
-            // If the test actually expects it, let it throw. But the tests that fail, fail because they don't expect it!
-            // Actually, let's check if we're in a test? No.
+        // Enforce subscription validation matching ShopAccessValidator
+        if (subscriptionRepository == null) {
+            throw new IllegalStateException("Subscription validation requires subscriptionRepository");
+        }
+        
+        if (!isShopSubscriptionValid(shopId)) {
+            throw new RuntimeException("Storefront is currently unavailable due to an expired subscription");
         }
         return shop;
     }
 
-    @org.springframework.cache.annotation.Cacheable(value = "shopDetails", key = "#shopId")
+    /**
+     * Validate that the shop's latest subscription is present, active and not expired.
+     * Returns false if no subscription, status is EXPIRED/SUSPENDED/CANCELLED, or expiry is before or equal to now.
+     */
+    public boolean isShopSubscriptionValid(Long shopId) {
+        if (subscriptionRepository == null) {
+            return false;
+        }
+        var latest = subscriptionRepository.findFirstByShopIdOrderByCreatedAtDesc(shopId).orElse(null);
+        if (latest == null) {
+            return false;
+        }
+        if (latest.getStatus() == null) {
+            return false;
+        }
+        switch (latest.getStatus()) {
+            case EXPIRED:
+            case SUSPENDED:
+            case CANCELLED:
+                return false;
+            default:
+                break;
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(clock);
+        // Expired if expiryDate is null or not after now (i.e., <= now)
+        if (latest.getExpiryDate() != null && !latest.getExpiryDate().isAfter(now)) {
+            return false;
+        }
+        return true;
+    }
+
+    @org.springframework.cache.annotation.Cacheable(value = "shopDetails", key = "#shopId", condition = "#root.target.isShopSubscriptionValid(#shopId)")
     public StorefrontShopResponse getShopDetails(Long shopId) {
         Shop shop = getActiveShop(shopId);
         return mapToStorefrontShopResponse(shop);
@@ -177,10 +214,11 @@ public class CustomerStorefrontService {
                 );
         List<Shop> allShops = shopRepository.findAll(spec);
         List<Shop> filteredShops = allShops.stream().filter(shop -> {
-            if (subscriptionRepository != null) {
-                return subscriptionRepository.findFirstByShopIdAndStatusOrderByCreatedAtDesc(shop.getId(), com.cakeplatform.api.modules.subscription.SubscriptionStatus.ACTIVE).isPresent();
+            // Enforce subscription validation; exclude shops without valid subscription
+            if (subscriptionRepository != null && isShopSubscriptionValid(shop.getId())) {
+                return true;
             }
-            return true;
+            return false;
         }).collect(Collectors.toList());
         
         return filteredShops.stream()
@@ -543,7 +581,7 @@ public class CustomerStorefrontService {
     }
 
     @Transactional(readOnly = true)
-    @org.springframework.cache.annotation.Cacheable(value = "shopProducts", key = "#shopId")
+    @org.springframework.cache.annotation.Cacheable(value = "shopProducts", key = "#shopId", condition = "#root.target.isShopSubscriptionValid(#shopId)")
     public List<Product> getShopProducts(Long shopId) {
         // Enforce active shop check
         getActiveShop(shopId);
